@@ -1,0 +1,721 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>%@ Restore normal sleep to continue.</key>
+	<string>%@ Нужно восстановить обычный сон.</string>
+	<key>%@ is available.</key>
+	<string>Доступна версия %@.</string>
+	<key>%d percent</key>
+	<string>%d процентов</string>
+	<key>%dh</key>
+	<string>%dч</string>
+	<key>%dm</key>
+	<string>%dм</string>
+	<key>1 hour</key>
+	<string>1 час</string>
+	<key>3 hours</key>
+	<string>3 часа</string>
+	<key>5 hours</key>
+	<string>5 часов</string>
+	<key>AI works. Your Mac stays wide awake.</key>
+	<string>ИИ работает — Mac не дремлет.</string>
+	<key>About Wakecup</key>
+	<string>О приложении Wakecup</string>
+	<key>About Wakecup…</key>
+	<string>О приложении…</string>
+	<key>Administrator privileges are required.</key>
+	<string>Нужны права администратора.</string>
+	<key>Allow Wakecup in System Settings → General → Login Items.</key>
+	<string>Разреши Wakecup в системных настройках → Основные → Объекты входа.</string>
+	<key>Allow login item in macOS…</key>
+	<string>Автозапуск: разрешить в macOS…</string>
+	<key>Keep awake on battery</key>
+	<string>Не засыпать без зарядки</string>
+	<key>About this setting</key>
+	<string>Об этой настройке</string>
+	<key>closed.lid.help</key>
+	<string>Не даёт Mac уснуть при закрытии крышки. Чтобы не вводить пароль каждый раз, используйте помощника.</string>
+	<key>battery.power.help</key>
+	<string>Не даёт Mac уснуть при работе от аккумулятора.
+
+Если выключено, Wakecup работает только с подключённой зарядкой. При её отключении Mac снова сможет засыпать как обычно.</string>
+	<key>Check for Updates</key>
+	<string>Проверить обновления</string>
+	<key>Check the result</key>
+	<string>Проверь, что запрет сна снят</string>
+	<key>Checking GitHub for updates…</key>
+	<string>Проверяем обновления на GitHub…</string>
+	<key>Checking…</key>
+	<string>Проверяем…</string>
+	<key>Copy</key>
+	<string>Скопировать</string>
+	<key>Copy: %@</key>
+	<string>Скопировать: %@</string>
+	<key>Could not authorize closed-lid mode.</key>
+	<string>Не удалось получить разрешение на режим закрытой крышки.</string>
+	<key>Could not change login at startup: %@</key>
+	<string>Не удалось изменить автозапуск: %@</string>
+	<key>Could not change sleep mode.</key>
+	<string>Не удалось изменить режим сна.</string>
+	<key>Could not commit session state.</key>
+	<string>Не удалось зафиксировать состояние режима.</string>
+	<key>Could not contact GitHub. Please try again.</key>
+	<string>Нет связи с GitHub. Попробуйте позже.</string>
+	<key>Could not determine the installed app version.</key>
+	<string>Не удалось определить версию приложения.</string>
+	<key>Could not establish session process identities.</key>
+	<string>Не удалось проверить процессы, управляющие сном.</string>
+	<key>Could not open the session directory.</key>
+	<string>Не удалось открыть рабочий каталог Wakecup.</string>
+	<key>Could not read guardian state.</key>
+	<string>Не удалось прочитать состояние защитного процесса.</string>
+	<key>Could not read session state.</key>
+	<string>Не удалось прочитать состояние режима.</string>
+	<key>Could not read sleep settings.</key>
+	<string>Не удалось прочитать настройки сна.</string>
+	<key>Could not restore sleep.</key>
+	<string>Не удалось восстановить сон.</string>
+	<key>Could not restore sleep. Recovery command required: sudo pmset disablesleep 0</key>
+	<string>Не удалось вернуть режим сна. Нужна команда восстановления: sudo pmset disablesleep 0</string>
+	<key>Could not save session state.</key>
+	<string>Не удалось сохранить состояние режима.</string>
+	<key>Could not confirm that the guardian stopped.</key>
+	<string>Не удалось подтвердить остановку помощника.</string>
+	<key>Could not send the stop request to the guardian.</key>
+	<string>Не удалось передать остановку защитному процессу.</string>
+	<key>Could not set the session file owner.</key>
+	<string>Не удалось установить владельца рабочего файла Wakecup.</string>
+	<key>Could not write session state.</key>
+	<string>Ошибка записи состояния режима.</string>
+	<key>Duration</key>
+	<string>Длительность</string>
+	<key>GitHub returned HTTP %d.</key>
+	<string>Ошибка GitHub: HTTP %d.</string>
+	<key>GitHub returned an invalid response.</key>
+	<string>GitHub вернул некорректный ответ.</string>
+	<key>GitHub returned invalid update information.</key>
+	<string>Не удалось прочитать данные релиза.</string>
+	<key>GitHub’s request limit was reached. Please try again later.</key>
+	<string>Лимит запросов GitHub. Попробуйте позже.</string>
+	<key>If your Mac still stays awake</key>
+	<string>Если запрет снят, а Mac всё ещё не засыпает</string>
+	<key>If your Mac stops sleeping</key>
+	<string>Сначала — через Wakecup</string>
+	<key>Invalid session directory permissions.</key>
+	<string>Недопустимые права рабочего каталога Wakecup.</string>
+	<key>Invalid session parameters.</key>
+	<string>Некорректные параметры режима.</string>
+	<key>Invalid session state file.</key>
+	<string>Недопустимый файл состояния режима.</string>
+	<key>Keep awake with lid closed</key>
+	<string>Не засыпать с закрытой крышкой</string>
+	<key>Language</key>
+	<string>Язык</string>
+	<key>Login at startup is disabled.</key>
+	<string>Автозапуск выключен.</string>
+	<key>Login at startup is enabled.</key>
+	<string>Автозапуск включён.</string>
+	<key>Manual recovery without Wakecup</key>
+	<string>Если не помогло: восстанови вручную</string>
+	<key>Minimum battery level</key>
+	<string>Минимальный заряд аккумулятора</string>
+	<key>Mode</key>
+	<string>Режим работы</string>
+	<key>Open at Login</key>
+	<string>Запускать при входе</string>
+	<key>Quit Wakecup</key>
+	<string>Завершить Wakecup</string>
+	<key>Request cancelled. The session was not started.</key>
+	<string>Запрос отменён. Режим не включён.</string>
+	<key>Restore Normal Sleep</key>
+	<string>Восстановить обычный сон</string>
+	<key>Restoring normal sleep…</key>
+	<string>Возвращаем обычный режим сна…</string>
+	<key>Session ended.</key>
+	<string>Wakecup выключен.</string>
+	<key>Session ended: %@.</key>
+	<string>Wakecup выключен: %@.</string>
+	<key>Session state is too large.</key>
+	<string>Слишком большой объём данных о состоянии режима.</string>
+	<key>Show remaining time in menu bar</key>
+	<string>Остаток времени в строке меню</string>
+	<key>Sleep is already disabled by a system setting. Wakecup will not change an existing setting.</key>
+	<string>Сон уже отключён системной настройкой. Wakecup не будет менять чужое состояние.</string>
+	<key>Sleep is already disabled by another setting. The session was not started.</key>
+	<string>Сон уже отключён другой настройкой. Wakecup не включён.</string>
+	<key>Start</key>
+	<string>Включить</string>
+	<key>Stop</key>
+	<string>Остановить</string>
+	<key>Stop at battery level</key>
+	<string>Остановить при заряде:</string>
+	<key>Stopping…</key>
+	<string>Выключаем…</string>
+	<key>The guardian did not start. Sleep settings were not confirmed.</key>
+	<string>Защитный процесс не запустился. Настройки сна не подтверждены.</string>
+	<key>The guardian is not responding. Restore normal sleep to continue.</key>
+	<string>Защитный процесс не отвечает. Нужно восстановить обычный сон.</string>
+	<key>The license document is unavailable.</key>
+	<string>Не удалось открыть текст лицензии.</string>
+	<key>The lid sensor is unavailable.</key>
+	<string>Датчик крышки недоступен.</string>
+	<key>The previous session was interrupted. Restore normal sleep before starting again.</key>
+	<string>Работа Wakecup была прервана. Восстанови обычный сон перед повторным включением.</string>
+	<key>The repository or a public release has not been published yet.</key>
+	<string>Публичного релиза пока нет.</string>
+	<key>There is no interrupted session to recover.</key>
+	<string>Восстановление сна после прерванной работы Wakecup не требуется.</string>
+	<key>Try Again</key>
+	<string>Повторить</string>
+	<key>Unknown SleepDisabled value.</key>
+	<string>Неизвестное значение SleepDisabled.</string>
+	<key>Unknown session file.</key>
+	<string>Неизвестный рабочий файл Wakecup.</string>
+	<key>Unknown version</key>
+	<string>Неизвестная версия</string>
+	<key>Version %@</key>
+	<string>Версия %@</string>
+	<key>View Release</key>
+	<string>Открыть релиз</string>
+	<key>Wakecup License</key>
+	<string>Лицензия Wakecup</string>
+	<key>Wakecup Settings</key>
+	<string>Настройки Wakecup</string>
+	<key>Wakecup is licensed under the MIT License with the Commons Clause condition.</key>
+	<string>Wakecup распространяется по лицензии MIT с дополнительным условием Commons Clause.</string>
+	<key>What Wakecup changes</key>
+	<string>Что меняет Wakecup</string>
+	<key>Mac won’t sleep with Wakecup off?</key>
+	<string>Wakecup выключен, а Mac не засыпает?</string>
+	<key>You’re up to date.</key>
+	<string>Установлена актуальная версия.</string>
+	<key>application closed</key>
+	<string>приложение закрыто</string>
+	<key>battery reached the %@%% threshold</key>
+	<string>заряд достиг порога %@%%</string>
+	<key>battery threshold must be between 10% and 90%</key>
+	<string>порог заряда должен быть от 10% до 90%</string>
+	<key>could not determine battery charge</key>
+	<string>не удалось определить заряд аккумулятора</string>
+	<key>could not read power state</key>
+	<string>не удалось прочитать состояние питания</string>
+	<key>guardian exited</key>
+	<string>защитный процесс завершён</string>
+	<key>macOS could not enable closed-lid mode.</key>
+	<string>macOS не включила режим закрытой крышки.</string>
+	<key>macOS could not prevent sleep (%@).</key>
+	<string>macOS не разрешила удержание сна (%@).</string>
+	<key>How to restore Mac sleep</key>
+	<string>Как восстановить сон Mac</string>
+	<key>pmset could not read settings.</key>
+	<string>pmset не прочитал настройки.</string>
+	<key>power adapter disconnected</key>
+	<string>зарядка отключена</string>
+	<key>recovery.section.1</key>
+	<string>После нажатия «Включить» Wakecup временно просит macOS не засыпать. Режим «Не выключать» в настройке «Подсветка экрана» также не даёт экрану погаснуть. После нажатия «Остановить» или завершения приложения эти временные запросы снимаются.
+
+Режим «Не засыпать с закрытой крышкой» дополнительно включает общий запрет сна — параметр SleepDisabled становится 1. При выключении режима отдельный защитный процесс возвращает его в 0 и проверяет результат. Он пытается вернуть сон и после сбоя основного приложения. Если восстановление не удалось, нужны ручные шаги выше.
+
+Wakecup не меняет таймеры сна, выключения экрана и параметры гибернации.
+
+Если установлен необязательный помощник, Wakecup также добавляет системную службу. Пока режим не включён, она не меняет настройки сна. Удалить её можно в настройках Wakecup → Режим с закрытой крышкой → Удалить помощника….</string>
+	<key>recovery.section.2</key>
+	<string>1. Открой Wakecup значком чашки в строке меню. Если значка нет, нажми Command (⌘) + Пробел, введи Wakecup и нажми Enter.
+2. Если есть кнопка «Остановить», нажми её и дождись выключения режима. Если видишь «Включить», удержание Mac от сна уже выключено.
+3. Если появилась кнопка «Восстановить обычный сон», нажми её. Если macOS запросит разрешение, введи пароль администратора.
+4. Проверь сон: выбери меню Apple  → «Режим сна». Если пункт недоступен или Mac по-прежнему не засыпает, переходи к ручным шагам ниже.</string>
+	<key>recovery.section.3</key>
+	<string>Чтобы открыть «Терминал» или «Мониторинг системы», нажми Command (⌘) + Пробел, введи название приложения и нажми Enter.
+
+1. Если Wakecup запущен, открой шестерёнку в его меню и выбери «Завершить Wakecup». Если приложение зависло, найди Wakecup в «Мониторинге системы» и заверши процесс кнопкой остановки.
+2. Заверши другие приложения, которые удерживают Mac от сна. В «Терминале» выполни /usr/bin/pmset -g и проверь SleepDisabled. Если значение равно 0 или такой строки нет, пропусти сброс и перейди к разделу «Если запрет снят, а Mac всё ещё не засыпает». Если значение остаётся равным 1 и ты хочешь снять общий запрет сна, выполни команду ниже.
+3. Введи пароль администратора Mac и нажми Enter. Пароль не отображается, даже звёздочками — это нормально.
+
+Команда снимает общий запрет сна, в том числе включённый другой программой. Отсутствие вывода после команды нормально; результат проверь следующим шагом.</string>
+	<key>recovery.section.4</key>
+	<string>Скопируй команду ниже в «Терминал» и нажми Enter. В начале вывода найди SleepDisabled:
+• 0 или такой строки нет — общий запрет сна снят.
+• 1 — запрет всё ещё включён.
+
+После снятия запрета снова проверь меню Apple  → «Режим сна».
+
+Если команда выполнена без ошибок, но значение остаётся 1 или возвращается обратно, сохрани работу и перезагрузи Mac. После перезагрузки не нажимай «Включить» в Wakecup и повтори ручное восстановление. Если команда сообщает об ошибке пароля или недостатке прав, понадобится помощь администратора Mac.</string>
+	<key>recovery.section.5</key>
+	<string>Если через меню Apple Mac засыпает, но не засыпает сам при бездействии, проверь обычные настройки сна macOS. Видео, загрузки и другие приложения тоже могут мешать сну — останови их и проверь ещё раз.
+
+Команда ниже ничего не меняет. Она показывает, какие программы сейчас просят Mac не засыпать. Если причина непонятна, сохрани её вывод для обращения за помощью.</string>
+	<key>sleep restored after an interrupted session</key>
+	<string>сон восстановлен после прерванной работы Wakecup</string>
+	<key>start cancelled</key>
+	<string>запуск отменён</string>
+	<key>stopped</key>
+	<string>остановлено</string>
+	<key>Until stopped manually</key>
+	<string>До ручной остановки</string>
+	<key>%d%% or lower</key>
+	<string>%d%% и ниже</string>
+	<key>Current charge: %d%%</key>
+	<string>Текущий заряд: %d%%</string>
+	<key>Current charge: unavailable</key>
+	<string>Текущий заряд: нет данных</string>
+	<key>Wakecup — restore normal sleep</key>
+	<string>Wakecup — нужно восстановить сон</string>
+	<key>Could not restore sleep. Try recovery again; if it still fails, use the manual recovery guide.</key>
+	<string>Не удалось вернуть обычный сон. Повтори восстановление. Если это не поможет, открой инструкцию по восстановлению сна.</string>
+	<key>Automatic recovery could not establish exclusive ownership. Try recovery again; if it still fails, use the manual recovery guide.</key>
+	<string>Не удалось безопасно восстановить сон. Повтори попытку. Если ошибка останется, открой инструкцию по восстановлению сна.</string>
+	<key>Another guardian or recovery operation owns the sleep setting. Try again after it stops.</key>
+	<string>Сейчас сном управляет другой процесс Wakecup. Дождись его остановки и повтори попытку.</string>
+	<key>A previous system command has not stopped. Try recovery again.</key>
+	<string>Предыдущая команда настройки сна ещё не завершилась. Повтори восстановление.</string>
+	<key>The system command timed out. Try recovery again.</key>
+	<string>macOS слишком долго не отвечает на команду настройки сна. Повтори восстановление.</string>
+	<key>Invalid system command timeout.</key>
+	<string>Некорректное время ожидания ответа macOS.</string>
+	<key>Could not create the system command pipe.</key>
+	<string>Не удалось подготовить обмен данными с macOS.</string>
+	<key>Could not prepare the system command.</key>
+	<string>Не удалось подготовить команду настройки сна.</string>
+	<key>Could not identify the system command.</key>
+	<string>Не удалось безопасно определить процесс команды настройки сна.</string>
+	<key>Could not open the guardian status socket.</key>
+	<string>Не удалось подключиться к процессу управления сном Mac.</string>
+	<key>Could not open the system sleep lease.</key>
+	<string>Не удалось подготовить управление сном Mac.</string>
+	<key>Invalid system sleep lease permissions.</key>
+	<string>Не удалось безопасно получить доступ к управлению сном Mac.</string>
+	<key>Could not acquire the system sleep lease.</key>
+	<string>Не удалось получить управление сном Mac. Повтори попытку.</string>
+	<key>Could not read the system sleep owner.</key>
+	<string>Не удалось определить, какой процесс управляет сном Mac.</string>
+	<key>Invalid system sleep owner record.</key>
+	<string>Не удалось подтвердить, какой процесс управляет сном Mac.</string>
+	<key>Could not save the system sleep owner.</key>
+	<string>Не удалось сохранить данные для безопасного восстановления сна.</string>
+	<key>Could not identify the current boot session.</key>
+	<string>Не удалось определить текущий запуск macOS.</string>
+	<key>Could not verify the guardian process.</key>
+	<string>Не удалось безопасно проверить защитный процесс Wakecup.</string>
+	<key>Could not verify guardian subprocesses.</key>
+	<string>Не удалось безопасно проверить команды защитного процесса Wakecup.</string>
+	<key>Could not stop the unresponsive guardian.</key>
+	<string>Не удалось остановить зависший защитный процесс Wakecup. Открой инструкцию по восстановлению сна.</string>
+	<key>Duration must be between 1 second and 999 hours.</key>
+	<string>Длительность должна быть от 1 секунды до 999 часов.</string>
+	<key>License…</key>
+	<string>Лицензия…</string>
+	<key>recovery.introduction</key>
+	<string>Эта инструкция нужна, если удержание Mac от сна уже выключено или Wakecup закрыт, а Mac всё равно не засыпает. Погасший экран сам по себе ещё не означает, что Mac спит.</string>
+	<key>Open guide separately</key>
+	<string>Открыть инструкцию отдельно</string>
+	<key>Could not open the guide separately.</key>
+	<string>Не удалось открыть инструкцию отдельно.</string>
+	<key>Select and copy the guide text before quitting Wakecup.</key>
+	<string>Выдели и скопируй текст инструкции перед завершением Wakecup.</string>
+	<key>Closed-lid permission</key>
+	<string>Режим с закрытой крышкой</string>
+	<key>Ask for a password each session</key>
+	<string>Запрашивать пароль при включении</string>
+	<key>Use installed helper</key>
+	<string>Использовать установленного помощника</string>
+	<key>Install helper…</key>
+	<string>Установить помощника…</string>
+	<key>Update helper…</key>
+	<string>Обновить помощника…</string>
+	<key>Remove helper…</key>
+	<string>Удалить помощника…</string>
+	<key>Changing helper…</key>
+	<string>Изменение помощника…</string>
+	<key>Why install a helper?</key>
+	<string>Зачем устанавливать помощника?</string>
+	<key>Remove Wakecup helper?</key>
+	<string>Удалить помощника Wakecup?</string>
+	<key>Install helper</key>
+	<string>Установить помощника</string>
+	<key>Remove helper</key>
+	<string>Удалить помощника</string>
+	<key>helper.remove.explanation</key>
+	<string>Wakecup снова будет запрашивать разрешение администратора при каждом включении режима с закрытой крышкой. Помощник и его системная служба будут удалены. Ваши настройки и сведения для восстановления сна сохранятся.</string>
+	<key>helper.failure.explanation</key>
+	<string>Не удалось изменить настройки помощника. Его состояние показано в основном окне Wakecup.</string>
+	<key>Could not change the Wakecup helper</key>
+	<string>Не удалось изменить помощник Wakecup</string>
+	<key>The helper belongs to another Mac user.</key>
+	<string>Помощник установлен для другого пользователя Mac.</string>
+	<key>The installed helper identity could not be confirmed.</key>
+	<string>Не удалось подтвердить подлинность установленного помощника.</string>
+	<key>Starting session</key>
+	<string>Включаем режим…</string>
+	<key>Helper request failed: %@</key>
+	<string>Не удалось выполнить запрос к помощнику: %@</string>
+	<key>Optional helper</key>
+	<string>Необязательный помощник</string>
+	<key>recovery.helper</key>
+	<string>По умолчанию macOS запрашивает разрешение администратора при каждом включении режима с закрытой крышкой. Чтобы не вводить пароль каждый раз, под настройкой «Не засыпать с закрытой крышкой» найдите строку «Помощник» и нажмите «Установить». macOS запросит разрешение администратора. Помощник не знает и не хранит пароль.
+
+Для управления установленным помощником нажмите «Настроить…» в той же строке. Там можно вернуть запрос пароля или удалить помощника. Перед обновлением или удалением остановите Wakecup. Установка, обновление и удаление требуют разрешения администратора; обычная работа с исправным помощником — нет. Если после обновления приложения в строке «Помощник» появится «Обновить», нажмите эту кнопку перед повторным включением режима с закрытой крышкой.
+
+Помощник доступен пользователю Mac, который его установил. Он запускает защитный процесс для режима с закрытой крышкой и возвращает обычный сон после выключения режима. Его удаление сохраняет сведения, нужные для восстановления сна после сбоя.</string>
+	<key>helper.failure.previous</key>
+	<string>Изменение не применено. Ранее установленный помощник по-прежнему доступен.</string>
+	<key>Wakecup helper</key>
+	<string>Помощник Wakecup</string>
+	<key>The bundled helper is missing or damaged. Reinstall Wakecup.</key>
+	<string>Файл помощника отсутствует или повреждён. Переустановите Wakecup.</string>
+	<key>helper.explanation</key>
+	<string>Помощник позволяет включать режим «Не засыпать с закрытой крышкой» без ввода пароля каждый раз, даже после перезапуска Wakecup.
+
+При установке macOS запрашивает разрешение администратора и даёт помощнику нужные права для управления сном. Помощник не знает и не хранит ваш пароль.
+
+В настройках Wakecup можно вернуть запрос пароля или удалить помощника. Установка, обновление и удаление требуют разрешения администратора.</string>
+	<key>Remove</key>
+	<string>Удалить</string>
+	<key>Update helper</key>
+	<string>Обновить помощника</string>
+	<key>Invalid helper session path.</key>
+	<string>Недопустимый путь к рабочим файлам помощника.</string>
+	<key>The session does not belong to the requesting Wakecup process.</key>
+	<string>Этим режимом управляет другой процесс Wakecup.</string>
+	<key>Invalid helper signing identity.</key>
+	<string>Недопустимая подпись помощника.</string>
+	<key>Invalid helper response.</key>
+	<string>Помощник вернул некорректный ответ.</string>
+	<key>Invalid helper guard response.</key>
+	<string>Защитный процесс помощника вернул некорректный ответ.</string>
+	<key>The helper connection ended. Check the session status before trying again.</key>
+	<string>Соединение с помощником закрыто. Проверьте, включён ли режим, перед повторной попыткой.</string>
+	<key>The helper connection was interrupted. Check the session status before trying again.</key>
+	<string>Соединение с помощником прервано. Проверьте, включён ли режим, перед повторной попыткой.</string>
+	<key>Could not connect to the Wakecup helper.</key>
+	<string>Не удалось подключиться к помощнику Wakecup.</string>
+	<key>The helper did not reply. Check the session status before trying again.</key>
+	<string>Помощник не ответил. Проверьте, включён ли режим, перед повторной попыткой.</string>
+	<key>The helper is already processing another session.</key>
+	<string>Помощник уже выполняет другой запрос на управление сном.</string>
+	<key>The Wakecup helper needs an update.</key>
+	<string>Нужно обновить помощника Wakecup.</string>
+	<key>The Wakecup connection is no longer valid.</key>
+	<string>Соединение с Wakecup больше не действительно.</string>
+	<key>This session has already been started. Check its current status.</key>
+	<string>Режим уже включён. Проверьте его текущее состояние.</string>
+	<key>The system helper identity is invalid.</key>
+	<string>Не удалось подтвердить подлинность системного помощника.</string>
+	<key>The Wakecup connection ended.</key>
+	<string>Соединение с Wakecup закрыто.</string>
+	<key>Could not prepare the helper guard.</key>
+	<string>Не удалось подготовить защитный процесс помощника.</string>
+	<key>Could not prepare helper descriptors.</key>
+	<string>Не удалось подготовить файлы защитного процесса.</string>
+	<key>Could not isolate the helper guard.</key>
+	<string>Не удалось безопасно запустить защитный процесс помощника.</string>
+	<key>Could not isolate helper descriptors.</key>
+	<string>Не удалось изолировать файлы защитного процесса.</string>
+	<key>Invalid administrator installation request.</key>
+	<string>Некорректный запрос на установку с правами администратора.</string>
+	<key>The installer must run from a verified system staging file.</key>
+	<string>Установщик должен запускаться из проверенного системного файла.</string>
+	<key>Stop Wakecup and restore normal sleep before changing the helper.</key>
+	<string>Нажмите «Остановить» и восстановите обычный сон перед изменением помощника.</string>
+	<key>Stop the active Wakecup guardian before changing the helper.</key>
+	<string>Остановите активный защитный процесс Wakecup перед изменением помощника.</string>
+	<key>Could not stop the installed Wakecup helper.</key>
+	<string>Не удалось остановить установленного помощника Wakecup.</string>
+	<key>Could not register the Wakecup helper.</key>
+	<string>Не удалось зарегистрировать помощника Wakecup в системе.</string>
+	<key>The installed Wakecup helper was not registered.</key>
+	<string>Установленный помощник Wakecup не зарегистрирован в системе.</string>
+	<key>The new helper did not authenticate with Wakecup. The previous installation has been restored.</key>
+	<string>Новый помощник не смог установить подтверждённое соединение с Wakecup. Предыдущая установка восстановлена.</string>
+	<key>Could not remove the Wakecup helper file.</key>
+	<string>Не удалось удалить файл помощника Wakecup.</string>
+	<key>Could not stage a Wakecup helper file.</key>
+	<string>Не удалось подготовить файл помощника Wakecup к установке.</string>
+	<key>Could not write a Wakecup helper file.</key>
+	<string>Не удалось записать файл помощника Wakecup.</string>
+	<key>Could not commit a Wakecup helper file.</key>
+	<string>Не удалось сохранить файл помощника Wakecup.</string>
+	<key>Could not verify helper signature.</key>
+	<string>Не удалось проверить подпись помощника.</string>
+	<key>Could not verify the running Wakecup signature.</key>
+	<string>Не удалось проверить подпись запущенного Wakecup.</string>
+	<key>The helper signature is invalid.</key>
+	<string>Подпись помощника недействительна.</string>
+	<key>Hardened Runtime is required for the Wakecup helper.</key>
+	<string>Для помощника Wakecup требуется защита Hardened Runtime.</string>
+	<key>Unsafe helper signing entitlements.</key>
+	<string>В подписи помощника обнаружены небезопасные разрешения.</string>
+	<key>Could not open the installed helper.</key>
+	<string>Не удалось открыть установленного помощника.</string>
+	<key>Unsafe installed helper permissions.</key>
+	<string>Установленный помощник имеет небезопасные права доступа.</string>
+	<key>Installed helper file is too large.</key>
+	<string>Файл установленного помощника слишком велик.</string>
+	<key>Invalid system helper access permissions.</key>
+	<string>Недопустимые права доступа к системному помощнику.</string>
+	<key>The system helper location has additional access grants. Installation was refused.</key>
+	<string>Дополнительные права доступа к системному каталогу не позволяют безопасно установить помощника.</string>
+	<key>Could not prepare private helper permissions.</key>
+	<string>Не удалось подготовить защищённые права доступа к помощнику.</string>
+	<key>Could not clear inherited helper access permissions.</key>
+	<string>Не удалось удалить унаследованные права доступа к помощнику.</string>
+	<key>Invalid installed helper identity.</key>
+	<string>Не удалось подтвердить подлинность установленного помощника.</string>
+	<key>The helper session changed before it could start.</key>
+	<string>Параметры режима изменились до запуска помощника.</string>
+	<key>Invalid managed guard context.</key>
+	<string>Некорректные параметры защитного процесса помощника.</string>
+	<key>Cancel</key>
+	<string>Отмена</string>
+	<key>OK</key>
+	<string>ОК</string>
+	<key>Close</key>
+	<string>Закрыть</string>
+	<key>Helper</key>
+	<string>Помощник</string>
+	<key>Configure…</key>
+	<string>Настроить…</string>
+	<key>Install</key>
+	<string>Установить</string>
+	<key>Update</key>
+	<string>Обновить</string>
+	<key>Details…</key>
+	<string>Подробнее…</string>
+	<key>Applying changes…</key>
+	<string>Применяем изменения…</string>
+	<key>Wait for the operation to finish.</key>
+	<string>Дождитесь завершения операции.</string>
+	<key>Checking readiness…</key>
+	<string>Проверяем готовность…</string>
+	<key>Wait for the check to finish.</key>
+	<string>Дождитесь окончания проверки.</string>
+	<key>Disabled in settings</key>
+	<string>Отключён в настройках</string>
+	<key>Closed-lid mode requires a password.</key>
+	<string>Для режима с закрытой крышкой нужен пароль.</string>
+	<key>Installed and in use</key>
+	<string>Установлен и используется</string>
+	<key>Closed-lid mode — no password required.</key>
+	<string>Режим с закрытой крышкой — без ввода пароля.</string>
+	<key>Update required</key>
+	<string>Требуется обновление</string>
+	<key>Closed-lid mode requires a password for now.</key>
+	<string>Пока для режима с закрытой крышкой нужен пароль.</string>
+	<key>Unavailable</key>
+	<string>Недоступен</string>
+	<key>Not installed</key>
+	<string>Не установлен</string>
+	<key>Switch to password prompts</key>
+	<string>Перейти на ввод пароля</string>
+	<key>Use helper</key>
+	<string>Использовать помощника</string>
+	<key>Current mode: closed-lid operation without a password.</key>
+	<string>Сейчас: режим с закрытой крышкой без ввода пароля.</string>
+	<key>Current mode: a password is required each time closed-lid mode is enabled.</key>
+	<string>Сейчас: пароль при каждом включении режима с закрытой крышкой.</string>
+	<key>Connect power or enable Keep awake on battery.</key>
+	<string>Подключите зарядку или включите «Не засыпать без зарядки».</string>
+	<key>Wait for the power status to become available, or connect power.</key>
+	<string>Дождитесь данных о питании или подключите зарядку.</string>
+	<key>Choose a battery stop threshold between 10% and 90%.</key>
+	<string>Выберите порог остановки от 10% до 90%.</string>
+	<key>Invalid administrator execution request.</key>
+	<string>Недопустимый запрос на запуск с правами администратора.</string>
+	<key>The operation must run from a verified system staging file.</key>
+	<string>Операция должна запускаться из проверенной защищённой копии помощника.</string>
+	<key>Recovery is already in progress. Check the session status before trying again.</key>
+	<string>Восстановление сна уже выполняется. Дождитесь его завершения перед повторной попыткой.</string>
+	<key>Could not prepare the recovery result.</key>
+	<string>Не удалось подготовить получение результата восстановления сна.</string>
+	<key>Could not isolate recovery result descriptors.</key>
+	<string>Не удалось защитить канал результата восстановления сна.</string>
+	<key>Invalid recovery completion request.</key>
+	<string>Недопустимый запрос результата восстановления сна.</string>
+	<key>Could not confirm recovery completion.</key>
+	<string>Не удалось подтвердить завершение восстановления сна.</string>
+	<key>Could not change the display setting. Try again.</key>
+	<string>Не удалось изменить настройку экрана. Повторите попытку.</string>
+	<key>Apply</key>
+	<string>Применить</string>
+	<key>Confirm the macOS prompt</key>
+	<string>Подтвердите запрос macOS</string>
+	<key>Connect power or lower the %d%% battery limit.</key>
+	<string>Подключите зарядку или снизьте порог заряда (%d%%).</string>
+	<key>Applying settings…</key>
+	<string>Применение настроек…</string>
+	<key>Could not apply settings. The current settings remain active.</key>
+	<string>Не удалось применить настройки. Прежние настройки продолжают действовать.</string>
+	<key>Open the lid before changing closed-lid mode.</key>
+	<string>Откройте крышку перед изменением этого режима.</string>
+	<key>The previous guardian has not exited. Wakecup could not apply the change.</key>
+	<string>Предыдущий защитный процесс не завершился. Не удалось изменить режим.</string>
+	<key>The mode could not restart. Wakecup has stopped.</key>
+	<string>Не удалось перезапустить режим. Wakecup остановлен.</string>
+	<key>The Wakecup timer ended. “Keep awake with lid closed” was not changed.</key>
+	<string>Таймер истёк. Режим с закрытой крышкой не изменился.</string>
+	<key>Could not confirm the new settings.</key>
+	<string>Не удалось подтвердить новые настройки.</string>
+	<key>Display backlight</key>
+	<string>Подсветка экрана</string>
+	<key>May turn off</key>
+	<string>Как в настройках macOS</string>
+	<key>Keep on</key>
+	<string>Не выключать</string>
+	<key>Backlight off</key>
+	<string>Без подсветки</string>
+	<key>display.modes.help</key>
+	<string>«Как в настройках macOS» — экран гаснет по системному таймеру.
+
+«Не выключать» — экран остаётся включённым, пока Wakecup активен.
+
+«Без подсветки» — через 10 секунд гаснет подсветка встроенного экрана. Mac и дисплей продолжают работать. Чтобы вернуть прежнюю яркость, нажмите сочетание из строки «Вернуть яркость». Если забыли сочетание, нажмите клавишу увеличения яркости, чтобы снова включить подсветку.</string>
+	<key>Backlight turns off in %ld s</key>
+	<string>Подсветка погаснет через %ld с</string>
+	<key>Cancel backlight countdown</key>
+	<string>Отменить</string>
+	<key>Only in Backlight off mode</key>
+	<string>Только в режиме «Без подсветки»</string>
+	<key>Restore brightness</key>
+	<string>Вернуть яркость</string>
+	<key>Not configured</key>
+	<string>Не настроено</string>
+	<key>Restore brightness shortcut</key>
+	<string>Сочетание для возврата яркости</string>
+	<key>Click here to record</key>
+	<string>Нажмите здесь для записи</string>
+	<key>Hold a modifier, then press F1–F20.</key>
+	<string>Зажмите модификатор и нажмите F1–F20.</string>
+	<key>display.shortcut.explanation</key>
+	<string>Сочетание F1–F20 с Shift, Control, Option или Command возвращает прежнюю яркость и режим подсветки. Действует только в режиме «Без подсветки».</string>
+	<key>display.shortcut.invalid</key>
+	<string>Используйте F1–F20 с Shift, Control, Option или Command. Буквы и сочетания только из модификаторов недоступны.</string>
+	<key>display.shortcut.locked</key>
+	<string>Верните яркость перед изменением сочетания.</string>
+	<key>display.shortcut.conflict</key>
+	<string>Это сочетание уже занято. Выберите другое.</string>
+	<key>display.shortcut.unavailable</key>
+	<string>Не удалось зарегистрировать сочетание. Выберите другое и повторите попытку.</string>
+	<key>Current shortcut: %@</key>
+	<string>Текущее сочетание: %@</string>
+	<key>Recording shortcut</key>
+	<string>Запись сочетания</string>
+	<key>Save</key>
+	<string>Сохранить</string>
+	<key>Clear</key>
+	<string>Очистить</string>
+	<key>Choose a restore shortcut before turning the backlight off.</key>
+	<string>Сначала настройте сочетание для возврата яркости.</string>
+	<key>The brightness safety process stopped. Check the display setting.</key>
+	<string>Процесс восстановления яркости остановился. Проверьте настройку экрана.</string>
+	<key>Backlight control is unavailable.</key>
+	<string>Управление подсветкой недоступно.</string>
+	<key>Invalid backlight recovery information.</key>
+	<string>Некорректные данные для восстановления яркости.</string>
+	<key>Cannot open backlight recovery directory.</key>
+	<string>Не удалось открыть папку восстановления яркости.</string>
+	<key>Unsafe backlight recovery directory permissions.</key>
+	<string>Неподходящие права доступа к папке восстановления яркости.</string>
+	<key>Cannot save backlight recovery information.</key>
+	<string>Не удалось сохранить данные восстановления яркости.</string>
+	<key>Cannot write backlight recovery information.</key>
+	<string>Не удалось записать данные восстановления яркости.</string>
+	<key>Cannot commit backlight recovery information.</key>
+	<string>Не удалось завершить сохранение данных восстановления яркости.</string>
+	<key>Cannot read backlight recovery information.</key>
+	<string>Не удалось прочитать данные восстановления яркости.</string>
+	<key>Unsafe backlight recovery file.</key>
+	<string>Файл восстановления яркости не прошёл проверку.</string>
+	<key>Backlight recovery file is too large.</key>
+	<string>Файл восстановления яркости слишком большой.</string>
+	<key>Cannot remove backlight recovery information.</key>
+	<string>Не удалось удалить данные восстановления яркости.</string>
+	<key>Backlight restoration process stopped. Restore brightness before trying again.</key>
+	<string>Процесс восстановления яркости остановился. Верните яркость перед повторной попыткой.</string>
+	<key>Backlight off requires a supported, awake built-in display with positive brightness.</key>
+	<string>Для этого режима нужен включённый встроенный экран с яркостью выше нуля.</string>
+	<key>Backlight restoration process did not stay ready.</key>
+	<string>Процесс восстановления яркости завершился при подготовке.</string>
+	<key>The built-in display changed during preparation.</key>
+	<string>Встроенный экран изменился во время подготовки.</string>
+	<key>macOS did not confirm backlight off with a live restoration process.</key>
+	<string>Не удалось подтвердить выключение подсветки с работающим восстановлением.</string>
+	<key>Backlight entry failed and brightness restoration is uncertain. Recovery information and the safety process were retained.</key>
+	<string>Не удалось включить режим и подтвердить возврат яркости. Данные и процесс восстановления сохранены.</string>
+	<key>Could not verify brightness restoration. Recovery information was retained.</key>
+	<string>Не удалось подтвердить возврат яркости. Данные восстановления сохранены.</string>
+	<key>Refusing to restore an invalid brightness snapshot.</key>
+	<string>Сохранённое значение яркости некорректно.</string>
+	<key>Brightness did not return to the saved value.</key>
+	<string>Яркость не вернулась к сохранённому значению.</string>
+	<key>Backlight restorer parent changed.</key>
+	<string>Изменился процесс, запустивший восстановление яркости.</string>
+	<key>Cannot prepare the backlight restoration control pipe.</key>
+	<string>Не удалось подготовить связь с процессом восстановления яркости.</string>
+	<key>Backlight restoration process exited before READY.</key>
+	<string>Процесс восстановления яркости завершился до готовности.</string>
+	<key>Backlight restoration process closed its readiness pipe.</key>
+	<string>Процесс восстановления яркости закрыл связь при подготовке.</string>
+	<key>Backlight restoration process did not acknowledge readiness.</key>
+	<string>Процесс восстановления яркости не подтвердил готовность.</string>
+	<key>Built-in brightness control is unavailable.</key>
+	<string>Управление яркостью встроенного экрана недоступно.</string>
+	<key>This macOS version does not support built-in brightness control.</key>
+	<string>Эта версия macOS не поддерживает выбранный способ управления яркостью.</string>
+	<key>Unlock the active Mac session before turning the backlight off.</key>
+	<string>Разблокируйте Mac перед выключением подсветки.</string>
+	<key>Cannot identify the built-in display.</key>
+	<string>Не удалось определить встроенный экран.</string>
+	<key>Backlight off requires an awake built-in Mac display.</key>
+	<string>Для этого режима нужен включённый встроенный экран Mac.</string>
+	<key>Saved built-in display identity is no longer available.</key>
+	<string>Сохранённый встроенный экран больше не доступен.</string>
+	<key>Cannot read a valid built-in display brightness.</key>
+	<string>Не удалось прочитать яркость встроенного экрана.</string>
+	<key>macOS refused the built-in brightness change.</key>
+	<string>macOS не разрешила изменить яркость встроенного экрана.</string>
+	<key>Backlight restoration process is still finishing. Try restoring brightness again.</key>
+	<string>Процесс ещё завершает восстановление. Повторите возврат яркости.</string>
+	<key>display.shortcut.firstUse</key>
+	<string>Выберите F1–F20 с Shift, Control, Option или Command для возврата яркости. После сохранения будет выбран режим «Без подсветки».</string>
+	<key>helper.help</key>
+	<string>Помощник позволяет включать режим «Не засыпать с закрытой крышкой» без ввода пароля каждый раз.
+
+При его установке macOS попросит разрешение администратора. Ваш пароль не сохраняется.</string>
+	<key>Active until %@</key>
+	<string>Активен до %@</string>
+	<key>battery.threshold.scale.help</key>
+	<string>Шкала показывает текущий заряд от 1% до 100%. Порог остановки можно перемещать от 10% до 90%.</string>
+	<key>When to stop</key>
+	<string>Когда остановить</string>
+	<key>Stop at</key>
+	<string>Остановить в</string>
+	<key>Today</key>
+	<string>Сегодня</string>
+	<key>Tomorrow</key>
+	<string>Завтра</string>
+	<key>Choose date…</key>
+	<string>Выбрать дату…</string>
+	<key>End time</key>
+	<string>Время окончания</string>
+	<key>End day</key>
+	<string>День окончания</string>
+	<key>Enter a time such as 18:30.</key>
+	<string>Введите время, например 18:30.</string>
+	<key>Stops in %@</key>
+	<string>Остановка через %@</string>
+	<key>This time has already passed.</key>
+	<string>Это время уже прошло.</string>
+	<key>Choose an end date within the next 30 days.</key>
+	<string>Выберите дату окончания в пределах 30 дней.</string>
+	<key>Indefinitely</key>
+	<string>Бессрочно</string>
+	<key>Hold a modifier</key>
+	<string>Зажмите модификатор</string>
+	<key>Press F1–F20.</key>
+	<string>Нажмите F1–F20.</string>
+	<key>Then press F1–F20.</key>
+	<string>Затем нажмите F1–F20.</string>
+	<key>Cancel edits</key>
+	<string>Отменить</string>
+</dict>
+</plist>

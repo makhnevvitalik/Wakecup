@@ -1,0 +1,53 @@
+Wakecup live settings
+
+Current behavior
+- The same settings are available while Wakecup is off or running. The header shows when the active timer ends.
+- The When to stop card uses a date and time, the 1/3/5-hour presets, or Indefinitely. The calendar allows today and the next 30 local calendar days. Editing the selection does not change an active timer until Apply.
+- During a run, the end time, battery permission, charge threshold, closed-lid mode, and display mode share one draft with Apply and Cancel at the bottom of the panel. Backlight off starts a visible 10-second countdown. Display changes preserve the running timer. The selected power policy can stop Wakecup if its conditions are no longer met.
+- Open the lid before changing closed-lid mode during a run. Wakecup preserves the original end time or indefinite mode during the internal handoff.
+- See ../README.md for the current user flow and DisplayModes.txt for the backlight design and verification history.
+
+History
+The following plan and verification notes describe the versions tested on their stated dates.
+
+Original approved behavior (2026-11-07)
+- One settings screen while off or active; active state adds the current timer and Stop.
+- Display, battery permission and battery threshold apply without restarting the timer.
+- The duration editor describes remaining time from Apply, not the original total duration. Editing alone does not alter the running timer.
+- Closed-lid changes may restart the internal mode. Preserve the absolute continuous-clock deadline, including time spent restoring/authorizing; preserve infinity.
+- Do not revive an expired timer. Confirm sleep restoration and prior guardian exit before starting a replacement guardian.
+- Require the lid to be open for a closed-lid transition, avoiding unintended sleep during the handoff.
+- Helper installation/removal stays blocked while active. Permission-mode selection may affect the next launch without restarting current work.
+- Errors show what remains applied. No silently replayed privileged starts and no global power/security preference changes in tests.
+- Backlight-off remains a separate deferred feature, pending its physical brightness-down test.
+
+Original implementation plan (2026-11-07)
+1. Core/SessionCore.swift and System/Guard.swift: optional absoluteDeadline in configuration, revisioned live settings in control, optional acknowledgement/effective policy in status. Validate before applying; keep old policy on rejected updates. Use revisioned updates for every deadline change.
+2. Application/SessionModel.swift: explicit setters and runtime acknowledgement tracking; remaining-time drafts with Apply; restart request carrying the original deadline and an ordered stop/wait/start lifecycle. Keep system assertions during a safe handoff. Inject lid/guardian-liveness reads in SessionOperations for tests.
+3. Presentation: always show SessionOptionsView, bind settings through explicit setters, disable only unsafe transitions, show Apply and pending/error state inline. Keep one display toggle, no duplicate active summary card. Timer remains visible during an internal restart.
+4. Tests: Core acceptance/rejection, non-revival, timer replacements, repeated updates; fake model tests for live changes and rollback, finite/infinite restarts, expiry during authorization, guardian-exit waits, stale callbacks and no extra authorization. Offscreen EN/RU unified layout checks with isolated preferences.
+5. Verify signed build, headless tests and selected offscreen tests; fresh focused review. Do not install over the user's active guardian; do not commit/push/tag/release.
+
+Cross-module contract at the time (2026-11-07)
+- SessionLiveUpdate: revision UInt64, powerMode PowerMode, threshold Int, deadline TimeInterval? (nil means infinity).
+- SessionConfiguration.absoluteDeadline: optional TimeInterval, defaults nil for old records.
+- SessionControl.update: optional SessionLiveUpdate.
+- SessionMonitor: settingsRevision UInt64, settingsError String?, effectivePowerMode PowerMode, effectiveThreshold Int. settingsRevision means latest processed update, even if rejected; old/equal revisions never reapply.
+- SessionStatus: optional settingsRevision UInt64, settingsError String, powerMode PowerMode, threshold Int. Existing deadline stays authoritative.
+- UI model API: setClosedLid(Bool), setAllowBattery(Bool), setThreshold(Double), applyDuration(), durationEditDirty, settingsApplying, settingsMessage, isRestarting, canEditSessionSettings, canChangeClosedLid.
+
+Verification (2026-11-07)
+- Core: 139 checks, no failures, including revision acknowledgement/rejection, absolute deadlines, legacy JSON and no revival after expiry.
+- Model: all 30 groups passed with fake clock/power/assertion/authorization/helper/lid/process operations. Covered finite/infinite Apply and restarts, dirty drafts, coalesced settings/extensions, stale replies, exit waits/timeouts, expiry and cancellation.
+- Focused offscreen fixtures: unified settings and active display controls passed in English/Russian. Checked native enabled/state values, retained duration editor identity, draft text, pending/error handling and stable normal-change/restart geometry. Images inspected; no visible windows or real sleep operations.
+- Complete test.sh passed with release signing, including file/IPC, recovery, helper policy, localization, release metadata, clean build rollback and Hardened Runtime checks.
+- Signed release packages built for arm64 and x86_64 Matching-architecture self-tests passed; Intel runtime needs Intel hardware.
+- Fresh independent review found no remaining significant issue. Legacy GUI extension writes were replaced with the same revisioned update flow so pending extensions cannot be lost during power/threshold edits.
+- Source diff/whitespace and runner syntax checked. No commit, push, tag, publication, installation or change to the user's running Wakecup timer.
+- Physical closed-lid handoffs remain a manual acceptance check; automated checks use fake system operations. Backlight mode remains deferred as agreed.
+
+Quick duration reductions (2026-11-09)
+- Added a second aligned row below Extend: Reduce −15 min / −30 min / −1 hour; EN/RU use shared control/secondary fonts. Timed active footer reserves both rows even while a draft is invalid.
+- Additions/reductions share the revisioned deadline update path and use the latest pending deadline. Dirty duration drafts remain untouched; infinity and invalid amounts remain no-ops. Subtracting all remaining time requests the existing normal stop/restoration path.
+- All SessionModelTests groups passed, including new reductions/old acknowledgements/coalescing/zero-time guardian stop. Display-mode lifecycle tests passed with reduction-to-zero restoring brightness before releasing assertions.
+- Unified EN/RU offscreen tests passed for all six actions and stable geometry; screenshots inspected. Signed arm64/x86_64 packages rebuilt No installation or changes to the user's active timer.

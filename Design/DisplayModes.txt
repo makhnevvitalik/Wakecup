@@ -1,0 +1,75 @@
+Wakecup display modes — approved behavior and verification (updated 2026-11-09)
+
+Approved UX
+- Display has three choices: May turn off / Keep on / Backlight off.
+- Choices remain available while the timer is active, without resetting its deadline.
+- Backlight off uses zero hardware brightness on the built-in MacBook display while keeping display sleep prevented.
+- A user-configured global shortcut restores the previous brightness and display mode. The countdown can be cancelled to return to that same mode. There is no fixed sun-key action (user decision 2026-11-09).
+- Mouse movement does not exit this mode: AI agents may move the pointer.
+- Explain the configured shortcut exit and require successful registration before darkening the display.
+- Leaving the mode, stopping Wakecup or terminating its GUI restores the saved brightness.
+- Preserve the existing privileged sleep guardian; do not mutate its trusted configuration.
+- Do not change global lock-screen, screen-saver or password settings.
+
+Completed work
+- Live May turn off / Keep on switching is implemented and tested; its signed local build has not replaced the running application.
+- Two 10-second zero-brightness trials on this Mac kept the display logically awake and the session unlocked, and restored the prior brightness. The user confirmed that the backlight went fully dark.
+- DisplayServices brightness read/write and notification registration are available on this Mac.
+- Writing the SAME brightness emits a brightness notification with a value payload. This is a candidate for detecting brightness-down even at zero without monitoring keyboard input.
+- Passive media-event observation is permission-gated and is not the chosen default. Do not silently add Input Monitoring or Accessibility requirements.
+
+Remaining manual acceptance checks
+- Test the actual user-chosen global shortcut in the installed app; automated registration and UI checks use fake system operations and synthetic local events.
+- Check held shortcuts, display reconnection and system auto-brightness interactions on hardware. Built-in display identity is checked before restoration; unsupported displays fail without darkening.
+- Short trials do not establish that automatic screen-saver/lock behavior stays suppressed over a long idle interval. Verify separately before promising unlocked unattended operation.
+
+Implemented boundaries
+1. Core: display-mode choice and restoration/notification policy, covered with fake operations.
+2. System: built-in brightness adapter, dynamically resolved private DisplayServices API, saved display UUID and validated readback. Application owns scoped Carbon hotkey registration; no raw keyboard or brightness-key observation.
+3. Application: coordinate display assertions and brightness changes transactionally; persist a mode only after success; do not stop or extend the timer on display-control errors.
+4. Restoration: prepare an independent unprivileged restorer before setting brightness to zero. It must restore on normal stop and parent pipe EOF. Keep recovery information if restoration fails; never overwrite the saved positive brightness with the dark value.
+5. Presentation: native three-choice menu in idle and active cards, shared fonts and stable row size, RU/EN hints and an explanation of how to restore the screen.
+
+Acceptance checks
+- The configured exit registers successfully before zero brightness; a missing/invalid/conflicting shortcut cannot darken the screen.
+- Queued callbacks from a previous shortcut registration cannot affect a new backlight activation.
+- A failed driver write, observer registration or restorer launch leaves the previous mode usable and visible.
+- Stop, timer expiry, power stop, normal quit and unexpected GUI exit restore brightness without new administrator authorization.
+- Unsupported displays or missing private symbols fail visibly and safely; no black overlay is used as a substitute for backlight control.
+- No installation over an active sleep guardian, and no commit/push/tag/release without a separate user instruction.
+
+Physical key checks (2026-11-09)
+- User has standard F1/F2 behavior enabled: brightness actions require Fn.
+- Fn+F2 (increase), confirmed by the user after clarifying the instruction: a notification arrived about 2.7 seconds after entry; brightness changed from 0 to 0.0625 before the independent 20-second restoration. This observer can detect the increase action.
+- Dedicated 20-second Fn+F1 (decrease) retest: no notification between the entry write (~0.12 seconds) and watchdog restoration (~20.16 seconds); brightness stayed 0 through the final check at ~18.82 seconds. This notification route did not detect decrease at zero in this trial.
+- Original brightness was restored after both trials. The display stayed logically awake and the session stayed unlocked during the measured short intervals; long idle locking remains unverified.
+- Earlier trials without a verified Fn combination are inconclusive about brightness keys.
+- Proposed next decision: use brightness-increase as the exit action, then test immediate restoration on that event. Do not claim support for either brightness key or implement raw keyboard monitoring without revisiting the requirement.
+
+Successful increase-key exit trial (2026-11-09)
+- First immediate-write attempt visibly flashed the saved brightness, then macOS reapplied one brightness step; the independent watchdog restored the saved value at 20 seconds. The user confirmed the visible overwrite, consistent with a hardware-key processing race.
+- Revised diagnostic restores only after brightness stabilizes, verifies the target remains stable and bounds this sequence to 3 seconds. Fake checks passed for an ordinary restore, an OS overwrite and persistent write refusal.
+- Physical Fn+F2 retest: notification at 3.099 seconds; verified saved brightness 0.64888966 by 4.193 seconds (about 1.1 seconds after detection). Readbacks stayed at that brightness through the end of the 20-second trial. Awake/unlocked throughout measured samples; watchdog also completed successfully.
+- This validates the tested increase-key exit path in a separate diagnostic script, not integration into the Wakecup app, held-key behavior, automatic-brightness interactions or long idle lock suppression.
+
+Implementation contract — configurable exit (2026-11-09)
+- User replaces the fixed brightness-key exit with one configurable action: Restore brightness. No default/fixed sun key; F1–F20 with at least one of Shift/Control/Option/Command only, with native registration/conflict checks. Unsupported stored shortcuts are cleared without conversion. Shortcut is active only while backlight is off; setting it uses a local capture control, without global keyboard observation.
+- Main Display backlight control: Follow macOS settings / Keep on / Backlight off. A shortcut must be configured before selecting Backlight off. Idle selection configures the next start; changing during active use applies without resetting the timer. Shortcut exit restores the previous display mode and saved positive brightness. Disallow removing/editing the exit shortcut while dark.
+- Core/DisplaySettings.swift defines DisplayMode and DisplayShortcut. Application/GlobalDisplayHotKey.swift owns scoped native registration. Presentation/DisplayShortcutEditor.swift owns focused local capture, validation, Save/Cancel/Clear and shared fonts.
+- System/BacklightSession.swift owns built-in display validation, dynamically resolved DisplayServices access and an independent unprivileged restore child. Expose begin(), restore(), isHealthy, and a CLI entry handled before normal NSApplication startup. Child must acknowledge READY before zero write, restore on parent pipe EOF/explicit request, retain recovery record on failure, and never touch root sleep/lock/password settings.
+- Application/SessionOperations.swift adds injectable enterBacklight(shortcut, callback), restoreBacklight(), validateDisplayShortcut(shortcut), backlightIsHealthy() with inert/default-failure fixtures. System operations compose the hotkey and brightness backend transactionally. SessionModel coordinates activation, exit and lifecycle through setDisplayMode. Do not move dialogs into the model.
+- Verification: fake shortcut validation/registration, brightness/child restoration and model lifecycle tests; isolated offscreen EN/RU editor and unified layout tests; full headless test.sh and signed builds; fresh review. No actual screen darkening, physical shortcut capture, installation, commit or publishing during implementation/testing.
+- Existing pending source changes are preserved. Work in the current checkout. No extra dependencies or generalized shortcut framework; the Lang Switcher recorder is a reference for focus/navigation and styles, not a copied global event tap.
+
+Implementation verification (2026-11-09)
+- Configurable Restore brightness editor and three display modes implemented; display lifecycle isolated in Application/DisplayModeController.swift. No fixed sun action and no global keyboard event monitor.
+- Core settings: 81 checks passed; hotkey ownership: 18 fake checks passed. Backend tests passed, including real subprocess/pipe EOF using fake file-backed hardware and delayed-child RED/GREEN regression.
+- Display-mode model tests passed for live changes, rollback, retained escape on uncertain restoration, expiry/stop/health restoration, old callbacks, legacy settings and blocking a new start during unresolved recovery. Existing session model groups still pass.
+- Full signed headless test.sh passed. The only subsequent runtime-source change is the reviewed modal-owner dismissal guard, covered by final full-source compilation and offscreen EN/RU editor/unified tests.
+- EN/RU isolated editor, active mode and unified layout tests passed. Screenshots inspected. Both review findings fixed: require old safety child exit; suspend parent outside-click/Escape dismissal while an editor is modal. Fresh review reports no remaining significant findings.
+- REUSE lint: 118/118 files covered. Diff/runner syntax checks passed. Separate signed arm64/x86_64 packages built; no installation, actual new shortcut delivery test, real display changes, commit or publication performed during implementation.
+
+First-use setup refinement (2026-11-09)
+- User requirement: the first attempt to select Backlight off with no configured chord opens the recorder automatically, so the user chooses the exit themselves.
+- Presentation requests the existing editor with a required shortcut. Save stays disabled for an empty draft; cancellation preserves the current mode. The chosen mode is applied only after a successful save and modal dismissal. Existing shortcuts bypass the prompt; clearing a shortcut makes setup required again.
+- Focused offscreen EN/RU editor and unified-flow tests passed, including empty Save, cancellation, missing chord despite acceptance, no darkening during setup, successful mode selection and no repeated prompt. Native input/hardware were not used. First-use screenshots inspected. Signed arm64/x86_64 packages rebuilt without installation.

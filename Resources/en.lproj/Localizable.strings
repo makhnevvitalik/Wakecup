@@ -1,0 +1,721 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>%@ Restore normal sleep to continue.</key>
+	<string>%@ Restore normal sleep to continue.</string>
+	<key>%@ is available.</key>
+	<string>%@ is available.</string>
+	<key>%d percent</key>
+	<string>%d percent</string>
+	<key>%dh</key>
+	<string>%dh</string>
+	<key>%dm</key>
+	<string>%dm</string>
+	<key>1 hour</key>
+	<string>1 hour</string>
+	<key>3 hours</key>
+	<string>3 hours</string>
+	<key>5 hours</key>
+	<string>5 hours</string>
+	<key>AI works. Your Mac stays wide awake.</key>
+	<string>AI works. Your Mac stays wide awake.</string>
+	<key>About Wakecup</key>
+	<string>About Wakecup</string>
+	<key>About Wakecup…</key>
+	<string>About…</string>
+	<key>Administrator privileges are required.</key>
+	<string>Administrator privileges are required.</string>
+	<key>Allow Wakecup in System Settings → General → Login Items.</key>
+	<string>Allow Wakecup in System Settings → General → Login Items.</string>
+	<key>Allow login item in macOS…</key>
+	<string>Allow login item in macOS…</string>
+	<key>Keep awake on battery</key>
+	<string>Keep awake on battery</string>
+	<key>About this setting</key>
+	<string>About this setting</string>
+	<key>closed.lid.help</key>
+	<string>Keeps your Mac awake when the lid is closed. Use the helper to avoid repeated password prompts.</string>
+	<key>battery.power.help</key>
+	<string>Keeps your Mac awake while running on battery.
+
+When this is off, Wakecup only works while external power is connected. Unplugging it lets your Mac sleep normally again.</string>
+	<key>Check for Updates</key>
+	<string>Check for Updates</string>
+	<key>Check the result</key>
+	<string>Check that the sleep block is off</string>
+	<key>Checking GitHub for updates…</key>
+	<string>Checking GitHub for updates…</string>
+	<key>Checking…</key>
+	<string>Checking…</string>
+	<key>Copy</key>
+	<string>Copy</string>
+	<key>Copy: %@</key>
+	<string>Copy: %@</string>
+	<key>Could not authorize closed-lid mode.</key>
+	<string>Could not authorize closed-lid mode.</string>
+	<key>Could not change login at startup: %@</key>
+	<string>Could not change login at startup: %@</string>
+	<key>Could not change sleep mode.</key>
+	<string>Could not change sleep mode.</string>
+	<key>Could not commit session state.</key>
+	<string>Could not commit session state.</string>
+	<key>Could not contact GitHub. Please try again.</key>
+	<string>Could not contact GitHub. Please try again.</string>
+	<key>Could not determine the installed app version.</key>
+	<string>Could not determine the installed app version.</string>
+	<key>Could not establish session process identities.</key>
+	<string>Could not establish session process identities.</string>
+	<key>Could not open the session directory.</key>
+	<string>Could not open the session directory.</string>
+	<key>Could not read guardian state.</key>
+	<string>Could not read guardian state.</string>
+	<key>Could not read session state.</key>
+	<string>Could not read session state.</string>
+	<key>Could not read sleep settings.</key>
+	<string>Could not read sleep settings.</string>
+	<key>Could not restore sleep.</key>
+	<string>Could not restore sleep.</string>
+	<key>Could not restore sleep. Recovery command required: sudo pmset disablesleep 0</key>
+	<string>Could not restore sleep. Recovery command required: sudo pmset disablesleep 0</string>
+	<key>Could not save session state.</key>
+	<string>Could not save session state.</string>
+	<key>Could not confirm that the guardian stopped.</key>
+	<string>Could not confirm that the guardian stopped.</string>
+	<key>Could not send the stop request to the guardian.</key>
+	<string>Could not send the stop request to the guardian.</string>
+	<key>Could not set the session file owner.</key>
+	<string>Could not set the session file owner.</string>
+	<key>Could not write session state.</key>
+	<string>Could not write session state.</string>
+	<key>Duration</key>
+	<string>Duration</string>
+	<key>GitHub returned HTTP %d.</key>
+	<string>GitHub returned HTTP %d.</string>
+	<key>GitHub returned an invalid response.</key>
+	<string>GitHub returned an invalid response.</string>
+	<key>GitHub returned invalid update information.</key>
+	<string>GitHub returned invalid update information.</string>
+	<key>GitHub’s request limit was reached. Please try again later.</key>
+	<string>GitHub’s request limit was reached. Please try again later.</string>
+	<key>If your Mac still stays awake</key>
+	<string>If the block is off but your Mac still will not sleep</string>
+	<key>If your Mac stops sleeping</key>
+	<string>Try Wakecup first</string>
+	<key>Invalid session directory permissions.</key>
+	<string>Invalid session directory permissions.</string>
+	<key>Invalid session parameters.</key>
+	<string>Invalid session parameters.</string>
+	<key>Invalid session state file.</key>
+	<string>Invalid session state file.</string>
+	<key>Keep awake with lid closed</key>
+	<string>Keep awake with lid closed</string>
+	<key>Language</key>
+	<string>Language</string>
+	<key>Login at startup is disabled.</key>
+	<string>Login at startup is disabled.</string>
+	<key>Login at startup is enabled.</key>
+	<string>Login at startup is enabled.</string>
+	<key>Manual recovery without Wakecup</key>
+	<string>If that did not help: restore sleep manually</string>
+	<key>Minimum battery level</key>
+	<string>Minimum battery level</string>
+	<key>Mode</key>
+	<string>Mode</string>
+	<key>Open at Login</key>
+	<string>Open at Login</string>
+	<key>Quit Wakecup</key>
+	<string>Quit Wakecup</string>
+	<key>Request cancelled. The session was not started.</key>
+	<string>Request cancelled. The session was not started.</string>
+	<key>Restore Normal Sleep</key>
+	<string>Restore Normal Sleep</string>
+	<key>Restoring normal sleep…</key>
+	<string>Restoring normal sleep…</string>
+	<key>Session ended.</key>
+	<string>Session ended.</string>
+	<key>Session ended: %@.</key>
+	<string>Session ended: %@.</string>
+	<key>Session state is too large.</key>
+	<string>Session state is too large.</string>
+	<key>Show remaining time in menu bar</key>
+	<string>Show remaining time in menu bar</string>
+	<key>Sleep is already disabled by a system setting. Wakecup will not change an existing setting.</key>
+	<string>Sleep is already disabled by a system setting. Wakecup will not change an existing setting.</string>
+	<key>Sleep is already disabled by another setting. The session was not started.</key>
+	<string>Sleep is already disabled by another setting. The session was not started.</string>
+	<key>Start</key>
+	<string>Start</string>
+	<key>Stop</key>
+	<string>Stop</string>
+	<key>Stop at battery level</key>
+	<string>Stop at battery level:</string>
+	<key>Stopping…</key>
+	<string>Stopping…</string>
+	<key>The guardian did not start. Sleep settings were not confirmed.</key>
+	<string>The guardian did not start. Sleep settings were not confirmed.</string>
+	<key>The guardian is not responding. Restore normal sleep to continue.</key>
+	<string>The guardian is not responding. Restore normal sleep to continue.</string>
+	<key>The license document is unavailable.</key>
+	<string>The license document is unavailable.</string>
+	<key>The lid sensor is unavailable.</key>
+	<string>The lid sensor is unavailable.</string>
+	<key>The previous session was interrupted. Restore normal sleep before starting again.</key>
+	<string>The previous session was interrupted. Restore normal sleep before starting again.</string>
+	<key>The repository or a public release has not been published yet.</key>
+	<string>No public release yet.</string>
+	<key>There is no interrupted session to recover.</key>
+	<string>There is no interrupted session to recover.</string>
+	<key>Try Again</key>
+	<string>Try Again</string>
+	<key>Unknown SleepDisabled value.</key>
+	<string>Unknown SleepDisabled value.</string>
+	<key>Unknown session file.</key>
+	<string>Unknown session file.</string>
+	<key>Unknown version</key>
+	<string>Unknown version</string>
+	<key>Version %@</key>
+	<string>Version %@</string>
+	<key>View Release</key>
+	<string>View Release</string>
+	<key>Wakecup License</key>
+	<string>Wakecup License</string>
+	<key>Wakecup Settings</key>
+	<string>Wakecup Settings</string>
+	<key>Wakecup is licensed under the MIT License with the Commons Clause condition.</key>
+	<string>Wakecup is licensed under the MIT License with the Commons Clause condition.</string>
+	<key>What Wakecup changes</key>
+	<string>What Wakecup changes</string>
+	<key>Mac won’t sleep with Wakecup off?</key>
+	<string>Mac won’t sleep with Wakecup off?</string>
+	<key>You’re up to date.</key>
+	<string>You’re up to date.</string>
+	<key>application closed</key>
+	<string>application closed</string>
+	<key>battery reached the %@%% threshold</key>
+	<string>battery reached the %@%% threshold</string>
+	<key>battery threshold must be between 10% and 90%</key>
+	<string>battery threshold must be between 10% and 90%</string>
+	<key>could not determine battery charge</key>
+	<string>could not determine battery charge</string>
+	<key>could not read power state</key>
+	<string>could not read power state</string>
+	<key>guardian exited</key>
+	<string>guardian exited</string>
+	<key>macOS could not enable closed-lid mode.</key>
+	<string>macOS could not enable closed-lid mode.</string>
+	<key>macOS could not prevent sleep (%@).</key>
+	<string>macOS could not prevent sleep (%@).</string>
+	<key>How to restore Mac sleep</key>
+	<string>How to restore Mac sleep</string>
+	<key>pmset could not read settings.</key>
+	<string>pmset could not read settings.</string>
+	<key>power adapter disconnected</key>
+	<string>power adapter disconnected</string>
+	<key>recovery.section.1</key>
+	<string>While a session is active, Wakecup temporarily asks macOS to stay awake. Select “Keep on” under “Display backlight” to prevent the screen from turning off. These temporary requests are released when the session stops or the app exits.
+
+Keep awake with lid closed additionally enables a system-wide sleep block: SleepDisabled becomes 1. When the session ends, a separate guardian process returns it to 0 and checks the result. It also attempts to restore sleep if the main app crashes. If restoration fails, use the manual steps above.
+
+Wakecup does not change sleep timers, display timers, or hibernation settings.
+
+If you installed the optional helper, Wakecup also adds a system service. It does not change sleep settings while idle. You can remove it in Wakecup Settings → Closed-lid permission → Remove helper….</string>
+	<key>recovery.section.2</key>
+	<string>1. Open Wakecup from the cup icon in the menu bar. If the icon is missing, press Command (⌘) + Space, type Wakecup, then press Return.
+2. If you see Stop, click it and wait for the session to end. If you see Start, the session is already stopped.
+3. If Restore Normal Sleep appears, click it. If macOS asks for permission, enter an administrator password.
+4. Test sleep: choose Apple menu  → Sleep. If Sleep is unavailable or your Mac still will not sleep, continue with the manual steps below.</string>
+	<key>recovery.section.3</key>
+	<string>To open Terminal or Activity Monitor, press Command (⌘) + Space, type the app name, then press Return.
+
+1. If Wakecup is running, open the gear menu and choose Quit Wakecup. If it is unresponsive, find Wakecup in Activity Monitor and stop the process using the stop button.
+2. Quit any other apps that keep your Mac awake. In Terminal, run /usr/bin/pmset -g and check SleepDisabled. If it is 0 or absent, skip the reset and see “If the block is off but your Mac still will not sleep” below. If it remains 1 and you want to clear the system-wide sleep block, run the command below.
+3. Enter your Mac administrator password and press Return. Terminal does not display password characters, not even asterisks; this is normal.
+
+This command removes the system-wide sleep block, including one enabled by another app. No output after the command is normal; check the result in the next step.</string>
+	<key>recovery.section.4</key>
+	<string>Paste the command below into Terminal and press Return. Near the start of the output, look for SleepDisabled:
+• 0, or no such line — the system-wide sleep block is off.
+• 1 — the sleep block is still on.
+
+Once the block is off, test Apple menu  → Sleep again.
+
+If the recovery command completed without errors but the value stays at 1 or changes back, save your work and restart your Mac. After restarting, leave the Wakecup session off and repeat the manual recovery steps. If the command reports a password or permissions error, ask your Mac administrator for help.</string>
+	<key>recovery.section.5</key>
+	<string>If your Mac sleeps from the Apple menu but not automatically when idle, check your normal macOS sleep settings. Video playback, downloads, and other apps can also prevent sleep; stop them and test again.
+
+The command below does not change anything. It lists apps currently requesting that your Mac stay awake. If the cause is unclear, save its output when asking for help.</string>
+	<key>sleep restored after an interrupted session</key>
+	<string>sleep restored after an interrupted session</string>
+	<key>start cancelled</key>
+	<string>start cancelled</string>
+	<key>stopped</key>
+	<string>stopped</string>
+	<key>Until stopped manually</key>
+	<string>Until stopped manually</string>
+	<key>%d%% or lower</key>
+	<string>%d%% or lower</string>
+	<key>Current charge: %d%%</key>
+	<string>Current charge: %d%%</string>
+	<key>Current charge: unavailable</key>
+	<string>Current charge: unavailable</string>
+	<key>Wakecup — restore normal sleep</key>
+	<string>Wakecup — restore normal sleep</string>
+	<key>Could not restore sleep. Try recovery again; if it still fails, use the manual recovery guide.</key>
+	<string>Could not restore sleep. Try recovery again; if it still fails, use the manual recovery guide.</string>
+	<key>Automatic recovery could not establish exclusive ownership. Try recovery again; if it still fails, use the manual recovery guide.</key>
+	<string>Automatic recovery could not establish exclusive ownership. Try recovery again; if it still fails, use the manual recovery guide.</string>
+	<key>Another guardian or recovery operation owns the sleep setting. Try again after it stops.</key>
+	<string>Another guardian or recovery operation owns the sleep setting. Try again after it stops.</string>
+	<key>A previous system command has not stopped. Try recovery again.</key>
+	<string>A previous system command has not stopped. Try recovery again.</string>
+	<key>The system command timed out. Try recovery again.</key>
+	<string>The system command timed out. Try recovery again.</string>
+	<key>Invalid system command timeout.</key>
+	<string>Invalid system command timeout.</string>
+	<key>Could not create the system command pipe.</key>
+	<string>Could not create the system command pipe.</string>
+	<key>Could not prepare the system command.</key>
+	<string>Could not prepare the system command.</string>
+	<key>Could not identify the system command.</key>
+	<string>Could not identify the system command.</string>
+	<key>Could not open the guardian status socket.</key>
+	<string>Could not open the guardian status socket.</string>
+	<key>Could not open the system sleep lease.</key>
+	<string>Could not open the system sleep lease.</string>
+	<key>Invalid system sleep lease permissions.</key>
+	<string>Invalid system sleep lease permissions.</string>
+	<key>Could not acquire the system sleep lease.</key>
+	<string>Could not acquire the system sleep lease.</string>
+	<key>Could not read the system sleep owner.</key>
+	<string>Could not read the system sleep owner.</string>
+	<key>Invalid system sleep owner record.</key>
+	<string>Invalid system sleep owner record.</string>
+	<key>Could not save the system sleep owner.</key>
+	<string>Could not save the system sleep owner.</string>
+	<key>Could not identify the current boot session.</key>
+	<string>Could not identify the current boot session.</string>
+	<key>Could not verify the guardian process.</key>
+	<string>Could not verify the guardian process.</string>
+	<key>Could not verify guardian subprocesses.</key>
+	<string>Could not verify guardian subprocesses.</string>
+	<key>Could not stop the unresponsive guardian.</key>
+	<string>Could not stop the unresponsive guardian.</string>
+	<key>Duration must be between 1 second and 999 hours.</key>
+	<string>Duration must be between 1 second and 999 hours.</string>
+	<key>License…</key>
+	<string>License…</string>
+	<key>recovery.introduction</key>
+	<string>Use this guide if your Wakecup session has stopped or the app is closed, but your Mac still will not sleep. A dark screen alone does not mean your Mac is asleep.</string>
+	<key>Open guide separately</key>
+	<string>Open guide separately</string>
+	<key>Could not open the guide separately.</key>
+	<string>Could not open the guide separately.</string>
+	<key>Select and copy the guide text before quitting Wakecup.</key>
+	<string>Select and copy the guide text before quitting Wakecup.</string>
+	<key>Closed-lid permission</key>
+	<string>Closed-lid permission</string>
+	<key>Ask for a password each session</key>
+	<string>Ask for a password when enabling</string>
+	<key>Use installed helper</key>
+	<string>Use installed helper</string>
+	<key>Install helper…</key>
+	<string>Install helper…</string>
+	<key>Update helper…</key>
+	<string>Update helper…</string>
+	<key>Remove helper…</key>
+	<string>Remove helper…</string>
+	<key>Changing helper…</key>
+	<string>Changing helper…</string>
+	<key>Why install a helper?</key>
+	<string>Why install a helper?</string>
+	<key>Remove Wakecup helper?</key>
+	<string>Remove Wakecup helper?</string>
+	<key>Install helper</key>
+	<string>Install helper</string>
+	<key>Remove helper</key>
+	<string>Remove helper</string>
+	<key>helper.remove.explanation</key>
+	<string>Wakecup will return to asking for administrator permission when starting a closed-lid session. The helper and its system service will be removed. Your preferences and sleep-recovery information will remain.</string>
+	<key>helper.failure.explanation</key>
+	<string>Could not change the helper settings. Check its status in the main Wakecup window.</string>
+	<key>Could not change the Wakecup helper</key>
+	<string>Could not change the Wakecup helper</string>
+	<key>The helper belongs to another Mac user.</key>
+	<string>The helper belongs to another Mac user.</string>
+	<key>The installed helper identity could not be confirmed.</key>
+	<string>The installed helper identity could not be confirmed.</string>
+	<key>Starting session</key>
+	<string>Starting…</string>
+	<key>Helper request failed: %@</key>
+	<string>Helper request failed: %@</string>
+	<key>Optional helper</key>
+	<string>Optional helper</string>
+	<key>recovery.helper</key>
+	<string>Closed-lid mode normally asks for administrator permission each time it is enabled. To avoid repeated prompts, click Install in the Helper row below Keep awake with lid closed. macOS will request administrator permission. The helper never knows or stores your password.
+
+To manage an installed helper, click Configure… in the same row. You can switch back to password prompts or remove the helper there. Stop Wakecup before updating or removing it. Installation, updates and removal require administrator permission; ordinary use with a working helper does not. If the Helper row shows Update after an app update, click it before enabling closed-lid mode again.
+
+The helper is available to the Mac user who installed it. It starts a protective process for closed-lid mode and restores normal sleep when the mode stops. Removing it preserves information needed to recover an interrupted mode.</string>
+	<key>helper.failure.previous</key>
+	<string>The change was not applied. The previously installed helper is still available.</string>
+	<key>Wakecup helper</key>
+	<string>Wakecup helper</string>
+	<key>The bundled helper is missing or damaged. Reinstall Wakecup.</key>
+	<string>The bundled helper is missing or damaged. Reinstall Wakecup.</string>
+	<key>helper.explanation</key>
+	<string>The helper lets you enable “Keep awake with lid closed” without entering your password each time, even after restarting Wakecup.
+
+During installation, macOS asks for administrator permission and gives the helper the rights it needs to manage sleep. The helper never knows or stores your password.
+
+You can switch back to password requests or remove the helper in Wakecup Settings. Installing, updating and removing the helper require administrator permission.</string>
+	<key>Remove</key>
+	<string>Remove</string>
+	<key>Update helper</key>
+	<string>Update helper</string>
+	<key>Invalid helper session path.</key>
+	<string>Invalid helper session path.</string>
+	<key>The session does not belong to the requesting Wakecup process.</key>
+	<string>The session does not belong to the requesting Wakecup process.</string>
+	<key>Invalid helper signing identity.</key>
+	<string>Invalid helper signing identity.</string>
+	<key>Invalid helper response.</key>
+	<string>Invalid helper response.</string>
+	<key>Invalid helper guard response.</key>
+	<string>Invalid helper guard response.</string>
+	<key>The helper connection ended. Check the session status before trying again.</key>
+	<string>The helper connection ended. Check the session status before trying again.</string>
+	<key>The helper connection was interrupted. Check the session status before trying again.</key>
+	<string>The helper connection was interrupted. Check the session status before trying again.</string>
+	<key>Could not connect to the Wakecup helper.</key>
+	<string>Could not connect to the Wakecup helper.</string>
+	<key>The helper did not reply. Check the session status before trying again.</key>
+	<string>The helper did not reply. Check the session status before trying again.</string>
+	<key>The helper is already processing another session.</key>
+	<string>The helper is already processing another session.</string>
+	<key>The Wakecup helper needs an update.</key>
+	<string>The Wakecup helper needs an update.</string>
+	<key>The Wakecup connection is no longer valid.</key>
+	<string>The Wakecup connection is no longer valid.</string>
+	<key>This session has already been started. Check its current status.</key>
+	<string>This session has already been started. Check its current status.</string>
+	<key>The system helper identity is invalid.</key>
+	<string>The system helper identity is invalid.</string>
+	<key>The Wakecup connection ended.</key>
+	<string>The Wakecup connection ended.</string>
+	<key>Could not prepare the helper guard.</key>
+	<string>Could not prepare the helper guard.</string>
+	<key>Could not prepare helper descriptors.</key>
+	<string>Could not prepare helper descriptors.</string>
+	<key>Could not isolate the helper guard.</key>
+	<string>Could not isolate the helper guard.</string>
+	<key>Could not isolate helper descriptors.</key>
+	<string>Could not isolate helper descriptors.</string>
+	<key>Invalid administrator installation request.</key>
+	<string>Invalid administrator installation request.</string>
+	<key>The installer must run from a verified system staging file.</key>
+	<string>The installer must run from a verified system staging file.</string>
+	<key>Stop Wakecup and restore normal sleep before changing the helper.</key>
+	<string>Stop Wakecup and restore normal sleep before changing the helper.</string>
+	<key>Stop the active Wakecup guardian before changing the helper.</key>
+	<string>Stop the active Wakecup guardian before changing the helper.</string>
+	<key>Could not stop the installed Wakecup helper.</key>
+	<string>Could not stop the installed Wakecup helper.</string>
+	<key>Could not register the Wakecup helper.</key>
+	<string>Could not register the Wakecup helper.</string>
+	<key>The installed Wakecup helper was not registered.</key>
+	<string>The installed Wakecup helper was not registered.</string>
+	<key>The new helper did not authenticate with Wakecup. The previous installation has been restored.</key>
+	<string>The new helper did not authenticate with Wakecup. The previous installation has been restored.</string>
+	<key>Could not remove the Wakecup helper file.</key>
+	<string>Could not remove the Wakecup helper file.</string>
+	<key>Could not stage a Wakecup helper file.</key>
+	<string>Could not stage a Wakecup helper file.</string>
+	<key>Could not write a Wakecup helper file.</key>
+	<string>Could not write a Wakecup helper file.</string>
+	<key>Could not commit a Wakecup helper file.</key>
+	<string>Could not commit a Wakecup helper file.</string>
+	<key>Could not verify helper signature.</key>
+	<string>Could not verify helper signature.</string>
+	<key>Could not verify the running Wakecup signature.</key>
+	<string>Could not verify the running Wakecup signature.</string>
+	<key>The helper signature is invalid.</key>
+	<string>The helper signature is invalid.</string>
+	<key>Hardened Runtime is required for the Wakecup helper.</key>
+	<string>Hardened Runtime is required for the Wakecup helper.</string>
+	<key>Unsafe helper signing entitlements.</key>
+	<string>Unsafe helper signing entitlements.</string>
+	<key>Could not open the installed helper.</key>
+	<string>Could not open the installed helper.</string>
+	<key>Unsafe installed helper permissions.</key>
+	<string>Unsafe installed helper permissions.</string>
+	<key>Installed helper file is too large.</key>
+	<string>Installed helper file is too large.</string>
+	<key>Invalid system helper access permissions.</key>
+	<string>Invalid system helper access permissions.</string>
+	<key>The system helper location has additional access grants. Installation was refused.</key>
+	<string>The system helper location has additional access grants. Installation was refused.</string>
+	<key>Could not prepare private helper permissions.</key>
+	<string>Could not prepare private helper permissions.</string>
+	<key>Could not clear inherited helper access permissions.</key>
+	<string>Could not clear inherited helper access permissions.</string>
+	<key>Invalid installed helper identity.</key>
+	<string>Invalid installed helper identity.</string>
+	<key>The helper session changed before it could start.</key>
+	<string>The helper session changed before it could start.</string>
+	<key>Invalid managed guard context.</key>
+	<string>Invalid managed guard context.</string>
+	<key>Cancel</key>
+	<string>Cancel</string>
+	<key>OK</key>
+	<string>OK</string>
+	<key>Close</key>
+	<string>Close</string>
+	<key>Helper</key>
+	<string>Helper</string>
+	<key>Configure…</key>
+	<string>Configure…</string>
+	<key>Install</key>
+	<string>Install</string>
+	<key>Update</key>
+	<string>Update</string>
+	<key>Details…</key>
+	<string>Details…</string>
+	<key>Applying changes…</key>
+	<string>Applying changes…</string>
+	<key>Wait for the operation to finish.</key>
+	<string>Wait for the operation to finish.</string>
+	<key>Checking readiness…</key>
+	<string>Checking readiness…</string>
+	<key>Wait for the check to finish.</key>
+	<string>Wait for the check to finish.</string>
+	<key>Disabled in settings</key>
+	<string>Disabled in settings</string>
+	<key>Closed-lid mode requires a password.</key>
+	<string>Closed-lid mode requires a password.</string>
+	<key>Installed and in use</key>
+	<string>Installed and in use</string>
+	<key>Closed-lid mode — no password required.</key>
+	<string>Closed-lid mode — no password required.</string>
+	<key>Update required</key>
+	<string>Update required</string>
+	<key>Closed-lid mode requires a password for now.</key>
+	<string>Closed-lid mode requires a password for now.</string>
+	<key>Unavailable</key>
+	<string>Unavailable</string>
+	<key>Not installed</key>
+	<string>Not installed</string>
+	<key>Switch to password prompts</key>
+	<string>Switch to password prompts</string>
+	<key>Use helper</key>
+	<string>Use helper</string>
+	<key>Current mode: closed-lid operation without a password.</key>
+	<string>Current mode: no password needed for closed-lid mode.</string>
+	<key>Current mode: a password is required each time closed-lid mode is enabled.</key>
+	<string>Current mode: a password is needed each time closed-lid mode starts.</string>
+	<key>Connect power or enable Keep awake on battery.</key>
+	<string>Connect power or enable Keep awake on battery.</string>
+	<key>Wait for the power status to become available, or connect power.</key>
+	<string>Wait for the power status to become available, or connect power.</string>
+	<key>Choose a battery stop threshold between 10% and 90%.</key>
+	<string>Choose a battery stop threshold between 10% and 90%.</string>
+	<key>Invalid administrator execution request.</key>
+	<string>Invalid administrator execution request.</string>
+	<key>The operation must run from a verified system staging file.</key>
+	<string>The operation must run from a verified system staging file.</string>
+	<key>Recovery is already in progress. Check the session status before trying again.</key>
+	<string>Recovery is already in progress. Check the session status before trying again.</string>
+	<key>Could not prepare the recovery result.</key>
+	<string>Could not prepare the recovery result.</string>
+	<key>Could not isolate recovery result descriptors.</key>
+	<string>Could not isolate recovery result descriptors.</string>
+	<key>Invalid recovery completion request.</key>
+	<string>Invalid recovery completion request.</string>
+	<key>Could not confirm recovery completion.</key>
+	<string>Could not confirm recovery completion.</string>
+	<key>Could not change the display setting. Try again.</key>
+	<string>Could not change the display setting. Try again.</string>
+	<key>Apply</key>
+	<string>Apply</string>
+	<key>Confirm the macOS prompt</key>
+	<string>Confirm the macOS prompt</string>
+	<key>Connect power or lower the %d%% battery limit.</key>
+	<string>Connect power or lower the %d%% battery limit.</string>
+	<key>Applying settings…</key>
+	<string>Applying settings…</string>
+	<key>Could not apply settings. The current settings remain active.</key>
+	<string>Could not apply settings. The current settings remain active.</string>
+	<key>Open the lid before changing closed-lid mode.</key>
+	<string>Open the lid before changing closed-lid mode.</string>
+	<key>The previous guardian has not exited. Wakecup could not apply the change.</key>
+	<string>The previous guardian has not exited. Wakecup could not apply the change.</string>
+	<key>The mode could not restart. Wakecup has stopped.</key>
+	<string>The mode could not restart. Wakecup has stopped.</string>
+	<key>The Wakecup timer ended. “Keep awake with lid closed” was not changed.</key>
+	<string>The Wakecup timer ended. “Keep awake with lid closed” was not changed.</string>
+	<key>Could not confirm the new settings.</key>
+	<string>Could not confirm the new settings.</string>
+	<key>Display backlight</key>
+	<string>Display backlight</string>
+	<key>May turn off</key>
+	<string>Follow macOS settings</string>
+	<key>Keep on</key>
+	<string>Keep on</string>
+	<key>Backlight off</key>
+	<string>Backlight off</string>
+	<key>display.modes.help</key>
+	<string>“Follow macOS settings” lets the screen turn off on the system timer.
+
+“Keep on” keeps the screen on while Wakecup is active.
+
+“Backlight off” turns off the built-in screen’s backlight after a 10-second countdown. The Mac and display stay awake. Use the “Restore brightness” shortcut below to bring back the previous brightness. If you forget the shortcut, press the brightness-up key to turn the backlight on again.</string>
+	<key>Backlight turns off in %ld s</key>
+	<string>Backlight turns off in %ld s</string>
+	<key>Cancel backlight countdown</key>
+	<string>Cancel</string>
+	<key>Only in Backlight off mode</key>
+	<string>Only in Backlight off mode</string>
+	<key>Restore brightness</key>
+	<string>Restore brightness</string>
+	<key>Not configured</key>
+	<string>Not configured</string>
+	<key>Restore brightness shortcut</key>
+	<string>Restore brightness shortcut</string>
+	<key>Click here to record</key>
+	<string>Click here to record</string>
+	<key>Hold a modifier, then press F1–F20.</key>
+	<string>Hold a modifier, then press F1–F20.</string>
+	<key>display.shortcut.explanation</key>
+	<string>Use F1–F20 with Shift, Control, Option or Command to restore brightness and return to the previous display mode. Active only while the backlight is off.</string>
+	<key>display.shortcut.invalid</key>
+	<string>Use F1–F20 with Shift, Control, Option or Command. Letters and modifier-only gestures are unavailable.</string>
+	<key>display.shortcut.locked</key>
+	<string>Restore brightness before changing this shortcut.</string>
+	<key>display.shortcut.conflict</key>
+	<string>This shortcut is already in use. Choose another.</string>
+	<key>display.shortcut.unavailable</key>
+	<string>Could not register this shortcut. Choose another and try again.</string>
+	<key>Current shortcut: %@</key>
+	<string>Current shortcut: %@</string>
+	<key>Recording shortcut</key>
+	<string>Recording shortcut</string>
+	<key>Save</key>
+	<string>Save</string>
+	<key>Clear</key>
+	<string>Clear</string>
+	<key>Choose a restore shortcut before turning the backlight off.</key>
+	<string>Choose a restore shortcut before turning the backlight off.</string>
+	<key>The brightness safety process stopped. Check the display setting.</key>
+	<string>The brightness safety process stopped. Check the display setting.</string>
+	<key>Backlight control is unavailable.</key>
+	<string>Backlight control is unavailable.</string>
+	<key>Invalid backlight recovery information.</key>
+	<string>Invalid backlight recovery information.</string>
+	<key>Cannot open backlight recovery directory.</key>
+	<string>Cannot open backlight recovery directory.</string>
+	<key>Unsafe backlight recovery directory permissions.</key>
+	<string>Unsafe backlight recovery directory permissions.</string>
+	<key>Cannot save backlight recovery information.</key>
+	<string>Cannot save backlight recovery information.</string>
+	<key>Cannot write backlight recovery information.</key>
+	<string>Cannot write backlight recovery information.</string>
+	<key>Cannot commit backlight recovery information.</key>
+	<string>Cannot commit backlight recovery information.</string>
+	<key>Cannot read backlight recovery information.</key>
+	<string>Cannot read backlight recovery information.</string>
+	<key>Unsafe backlight recovery file.</key>
+	<string>Unsafe backlight recovery file.</string>
+	<key>Backlight recovery file is too large.</key>
+	<string>Backlight recovery file is too large.</string>
+	<key>Cannot remove backlight recovery information.</key>
+	<string>Cannot remove backlight recovery information.</string>
+	<key>Backlight restoration process stopped. Restore brightness before trying again.</key>
+	<string>Backlight restoration process stopped. Restore brightness before trying again.</string>
+	<key>Backlight off requires a supported, awake built-in display with positive brightness.</key>
+	<string>Backlight off requires a supported, awake built-in display with positive brightness.</string>
+	<key>Backlight restoration process did not stay ready.</key>
+	<string>Backlight restoration process did not stay ready.</string>
+	<key>The built-in display changed during preparation.</key>
+	<string>The built-in display changed during preparation.</string>
+	<key>macOS did not confirm backlight off with a live restoration process.</key>
+	<string>macOS did not confirm backlight off with a live restoration process.</string>
+	<key>Backlight entry failed and brightness restoration is uncertain. Recovery information and the safety process were retained.</key>
+	<string>Backlight entry failed and brightness restoration is uncertain. Recovery information and the safety process were retained.</string>
+	<key>Could not verify brightness restoration. Recovery information was retained.</key>
+	<string>Could not verify brightness restoration. Recovery information was retained.</string>
+	<key>Refusing to restore an invalid brightness snapshot.</key>
+	<string>Refusing to restore an invalid brightness snapshot.</string>
+	<key>Brightness did not return to the saved value.</key>
+	<string>Brightness did not return to the saved value.</string>
+	<key>Backlight restorer parent changed.</key>
+	<string>Backlight restorer parent changed.</string>
+	<key>Cannot prepare the backlight restoration control pipe.</key>
+	<string>Cannot prepare the backlight restoration control pipe.</string>
+	<key>Backlight restoration process exited before READY.</key>
+	<string>Backlight restoration process exited before READY.</string>
+	<key>Backlight restoration process closed its readiness pipe.</key>
+	<string>Backlight restoration process closed its readiness pipe.</string>
+	<key>Backlight restoration process did not acknowledge readiness.</key>
+	<string>Backlight restoration process did not acknowledge readiness.</string>
+	<key>Built-in brightness control is unavailable.</key>
+	<string>Built-in brightness control is unavailable.</string>
+	<key>This macOS version does not support built-in brightness control.</key>
+	<string>This macOS version does not support built-in brightness control.</string>
+	<key>Unlock the active Mac session before turning the backlight off.</key>
+	<string>Unlock the active Mac session before turning the backlight off.</string>
+	<key>Cannot identify the built-in display.</key>
+	<string>Cannot identify the built-in display.</string>
+	<key>Backlight off requires an awake built-in Mac display.</key>
+	<string>Backlight off requires an awake built-in Mac display.</string>
+	<key>Saved built-in display identity is no longer available.</key>
+	<string>Saved built-in display identity is no longer available.</string>
+	<key>Cannot read a valid built-in display brightness.</key>
+	<string>Cannot read a valid built-in display brightness.</string>
+	<key>macOS refused the built-in brightness change.</key>
+	<string>macOS refused the built-in brightness change.</string>
+	<key>Backlight restoration process is still finishing. Try restoring brightness again.</key>
+	<string>Backlight restoration process is still finishing. Try restoring brightness again.</string>
+	<key>display.shortcut.firstUse</key>
+	<string>Choose F1–F20 with Shift, Control, Option or Command to restore brightness. Backlight off will be selected after you save.</string>
+	<key>helper.help</key>
+	<string>The helper lets you enable “Keep awake with lid closed” without entering your password each time.
+
+During installation, macOS asks for administrator permission. Your password is never stored.</string>
+	<key>Active until %@</key>
+	<string>Active until %@</string>
+	<key>battery.threshold.scale.help</key>
+	<string>The scale shows current charge from 1% to 100%. Drag the stop threshold between 10% and 90%.</string>
+	<key>When to stop</key>
+	<string>When to stop</string>
+	<key>Stop at</key>
+	<string>Stop at</string>
+	<key>Today</key>
+	<string>Today</string>
+	<key>Tomorrow</key>
+	<string>Tomorrow</string>
+	<key>Choose date…</key>
+	<string>Choose date…</string>
+	<key>End time</key>
+	<string>End time</string>
+	<key>End day</key>
+	<string>End day</string>
+	<key>Enter a time such as 18:30.</key>
+	<string>Enter a time such as 18:30.</string>
+	<key>Stops in %@</key>
+	<string>Stops in %@</string>
+	<key>This time has already passed.</key>
+	<string>This time has already passed.</string>
+	<key>Choose an end date within the next 30 days.</key>
+	<string>Choose an end date within the next 30 days.</string>
+	<key>Indefinitely</key>
+	<string>Indefinitely</string>
+	<key>Hold a modifier</key>
+	<string>Hold a modifier</string>
+	<key>Press F1–F20.</key>
+	<string>Press F1–F20.</string>
+	<key>Then press F1–F20.</key>
+	<string>Then press F1–F20.</string>
+	<key>Cancel edits</key>
+	<string>Cancel</string>
+</dict>
+</plist>

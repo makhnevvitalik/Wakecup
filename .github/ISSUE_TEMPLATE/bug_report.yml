@@ -1,0 +1,24 @@
+name: Bug report / Сообщить об ошибке
+description: Describe an unexpected result / Опишите проблему
+title: "[Bug]: "
+body:
+  - type: input
+    id: version
+    attributes:
+      label: Wakecup version / Версия Wakecup
+      description: From About / Из окна «О приложении»
+    validations:
+      required: true
+  - type: input
+    id: system
+    attributes:
+      label: macOS version and Mac model / Версия macOS и модель Mac
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps, expected and actual result / Шаги, ожидаемый и фактический результат
+      description: Include lid, power and helper settings. Do not include passwords or personal data. / Укажите настройки крышки, питания и помощника. Не добавляйте пароли и личные данные.
+    validations:
+      required: true

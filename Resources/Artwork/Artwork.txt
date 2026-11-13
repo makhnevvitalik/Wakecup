@@ -1,0 +1,11 @@
+Wakecup original artwork
+Copyright (c) 2026 Vitalik Makhnev
+License: MIT AND LicenseRef-Commons-Clause-1.0 (see LICENSE at the repository root)
+
+WakecupIcon.png is the original blue cup-and-lightning application icon,
+created for Wakecup with AI-assisted image generation and refined for the app.
+IconPrompt.txt records the design brief. The image is not a Java logo or a
+third-party icon pack. It is the source for the generated macOS .icns file.
+
+Presentation/WakecupBrand.swift defines the original menu-bar cup drawing.
+Apple system interface symbols used elsewhere remain subject to Apple terms.

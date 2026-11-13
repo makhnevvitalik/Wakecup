@@ -1,0 +1,49 @@
+Wakecup optional privileged helper — architecture (2026-11-06)
+
+Accepted UX
+- Preserve per-session macOS administrator authorization as the default.
+- Optional settings submenu explains installation, selects either mode, updates/removes the helper.
+- Installing enables the helper mode; cancelling leaves the default unchanged.
+- No passwords stored. No sudoers changes. No automatic privileged installation.
+- GUI updates change the pinned exact signing hash and require an administrator refresh, including certificate-signed releases.
+
+Architecture
+- Dedicated root-owned executable: /Library/PrivilegedHelperTools/local.wakecup.helper
+- Root-owned allowlist manifest: /Library/PrivilegedHelperTools/local.wakecup.helper.json
+- LaunchDaemon: /Library/LaunchDaemons/local.wakecup.helper.plist
+- Private system Mach service local.wakecup.helper, on demand, root only.
+- macOS 14 minimum and app version 1.0.0 stay unchanged.
+- Both GUI/helper use Hardened Runtime without injection/debug exceptions.
+- Helper build SHA256/CDHash are embedded in the GUI executable, not trusted from editable resources.
+- Mutual NSXPC code-signing requirements pin exact executables. Service also pins the installing UID.
+- Methods only: protocol info and start existing sleep guard/recovery for a session.
+- Root installer can query authenticated readiness; only the installing UID may start sessions.
+- The installer retains rollback state until the real pinned GUI authenticates to the new daemon.
+- No arbitrary commands, executable paths or power-settings API.
+
+Guard integration
+- Existing sleep assertions, root guard, trusted lease and recovery algorithm remain authoritative.
+- Validate bounded session files and peer UID, PID/birth identity, UUID and full configuration.
+- Managed child receives immutable context and revalidates retained directory/configuration once.
+- Use the validated directory and snapshot throughout guard execution.
+- Child has independent process group and closed inherited descriptors; launchd must not kill restoring guards.
+- Duplicate requests are idempotent and outstanding children are bounded. No automatic replay after lost replies.
+- File controls and state transitions allow stop/recovery independently of daemon availability.
+- Both authorization paths use the same local Unix socket to check whether the guard's monitoring loop answers.
+- The guard owns the socket directory, restricts the endpoint to the session user, and only answers status probes.
+- The UI and recovery validate the responding process. Recovery refuses takeover when the endpoint cannot be authenticated.
+- Status files are written on transitions and accepted or rejected settings changes, without periodic heartbeat writes.
+
+Installation and removal
+- One explicit administrator prompt stages a root-owned executable and verifies its embedded expected SHA256 before execution.
+- Installer validates every owned path/parent, acquires the existing global lease and refuses active/live writes or blocked sleep.
+- Only fixed Wakecup helper files may be changed. Preserve prior installation for rollback until bootstrap/handshake succeeds.
+- Removal always uses the administrator-authorized staged remover, including stale-pin installations.
+- Never delete the recovery lease or unrelated files.
+- Prepare/test everything locally before the user enters the system password for installation.
+
+Review focus
+- Wrong UID/hash/protocol; DYLD injection; stale-pin update/removal.
+- Configuration/directory swaps and file growth; inherited descriptors and orphan commands.
+- Duplicate starts and installer races; daemon crash during active guard.
+- Partial install/bootstrap failure and rollback; removal must not leave owned sleep blocked.

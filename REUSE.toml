@@ -1,0 +1,7 @@
+version = 1
+
+[[annotations]]
+path = ["**", ".github/**", ".gitignore", ".gitattributes"]
+precedence = "aggregate"
+SPDX-FileCopyrightText = "2026 Vitalik Makhnev"
+SPDX-License-Identifier = "MIT AND LicenseRef-Commons-Clause-1.0"
