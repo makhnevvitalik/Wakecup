@@ -55,7 +55,7 @@ final class DisplayModeController: ObservableObject {
         try operations.validate(value)
     }
 
-    func setShortcut(_ value: DisplayShortcut?, running: Bool) throws {
+    func setShortcut(_ value: DisplayShortcut?, running: Bool) throws -> SessionOperationResult {
         guard !isBacklightOff, !transitioning else { throw WakecupError(message: "display.shortcut.locked") }
         if let value { try validateShortcut(value) }
         shortcut = value
@@ -65,31 +65,26 @@ final class DisplayModeController: ObservableObject {
             defaults.removeObject(forKey: "displayRestoreShortcut")
             if mode == .backlightOff {
                 cancelCountdown()
-                returnToMode(previousMode, running: running)
+                return returnToMode(previousMode, running: running)
             }
         }
+        return .completed
     }
 
-    func setMode(_ value: DisplayMode, running: Bool, now: TimeInterval) {
-        guard value != mode, !transitioning else { return }
+    @discardableResult
+    func setMode(_ value: DisplayMode, running: Bool, now: TimeInterval, assertionsAlreadyApplied: Bool = false,
+                 completion: ((SessionOperationResult) -> Void)? = nil) -> SessionOperationResult {
+        guard value != mode else { return .completed }
+        guard !transitioning else { return .rejected("Wait for the display change to finish.") }
         guard value != .backlightOff || shortcut != nil else {
-            error = "Choose a restore shortcut before turning the backlight off."
-            return
+            return reportFailure("Choose a restore shortcut before turning the backlight off.")
         }
         if isBacklightOff {
-            restoreBrightness(to: value, running: running)
-        } else {
-            applyMode(value, running: running, now: now)
+            return restoreBrightness(to: value, running: running, completion: completion)
         }
-    }
-
-    private func applyMode(_ value: DisplayMode, running: Bool, now: TimeInterval) {
-        if running {
+        if running && !assertionsAlreadyApplied {
             do { try operations.assertions(value.keepsDisplayOn) }
-            catch {
-                self.error = "Could not change the display setting. Try again."
-                return
-            }
+            catch { return reportFailure(Self.assertionFailure) }
         }
         cancelCountdown()
         if value == .backlightOff {
@@ -100,6 +95,14 @@ final class DisplayModeController: ObservableObject {
         error = nil
         save()
         if running { activateIfConfigured(at: now) }
+        return .completed
+    }
+
+    private static let assertionFailure: SessionMessage = "Could not change the display setting. Try again."
+
+    private func reportFailure(_ message: SessionMessage) -> SessionOperationResult {
+        error = message
+        return .rejected(message)
     }
 
     func activateIfConfigured(at now: TimeInterval) {
@@ -125,10 +128,11 @@ final class DisplayModeController: ObservableObject {
         if countdown != nil { countdown = nil }
     }
 
-    func cancelBlackout() {
-        guard hasCountdown else { return }
+    @discardableResult
+    func cancelBlackout() -> SessionOperationResult {
+        guard hasCountdown else { return .completed }
         cancelCountdown()
-        returnToMode(previousMode, running: true)
+        return returnToMode(previousMode, running: true)
     }
 
     func advanceCountdown(at now: TimeInterval) {
@@ -175,16 +179,22 @@ final class DisplayModeController: ObservableObject {
         })
     }
 
-    private func returnToMode(_ value: DisplayMode, running: Bool) {
+    @discardableResult
+    private func returnToMode(_ value: DisplayMode, running: Bool) -> SessionOperationResult {
         mode = value
         save()
-        guard running else { return }
-        do { try operations.assertions(value.keepsDisplayOn) }
-        catch { self.error = "Could not change the display setting. Try again." }
+        if running {
+            do { try operations.assertions(value.keepsDisplayOn) }
+            catch { return reportFailure(Self.assertionFailure) }
+        }
+        return .completed
     }
 
-    private func restoreBrightness(to value: DisplayMode, running: Bool, notice: SessionMessage? = nil) {
+    @discardableResult
+    private func restoreBrightness(to value: DisplayMode, running: Bool, notice: SessionMessage? = nil,
+                                   completion: ((SessionOperationResult) -> Void)? = nil) -> SessionOperationResult {
         transition = .restoring
+        var outcome = SessionOperationResult.pending()
         operations.restore { [weak self] result in
             guard let self else { return }
             self.transition = nil
@@ -195,22 +205,36 @@ final class DisplayModeController: ObservableObject {
                 self.error = notice
                 // A stop during restoration must not recreate display assertions.
                 let ended = self.blackoutSessionEnded
-                self.returnToMode(running && ended ? self.previousMode : value, running: running && !ended)
+                outcome = self.returnToMode(running && ended ? self.previousMode : value, running: running && !ended)
             case .failure(let failure):
-                self.error = SessionMessage(failure.localizedDescription)
+                outcome = self.reportFailure(SessionMessage(failure.localizedDescription))
             }
+            completion?(outcome)
             self.flushRestorationWaiters()
         }
+        return outcome
     }
 
-    func finish(completion: (() -> Void)? = nil) {
+    @discardableResult
+    func restoreForUser(running: Bool) -> SessionOperationResult {
+        if hasCountdown { return cancelBlackout() }
+        if transition == .entering { restoreAfterEntry = true; return .pending() }
+        if transition == .restoring { return .pending() }
+        guard isBacklightOff else { return .completed }
+        error = nil
+        return restoreBrightness(to: previousMode, running: running)
+    }
+
+    @discardableResult
+    func finish(completion: (() -> Void)? = nil) -> SessionOperationResult {
         cancelCountdown()
         blackoutSessionEnded = true
         if let completion { restorationWaiters.append(completion) }
-        if transition == .entering { restoreAfterEntry = true; return }
-        if transition == .restoring { return }
-        if isBacklightOff { restoreBrightness(to: previousMode, running: false) }
-        else { flushRestorationWaiters() }
+        if transition == .entering { restoreAfterEntry = true; return .pending() }
+        if transition == .restoring { return .pending() }
+        if isBacklightOff { return restoreBrightness(to: previousMode, running: false) }
+        flushRestorationWaiters()
+        return .completed
     }
 
     private func flushRestorationWaiters() {

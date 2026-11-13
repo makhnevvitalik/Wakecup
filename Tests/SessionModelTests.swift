@@ -69,6 +69,10 @@ import Foundation
         print("PASS: helper timeout followed by late restoration clears recovery without authorization")
         try helperReadinessGate()
         try lifecycleTests()
+        try automationUsesAppliedSettings()
+        try automationReportsActualOutcomes()
+        try automationIsolatesDisplayOutcomes()
+        try automationReportsDisplayChangeAfterExpiry()
     }
 }
 
@@ -159,6 +163,246 @@ private final class SessionTestEnvironment {
 }
 
 private extension SessionModelTests {
+    static func automationReportsActualOutcomes() throws {
+        let environment = try SessionTestEnvironment()
+        let model = environment.model()
+        let control = AutomationController(model: model, defaults: environment.defaults)
+        func command(_ request: AutomationRequest) -> AutomationReply {
+            control.receive(.init(request: request, viaMCP: false))
+        }
+        model.editClosedLid(false)
+        environment.disabled = true
+        let rejected = command(.init(action: .start, seconds: 90, threshold: 40, closedLid: true, display: .keepOn))
+        try expect(rejected.outcome == .rejected && !model.closedLid && model.threshold == 20
+                   && model.displayMode == .mayTurnOff && (try model.selectedDuration()) == 3600,
+                   "A failed start must keep the previous preferences")
+        environment.disabled = false
+        let pending = command(.init(action: .start, seconds: 90, threshold: 40, closedLid: true, display: .keepOn))
+        try expect(pending.outcome == .pending && !model.closedLid && model.threshold == 20
+                   && model.displayMode == .mayTurnOff, "Authorization must not save candidate settings")
+        environment.authorizationReplies[0](CommandOutput(status: 1, text: "cancelled (-128)"))
+        try expect(model.phase == .idle && !model.closedLid && model.threshold == 20,
+                   "Cancelled authorization must preserve the old settings")
+        let closedLidStart = command(.init(action: .start, seconds: 90, threshold: 40, closedLid: true, display: .keepOn))
+        try expect(closedLidStart.outcome == .pending && !model.closedLid, "Closed-lid settings must wait for activation")
+        try environment.publish("active", deadline: 1_090)
+        model.tick()
+        try expect(model.phase == .active && model.closedLid && model.threshold == 40 && model.displayMode == .keepOn
+                   && environment.assertionDisplays == [true], "Activation must commit the pending settings exactly once")
+        _ = command(.init(action: .stop))
+        try environment.publish("stopped", restored: true)
+        model.tick()
+
+        let accepted = command(.init(action: .start, seconds: 1800, threshold: 30, closedLid: false, display: .mayTurnOff))
+        try expect(accepted.outcome == .completed && model.threshold == 30 && model.remaining == 1800,
+                   "A successful start must persist the new settings")
+        environment.assertionFailure = WakecupError(message: "Display assertion refused")
+        let partial = command(.init(action: .configure, seconds: 2700, threshold: 45, display: .keepOn))
+        try expect(partial.outcome.rawValue == "partiallyApplied" && model.threshold == 45
+                   && model.remaining == 2700 && model.displayMode == .mayTurnOff,
+                   "A display failure must report the settings already applied")
+
+        environment.power = PowerState(onAC: false, percent: 40)
+        let stoppedByThreshold = command(.init(action: .configure, threshold: 50, display: .keepOn))
+        let stoppedStatus = command(.init(action: .status)).status
+        try expect(stoppedByThreshold.outcome == .partiallyApplied && model.phase == .idle
+                   && stoppedByThreshold.status?.settingsPartiallyApplied == true
+                   && stoppedStatus?.settingsPartiallyApplied == true
+                   && stoppedStatus?.threshold == 50 && stoppedStatus?.display == .mayTurnOff
+                   && stoppedStatus?.message == stoppedByThreshold.message,
+                   "A partial application must remain visible after the new threshold stops the timer")
+
+        let alreadyStopped = command(.init(action: .stop))
+        try expect(alreadyStopped.status?.settingsPartiallyApplied == true,
+                   "Stopping an already inactive timer must not erase the last settings result")
+
+        let interrupted = try SessionTestEnvironment()
+        try interrupted.interruptedSession()
+        let recovery = interrupted.model()
+        try interrupted.publish("active")
+        let recoveryControl = AutomationController(model: recovery, defaults: interrupted.defaults)
+        let sent = recoveryControl.receive(.init(request: .init(action: .restoreSleep), viaMCP: false))
+        try expect(sent.outcome == .pending && recovery.needsRecovery, "A guardian stop request is not confirmed recovery")
+        try interrupted.publish("stopped", restored: true)
+        let restored = recoveryControl.receive(.init(request: .init(action: .restoreSleep), viaMCP: false))
+        try expect(restored.outcome == .completed && !recovery.needsRecovery, "Recovery is completed when sleep is confirmed")
+
+        let failed = try SessionTestEnvironment()
+        try failed.interruptedSession()
+        let failedRecovery = failed.model()
+        failed.authorizationLaunchError = WakecupError(message: "Authorization launch refused")
+        let failedControl = AutomationController(model: failedRecovery, defaults: failed.defaults)
+        let refused = failedControl.receive(.init(request: .init(action: .restoreSleep), viaMCP: false))
+        try expect(refused.outcome == .rejected && failedRecovery.needsRecovery
+                   && refused.message == "Authorization launch refused", "Recovery must report an immediate authorization failure")
+
+        print("PASS: automation preserves failed start settings and reports partial changes and recovery outcomes")
+    }
+
+    static func automationReportsDisplayChangeAfterExpiry() throws {
+        for restorationSucceeds in [false, true] {
+            let environment = try SessionTestEnvironment()
+            var operations = environment.operations
+            var restore: ((Result<Void, Error>) -> Void)?
+            operations.enterBacklight = { _, _, complete in complete(.success(()), true) }
+            operations.restoreBacklight = { restore = $0 }
+            let model = SessionModel(defaults: environment.defaults, operations: operations,
+                                     helper: isolatedHelper(environment.defaults))
+            let control = AutomationController(model: model, defaults: environment.defaults)
+            func command(_ request: AutomationRequest) -> AutomationReply {
+                control.receive(.init(request: request, viaMCP: false))
+            }
+
+            try model.setDisplayShortcut(.init(keyCode: 120, modifiers: DisplayShortcut.control))
+            _ = command(.init(action: .configure, display: .mayTurnOff))
+            let start = command(.init(action: .start, seconds: 90, closedLid: false, display: .backlightOff))
+            try expect(start.outcome == .completed, "The session must start")
+            environment.time += 10
+            model.tick()
+            try expect(model.isBacklightOff, "The backlight must turn off")
+
+            let change = command(.init(action: .configure, seconds: 30, threshold: 45, display: .keepOn))
+            try expect(change.outcome == .pending && model.threshold == 45 && restore != nil,
+                       "Brightness restoration must still be pending after applying the new threshold")
+            environment.time += 31
+            model.tick()
+            try expect(model.phase == .idle, "The timer must expire before brightness restoration completes")
+            if restorationSucceeds {
+                restore?(.success(()))
+            } else {
+                restore?(.failure(WakecupError(message: "Brightness restoration refused.")))
+            }
+            let status = command(.init(action: .status)).status
+            let expectedMessage = restorationSucceeds
+                ? "Wakecup stopped before the display setting could change."
+                : "Brightness restoration refused."
+            try expect(status?.settingsPartiallyApplied == true && status?.threshold == 45
+                       && status?.message == expectedMessage,
+                       "After expiry, status must preserve the applied threshold and report the display outcome")
+        }
+        print("PASS: automation reports a partial display change after timer expiry")
+    }
+
+    static func automationIsolatesDisplayOutcomes() throws {
+        let environment = try SessionTestEnvironment()
+        var operations = environment.operations
+        var restore: ((Result<Void, Error>) -> Void)?
+        operations.enterBacklight = { _, _, complete in complete(.success(()), true) }
+        operations.restoreBacklight = { restore = $0 }
+        let model = SessionModel(defaults: environment.defaults, operations: operations, helper: isolatedHelper(environment.defaults))
+        let control = AutomationController(model: model, defaults: environment.defaults)
+        func command(_ request: AutomationRequest, session: UUID? = nil) -> AutomationReply {
+            control.receive(.init(request: request, viaMCP: session != nil, mcpSession: session))
+        }
+
+        try model.setDisplayShortcut(.init(keyCode: 120, modifiers: DisplayShortcut.control))
+        let started = command(.init(action: .start, seconds: 90, closedLid: false, display: .backlightOff))
+        try expect(started.outcome == .completed, "Countdown scheduling completes the start")
+        environment.time += 10
+        model.tick()
+        try expect(model.isBacklightOff, "Test setup must turn off the backlight")
+
+        let configured = command(.init(action: .configure, seconds: 120, threshold: 45, display: .keepOn))
+        try expect(configured.outcome == .pending && model.remaining == 120 && model.threshold == 45,
+                   "The timer and power must be applied before asynchronous display restoration")
+        model.discardSettingsDraft()
+        control.mcpEnabled = true
+        let session = control.receive(.init(request: .init(action: .status), viaMCP: true)).mcpSession
+        try expect(session != nil, "MCP handshake must return a session")
+        let helperMode = command(.init(action: .helperUse, useHelper: false), session: session)
+        try expect(helperMode.outcome == .completed && helperMode.status?.displayTransitioning == true,
+                   "An unrelated MCP command must complete while display restoration is pending")
+
+        restore?(.failure(WakecupError(message: "Brightness restoration refused.")))
+        model.discardSettingsDraft()
+        let status = command(.init(action: .status))
+        try expect(status.status?.settingsPartiallyApplied == true
+                   && status.status?.message == "Brightness restoration refused. Retry only the display change.",
+                   "Status must report the partial change even after the panel closes")
+        let cancel = command(.init(action: .cancelBlackout), session: session)
+        try expect(cancel.outcome == .completed && cancel.message == nil,
+                   "Cancelling an absent countdown must not report an earlier display error")
+        let retry = command(.init(action: .configure, display: .keepOn))
+        try expect(retry.outcome == .pending, "The display change alone can be retried")
+        restore?(.success(()))
+        let recovered = command(.init(action: .status))
+        try expect(recovered.status?.settingsPartiallyApplied == false && recovered.status?.message == nil
+                   && model.displayMode == .keepOn && model.remaining == 120,
+                   "Retrying the display change must leave the updated timer intact")
+        model.stop()
+        print("PASS: CLI and MCP report the requested operation while display work is pending or failed")
+    }
+
+    static func automationUsesAppliedSettings() throws {
+        let environment = try SessionTestEnvironment()
+        let model = environment.model()
+        let control = AutomationController(model: model, defaults: environment.defaults)
+        func cli(_ request: AutomationRequest) -> AutomationReply {
+            control.receive(.init(request: request, viaMCP: false))
+        }
+        func mcp(_ request: AutomationRequest, session: UUID? = nil) -> AutomationReply {
+            control.receive(.init(request: request, viaMCP: true, mcpSession: session))
+        }
+        model.selectEndDate(model.currentDate.addingTimeInterval(9))
+        try expect(!model.durationInputIsValid, "The panel must reject an end time less than 10 seconds away")
+        model.selectEndDate(model.currentDate.addingTimeInterval(10))
+        try expect(model.durationInputIsValid, "The panel must accept an end time 10 seconds away")
+        let tooShort = cli(.init(action: .start, seconds: 9, closedLid: false))
+        try expect(tooShort.outcome == .rejected && model.phase == .idle, "CLI must reject durations below 10 seconds")
+        let minimum = cli(.init(action: .start, seconds: 10, closedLid: false))
+        try expect(minimum.outcome == .completed && model.remaining == 10, "CLI must accept a 10-second duration")
+        _ = cli(.init(action: .stop))
+        let started = cli(.init(action: .start, seconds: 3600, closedLid: false))
+        try expect(started.outcome == .completed && model.phase == .active, "CLI must start the model's timer")
+        model.editThreshold(40)
+        model.setEndTimeInputInvalid(true)
+        let extendedWithDraft = cli(.init(action: .adjust, seconds: 1800))
+        try expect(extendedWithDraft.outcome == .completed && model.remaining == 5400
+                   && model.endTimeInputInvalid && model.selectedThreshold == 40 && model.threshold == 20,
+                   "A remote adjustment must ignore and preserve uncommitted panel input")
+        let configuredWithDraft = cli(.init(action: .configure, allowBattery: false))
+        try expect(configuredWithDraft.outcome == .completed && !model.selectedAllowBattery
+                   && model.selectedThreshold == 40 && model.threshold == 20,
+                   "A panel threshold draft must not override an externally applied power mode")
+        try expect(mcp(.init(action: .status)).mcpSession == nil, "MCP must not start when disabled")
+        control.mcpEnabled = true
+        let session = mcp(.init(action: .status)).mcpSession
+        try expect(session != nil, "Enabling MCP must permit a connection")
+        let shortenedWithDraft = mcp(.init(action: .adjust, seconds: -1800), session: session)
+        try expect(shortenedWithDraft.outcome == .completed && model.remaining == 3600
+                   && model.endTimeInputInvalid && model.selectedThreshold == 40,
+                   "MCP must operate on the same applied timer while preserving the panel draft")
+        model.discardSettingsDraft()
+        let shortSetting = mcp(.init(action: .configure, seconds: 9), session: session)
+        try expect(shortSetting.outcome == .rejected && model.remaining == 3600,
+                   "MCP must reject a duration below 10 seconds without changing the active timer")
+        for seconds in [-9, 0, 9] {
+            let reply = mcp(.init(action: .adjust, seconds: seconds), session: session)
+            try expect(reply.outcome == .rejected && model.remaining == 3600,
+                       "An adjustment smaller than 10 seconds must leave the timer unchanged")
+        }
+        let extended = mcp(.init(action: .adjust, seconds: 10), session: session)
+        try expect(extended.outcome == .completed && model.remaining == 3610, "Accept a 10-second extension")
+        let shortened = cli(.init(action: .adjust, seconds: -10))
+        try expect(shortened.outcome == .completed && model.remaining == 3600, "Accept a 10-second reduction")
+        let adjusted = mcp(.init(action: .adjust, seconds: 1800), session: session)
+        try expect(adjusted.outcome == .completed && model.remaining == 5400, "MCP must extend the same timer")
+        let invalid = mcp(.init(action: .configure, threshold: 99, closedLid: true), session: session)
+        try expect(invalid.outcome == .rejected && !model.closedLid && model.threshold == 20,
+                   "Invalid settings must be rejected before applying other options")
+        control.mcpEnabled = false
+        try expect(mcp(.init(action: .stop), session: session).outcome == .rejected && model.phase == .active,
+                   "Disabling MCP must keep the active timer and reject existing clients")
+        try expect(cli(.init(action: .status)).outcome == .completed, "CLI must work when MCP is disabled")
+        control.mcpEnabled = true
+        let newSession = mcp(.init(action: .status)).mcpSession
+        try expect(newSession != nil && newSession != session, "Re-enabling MCP must require a new connection")
+        try expect(mcp(.init(action: .stop), session: session).outcome == .rejected, "An old connection must remain revoked")
+        let stopped = mcp(.init(action: .stop), session: newSession)
+        try expect(stopped.outcome == .completed && model.phase == .idle, "MCP must stop the existing timer")
+        print("PASS: CLI and MCP share the running model and keep UI drafts isolated")
+    }
+
     static func lifecycleTests() throws {
         try livePowerPolicyChanges()
         try liveDisplayChanges()
@@ -732,7 +976,7 @@ private extension SessionModelTests {
 // No installed-daemon inspection or desktop interaction during model checks.
 private func isolatedHelper(_ defaults: UserDefaults) -> PrivilegedHelperController {
     PrivilegedHelperController(defaults: defaults, inspectInstallation: { .init(state: .missing) },
-        requestInformation: { _ in }, interaction: .inert)
+        requestInformation: { _ in })
 }
 
 private extension SessionModelTests {
@@ -745,8 +989,7 @@ private extension SessionModelTests {
         var reply: ((Result<HelperInformation, Error>) -> Void)?
         let helper = PrivilegedHelperController(defaults: environment.defaults,
             inspectInstallation: { .init(state: .ready, manifest: manifest) },
-            requestInformation: { reply = $0 },
-            interaction: .inert)
+            requestInformation: { reply = $0 })
         let model = SessionModel(defaults: environment.defaults, operations: environment.operations, helper: helper)
         model.start()
         try expect(helper.checking && environment.sessions.isEmpty && environment.authorizationRequests.isEmpty,

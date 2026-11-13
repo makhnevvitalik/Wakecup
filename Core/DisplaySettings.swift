@@ -1,6 +1,6 @@
 import Foundation
 
-enum DisplayMode: String {
+enum DisplayMode: String, Codable {
     case mayTurnOff
     case keepOn
     case backlightOff
@@ -17,6 +17,16 @@ struct DisplayShortcut: Codable, Equatable {
 
     let keyCode: UInt32
     let modifiers: UInt32
+
+    init(keyCode: UInt32, modifiers: UInt32) {
+        self.keyCode = keyCode
+        self.modifiers = modifiers
+    }
+
+    init?(functionNumber: Int, modifiers: UInt32) {
+        guard let keyCode = Self.functionNumbers.first(where: { $0.value == functionNumber })?.key else { return nil }
+        self.init(keyCode: keyCode, modifiers: modifiers)
+    }
 
     var isValid: Bool {
         let supported = Self.shift | Self.control | Self.option | Self.command

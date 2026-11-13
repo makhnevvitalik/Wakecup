@@ -4,9 +4,14 @@ import SwiftUI
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
     let model = SessionModel()
+    private lazy var automation = AutomationController(model: model)
+    private var automationSocket: AutomationSocket?
     private var menuPanel: MenuPanelController!
     private let sleepHelp = SleepHelpWindowController()
-    private let about = AboutWindowController()
+    private let mcpSetup = MCPSetupWindowController()
+    private let updates = UpdateChecker()
+    private let updateNotifications = UpdateNotificationController()
+    private lazy var about = AboutWindowController(updates: updates)
     var status: NSStatusItem!
     private lazy var inactiveStatusImage = makeStatusIcon(active: false)
     private lazy var activeStatusImage = makeStatusIcon(active: true)
@@ -14,7 +19,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory)
-        model.helper.interaction = HelperPresentation.system.interaction
         model.quitRequested = { NSApp.terminate(nil) }
         let autosaveName = "Wakecup"
         let positionKey = "NSStatusItem Preferred Position " + autosaveName
@@ -30,6 +34,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         status.button?.target = self
         status.button?.action = #selector(toggle)
         status.button?.toolTip = "Wakecup"
+        var helperInteraction = HelperPresentation.system.interaction
+        helperInteraction.dismissPanel = { [weak self] in self?.menuPanel.close() }
         menuPanel = MenuPanelController(model: model,
             statusButton: { [weak self] in self?.status?.button }, showHelp: { [weak self] in
                 self?.menuPanel.close()
@@ -37,12 +43,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             }, showAbout: { [weak self] in
                 self?.menuPanel.close()
                 self?.about.show()
+            }, showMCPSetup: { [weak self] in
+                self?.menuPanel.close()
+                self?.mcpSetup.show()
             }, configureDisplayShortcut: { [weak self] requiresShortcut in
                 guard let self else { return false }
                 return self.menuPanel.presentShortcutEditor { owner in
                     DisplayShortcutEditor.present(model: self.model, owner: owner, requiresShortcut: requiresShortcut)
                 }
-            })
+            }, helperInteraction: helperInteraction,
+            isMCPEnabled: { [weak self] in self?.automation.mcpEnabled ?? false },
+            setMCPEnabled: { [weak self] enabled in self?.automation.mcpEnabled = enabled })
         model.statusDidChange = { [weak self] in self?.updateStatus() }
         model.showRequested = { [weak self] in self?.show() }
         updateStatus()
@@ -53,7 +64,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 fflush(stdout)
             }
         }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { self.show() }
+        do {
+            automationSocket = try AutomationSocket { [weak self] envelope in
+                guard let self else { return AutomationReply(outcome: .rejected, message: "Wakecup is quitting.") }
+                return self.automation.receive(envelope)
+            }
+        } catch {
+            NSLog("Wakecup automation unavailable: %@", error.localizedDescription)
+        }
+        updateNotifications.checkAtLaunch(using: updates)
+        if !CommandLine.arguments.contains("--automation-launch") {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { self.show() }
+        }
     }
 
     func updateStatus() {

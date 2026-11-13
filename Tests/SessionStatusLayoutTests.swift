@@ -31,8 +31,7 @@ import SwiftUI
             loginItem: LoginItemController(readStatus: { .notRegistered }, register: {}, unregister: {}, openSettings: {}),
             scheduleTicks: { _ in {} })
         let helper = PrivilegedHelperController(defaults: defaults,
-            inspectInstallation: { .init(state: .missing) }, requestInformation: { _ in },
-            interaction: .inert)
+            inspectInstallation: { .init(state: .missing) }, requestInformation: { _ in })
         let model = SessionModel(defaults: defaults, operations: operations, helper: helper)
         model.editClosedLid(false)
         let root = StatusFixture(model: model)

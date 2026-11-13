@@ -112,7 +112,7 @@ cp -R "$project_root/build/Wakecup.app/Contents/Resources/." "$helper_dialog_fix
 swiftc "$project_root"/Core/*.swift "$project_root"/System/*.swift \
   "$project_root"/Application/*.swift "$project_root/.build/HelperBuildIdentity.swift" \
   "$project_root/Presentation/AppStyle.swift" "$project_root/Presentation/HelperSettingsDialog.swift" \
-  "$project_root/Presentation/HelperPresentation.swift" \
+  "$project_root/Presentation/HelperInteraction.swift" "$project_root/Presentation/HelperPresentation.swift" \
   "$project_root/Tests/HelperDialogLayoutTests.swift" -o "$helper_dialog_fixture/Contents/MacOS/Wakecup" \
   -module-cache-path "$project_root/.build/module-cache" \
   -framework AppKit -framework IOKit -framework ServiceManagement

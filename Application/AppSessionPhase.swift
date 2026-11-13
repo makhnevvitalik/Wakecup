@@ -1,5 +1,5 @@
 // UI lifecycle is separate from the guardian's serialized IPC status.
-enum AppSessionPhase {
+enum AppSessionPhase: String {
     case idle, authorizing, active, stopping, failed
 
     var isBusy: Bool {

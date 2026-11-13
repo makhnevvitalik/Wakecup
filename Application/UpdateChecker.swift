@@ -70,13 +70,6 @@ final class UpdateChecker: ObservableObject {
         task?.resume()
     }
 
-    func cancel() {
-        requestID = nil
-        task?.cancel()
-        task = nil
-        state = .idle
-    }
-
     deinit { task?.cancel() }
 
     nonisolated static func evaluate(data: Data?, response: URLResponse?, error: Error?,

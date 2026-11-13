@@ -363,7 +363,7 @@ import Foundation
                 }, validateDisplayShortcut: { _ in if self.validationFailure { throw WakecupError(message: "display.shortcut.conflict") } },
                 checkBacklightHealth: { $0(self.healthy) })
             ops.wallNow = { Date(timeIntervalSince1970: 1_794_309_600 + self.now - 1_000) }
-            let helper = PrivilegedHelperController(defaults: defaults, inspectInstallation: { .init(state: .missing) }, requestInformation: { _ in }, interaction: .inert)
+            let helper = PrivilegedHelperController(defaults: defaults, inspectInstallation: { .init(state: .missing) }, requestInformation: { _ in })
             return SessionModel(defaults: defaults, operations: ops, helper: helper)
         }
     }

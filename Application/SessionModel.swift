@@ -73,6 +73,7 @@ final class SessionModel: ObservableObject {
     private var statusReadFailedAt: TimeInterval?
     private var authorizationFinishedAt: TimeInterval?
     private var pendingError: SessionMessage?
+    private static let displayChangeInterrupted: SessionMessage = "Wakecup stopped before the display setting could change."
     private static let restartExpired: SessionMessage = "The Wakecup timer ended. “Keep awake with lid closed” was not changed."
     private var recovering = false
     private var canPersist = false
@@ -87,6 +88,7 @@ final class SessionModel: ObservableObject {
         let sentAt: TimeInterval
         let duration: EndTimeSelection.Choice?
         let display: DisplayMode?
+        let appliesPanelDraft: Bool
     }
     private struct RestartRequest {
         let previousClosedLid: Bool
@@ -94,6 +96,19 @@ final class SessionModel: ObservableObject {
         var power: PowerDraft? = nil
         var duration: EndTimeSelection.Choice? = nil
         var display: DisplayMode? = nil
+        var appliesPanelDraft = false
+    }
+    private struct StartSettings {
+        let closedLid: Bool
+        let power: PowerDraft
+        let endTime: EndTimeSelection.Choice?
+        let display: DisplayMode
+    }
+    private var pendingStart: StartSettings?
+    private var settingsResult: SessionOperationResult?
+    var partialSettingsIssue: SessionMessage? {
+        guard case .partiallyApplied(let issue) = settingsResult else { return nil }
+        return issue
     }
     private var pendingSettings: PendingSettings?
     private var nextSettingsRevision: UInt64 = 0
@@ -142,14 +157,10 @@ final class SessionModel: ObservableObject {
         selectEndTime(.preset(preset, date: date))
     }
 
-    func selectEndDate(_ date: Date?) {
-        if let date {
-            guard date.timeIntervalSinceReferenceDate.isFinite else { return }
-            if date == selectedEndDate && !endTimeInputInvalid && !durationEditDirty { return }
-            selectEndTime(.date(date))
-        } else {
-            selectEndTimePreset(0)
-        }
+    func selectEndDate(_ date: Date) {
+        guard date.timeIntervalSinceReferenceDate.isFinite else { return }
+        if date == selectedEndDate && !endTimeInputInvalid && !durationEditDirty { return }
+        selectEndTime(.date(date))
     }
 
     private func selectEndTime(_ choice: EndTimeSelection.Choice) {
@@ -174,7 +185,7 @@ final class SessionModel: ObservableObject {
             return date == appliedDate || date == Calendar.current.dateInterval(of: .minute, for: appliedDate)?.start
         case .preset(.indefinitely, _):
             return deadline == nil
-        case .preset:
+        case .preset, .duration:
             return false
         }
     }
@@ -221,44 +232,25 @@ final class SessionModel: ObservableObject {
 
     deinit { cancelTicks?() }
 
-    enum EndTimeIssue: Equatable, LocalizedError {
-        case incomplete, past, tooFar
-        static func forDate(_ date: Date, from now: Date) -> EndTimeIssue? {
-            if date.timeIntervalSince(now) < 1 { return .past }
-            return date < EndTimeSelection.endOfWindow(from: now) ? nil : .tooFar
-        }
-        var errorDescription: String? { messageKey }
-
-        var messageKey: String {
-            switch self {
-            case .incomplete: "Enter a time such as 18:30."
-            case .past: "This time has already passed."
-            case .tooFar: "Choose an end date within the next 30 days."
-            }
-        }
-    }
-    var endTimeIssue: EndTimeIssue? {
+    var endTimeIssue: EndTimeSelection.Issue? {
         if endTimeInputInvalid { return .incomplete }
         if phase == .active && !durationEditDirty { return nil }
         let now = currentDate
-        return endTimeChoice.date(from: now).flatMap { EndTimeIssue.forDate($0, from: now) }
+        return endTimeChoice.date(from: now).flatMap { EndTimeSelection.issue(for: $0, from: now) }
     }
 
     var durationInputIsValid: Bool { endTimeIssue == nil }
 
     func selectedDuration() throws -> TimeInterval? {
-        guard !endTimeInputInvalid else { throw EndTimeIssue.incomplete }
-        let now = currentDate
-        guard let date = endTimeChoice.date(from: now) else { return nil }
-        if let issue = EndTimeIssue.forDate(date, from: now) { throw issue }
-        return date.timeIntervalSince(now)
+        guard !endTimeInputInvalid else { throw EndTimeSelection.Issue.incomplete }
+        return try endTimeChoice.validatedDuration(from: currentDate)
     }
 
     private static let endTimeChoiceKey = "endTimeChoice"
 
     private func saveEndTimeChoice(_ choice: EndTimeSelection.Choice) {
         let now = currentDate
-        if let date = choice.date(from: now), EndTimeIssue.forDate(date, from: now) != nil { return }
+        if let date = choice.date(from: now), EndTimeSelection.issue(for: date, from: now) != nil { return }
         if let data = try? JSONEncoder().encode(choice.forStorage) {
             defaults.set(data, forKey: Self.endTimeChoiceKey)
         }
@@ -268,7 +260,7 @@ final class SessionModel: ObservableObject {
         let choice = defaults.data(forKey: Self.endTimeChoiceKey)
             .flatMap { try? JSONDecoder().decode(EndTimeSelection.Choice.self, from: $0) } ?? .oneHour
         let now = currentDate
-        if let date = choice.date(from: now), EndTimeIssue.forDate(date, from: now) != nil {
+        if let date = choice.date(from: now), EndTimeSelection.issue(for: date, from: now) != nil {
             endTimeChoice = .oneHour
         } else {
             endTimeChoice = choice
@@ -327,10 +319,8 @@ final class SessionModel: ObservableObject {
 
     func discardSettingsDraft() {
         guard !settingsApplying, !isRestarting else { return }
-        if phase == .active && durationEditDirty {
-            endTimeInputInvalid = false
-            durationEditDirty = false
-        }
+        endTimeInputInvalid = false
+        durationEditDirty = false
         discardDisplayModeDraft()
         powerDraft = nil
         closedLidDraft = nil
@@ -341,8 +331,8 @@ final class SessionModel: ObservableObject {
     func applySettingsDraft() {
         guard canApplySettingsDraft else { return }
         defer { syncBacklightCountdown() }
+        settingsResult = nil
         settingsMessage = nil
-        let power = powerDraft ?? currentPowerSettings
         let proposedDisplay = displayModeDraft
         let duration = durationEditDirty ? endTimeChoice : nil
         let targetDeadline: TimeInterval?
@@ -352,31 +342,90 @@ final class SessionModel: ObservableObject {
         } else {
             targetDeadline = deadline
         }
-        if let closedLidDraft {
+        _ = applySessionChanges(closedLid: closedLidDraft, power: powerDraft, deadline: targetDeadline,
+                            duration: duration, display: proposedDisplay, appliesPanelDraft: true)
+    }
+
+    private func applySessionChanges(closedLid: Bool?, power: PowerDraft?, deadline targetDeadline: TimeInterval?,
+                                     duration: EndTimeSelection.Choice?, display: DisplayMode?,
+                                     appliesPanelDraft: Bool = false) -> SessionOperationResult {
+        if let closedLid {
+            let targetPower = power ?? currentPowerSettings
             // A restart must be able to start under the proposed power policy.
             let latestPower = operations.readPower()
-            if let restriction = powerRestriction(latestPower, mode: power.mode, threshold: Int(power.threshold)) {
-                settingsMessage = SessionMessage(reason: restriction.reason)
-                return
+            if let restriction = powerRestriction(latestPower, mode: targetPower.mode, threshold: Int(targetPower.threshold)) {
+                return rejectSettings(SessionMessage(reason: restriction.reason))
             }
-            restartClosedLid(closedLidDraft, request: RestartRequest(previousClosedLid: closedLid,
-                deadline: targetDeadline, power: powerDraft, duration: duration, display: proposedDisplay))
-        } else if powerDraft != nil || duration != nil {
-            submitSettings(power: power, deadline: targetDeadline, duration: duration, display: proposedDisplay)
-        } else if let proposedDisplay {
-            discardDisplayModeDraft()
-            setDisplayMode(proposedDisplay)
+            return restartClosedLid(closedLid, request: RestartRequest(previousClosedLid: self.closedLid,
+                deadline: targetDeadline, power: power, duration: duration, display: display, appliesPanelDraft: appliesPanelDraft))
+        } else if power != nil || duration != nil {
+            return submitSettings(power: power ?? currentPowerSettings, deadline: targetDeadline, duration: duration,
+                                  display: display, appliesPanelDraft: appliesPanelDraft)
+        } else if let display {
+            return applySettingsDisplay(display, appliesPanelDraft: appliesPanelDraft)
+        }
+        return .completed
+    }
+
+    @discardableResult
+    func applySettings(endTime: EndTimeSelection.Choice?, closedLid: Bool?, allowBattery: Bool?,
+                                 threshold: Int?, displayMode: DisplayMode?, starting: Bool) throws -> SessionOperationResult {
+        guard canEditSessionSettings, !settingsApplying, !display.transitioning, !starting || !busy else {
+            throw WakecupError(message: "Wakecup is busy. Check its status and try again.")
+        }
+        let power = PowerDraft(allowBattery: allowBattery ?? self.allowBattery,
+                              threshold: threshold.map(Double.init) ?? self.threshold)
+        guard Self.validThreshold(power.threshold) else { throw WakecupError(message: "Battery threshold must be 10–90%.") }
+        let targetMode = displayMode ?? self.displayMode
+        if targetMode == .backlightOff && displayShortcut == nil {
+            throw WakecupError(message: "Configure a restore brightness shortcut first.")
+        }
+        let nextLid = closedLid ?? self.closedLid
+        if starting {
+            return try start(with: StartSettings(closedLid: nextLid, power: power, endTime: endTime, display: targetMode))
+        }
+        let duration = try endTime?.validatedDuration(from: currentDate)
+        settingsResult = nil
+        settingsMessage = nil
+        display.clearError()
+        if phase == .active {
+            let targetDeadline = endTime == nil ? deadline : duration.map { operations.now() + $0 }
+            return applySessionChanges(closedLid: nextLid == self.closedLid ? nil : nextLid,
+                power: power == currentPowerSettings ? nil : power,
+                deadline: targetDeadline, duration: endTime,
+                display: targetMode == self.displayMode ? nil : targetMode)
+        } else {
+            if let endTime {
+                endTimeChoice = endTime
+                saveEndTimeChoice(endTime)
+            }
+            if nextLid != self.closedLid { self.closedLid = nextLid }
+            if power.allowBattery != self.allowBattery { self.allowBattery = power.allowBattery }
+            if power.threshold != self.threshold { self.threshold = power.threshold }
+            if targetMode != self.displayMode { return setDisplayMode(targetMode) }
+            return .completed
         }
     }
 
+    private static let settingsFailure: SessionMessage = "Could not apply settings. The current settings remain active."
+
+    @discardableResult
+    private func rejectSettings(_ issue: SessionMessage) -> SessionOperationResult {
+        settingsMessage = issue
+        let result = SessionOperationResult.rejected(issue)
+        settingsResult = result
+        return result
+    }
+
     private func submitSettings(power: PowerDraft, deadline targetDeadline: TimeInterval?,
-                                duration: EndTimeSelection.Choice?, display: DisplayMode?) {
-        guard phase == .active, pendingSettings == nil, let config = configuration else { return }
+                                duration: EndTimeSelection.Choice?, display: DisplayMode?,
+                                appliesPanelDraft: Bool) -> SessionOperationResult {
+        guard phase == .active, pendingSettings == nil, let config = configuration,
+              nextSettingsRevision < UInt64.max else { return rejectSettings(Self.settingsFailure) }
         let time = operations.now()
-        guard deadline.map({ time < $0 }) ?? true else { tick(); return }
-        guard nextSettingsRevision < UInt64.max else {
-            settingsMessage = "Could not apply settings. The current settings remain active."
-            return
+        guard deadline.map({ time < $0 }) ?? true else {
+            tick()
+            return rejectSettings(Self.settingsFailure)
         }
         let revision = nextSettingsRevision + 1
         let update = SessionLiveUpdate(revision: revision, powerMode: power.mode, threshold: Int(power.threshold), deadline: targetDeadline)
@@ -384,16 +433,19 @@ final class SessionModel: ObservableObject {
         candidate.update = update
         do {
             if config.closedLid {
-                guard let files else { return }
+                guard let files else { return rejectSettings(Self.settingsFailure) }
                 try files.write(candidate, to: "control.json")
             }
             control = candidate
             nextSettingsRevision = revision
-            pendingSettings = PendingSettings(update: update, sentAt: time, duration: duration, display: display)
+            pendingSettings = PendingSettings(update: update, sentAt: time, duration: duration,
+                                              display: display, appliesPanelDraft: appliesPanelDraft)
             settingsApplying = true
+            settingsResult = .pending()
             if !config.closedLid { tick() }
+            return settingsResult ?? rejectSettings(Self.settingsFailure)
         } catch {
-            settingsMessage = "Could not apply settings. The current settings remain active."
+            return rejectSettings(Self.settingsFailure)
         }
     }
 
@@ -402,71 +454,99 @@ final class SessionModel: ObservableObject {
               let pending = pendingSettings, revision >= pending.update.revision else { return }
         pendingSettings = nil
         settingsApplying = false
+        let previousPower = currentPowerSettings
         allowBattery = mode == .battery
         self.threshold = Double(threshold)
         if let error = status.settingsError {
-            settingsMessage = SessionMessage(reason: error)
+            rejectSettings(SessionMessage(reason: error))
         } else {
+            settingsResult = .completed
             settingsMessage = nil
-            powerDraft = nil
+            reconcilePowerDraft(previous: previousPower, appliesPanelDraft: pending.appliesPanelDraft)
             if let choice = pending.duration {
                 saveEndTimeChoice(choice)
-                durationEditDirty = false
+                if pending.appliesPanelDraft { durationEditDirty = false }
             }
             saveOptions()
-            if let mode = pending.display, phase == .active, status.phase == "active" {
-                discardDisplayModeDraft()
-                setDisplayMode(mode)
+            if let mode = pending.display {
+                if phase == .active, status.phase == "active" {
+                    _ = applySettingsDisplay(mode, afterOtherChanges: true, appliesPanelDraft: pending.appliesPanelDraft)
+                } else {
+                    settingsResult = .partiallyApplied(Self.displayChangeInterrupted)
+                }
             }
         }
     }
 
-    private func restartClosedLid(_ enabled: Bool, request: RestartRequest) {
-        guard canChangeClosedLid else { return }
+    private func reconcilePowerDraft(previous: PowerDraft, appliesPanelDraft: Bool) {
+        guard let draft = powerDraft else { return }
+        let rebased = PowerDraft(allowBattery: draft.allowBattery == previous.allowBattery ? allowBattery : draft.allowBattery,
+                                 threshold: draft.threshold == previous.threshold ? threshold : draft.threshold)
+        powerDraft = appliesPanelDraft || rebased == currentPowerSettings ? nil : rebased
+    }
+
+    private func restartClosedLid(_ enabled: Bool, request: RestartRequest) -> SessionOperationResult {
+        guard canChangeClosedLid else { return rejectSettings(Self.settingsFailure) }
         guard operations.readLidClosed() == false else {
-            settingsMessage = "Open the lid before changing closed-lid mode."
-            return
+            return rejectSettings("Open the lid before changing closed-lid mode.")
         }
         if enabled {
             guard !(helper.selected && helper.checking) else {
-                settingsMessage = "Wait for the check to finish."
-                return
+                return rejectSettings("Wait for the check to finish.")
             }
             do {
                 guard try !operations.readSleepDisabled() else {
-                    settingsMessage = "Sleep is already disabled by a system setting. Wakecup will not change an existing setting."
-                    return
+                    return rejectSettings("Sleep is already disabled by a system setting. Wakecup will not change an existing setting.")
                 }
-            } catch { settingsMessage = SessionMessage(reason: error.localizedDescription); return }
+            } catch { return rejectSettings(SessionMessage(reason: error.localizedDescription)) }
         }
-        guard deadline.map({ operations.now() < $0 }) ?? true else { tick(); return }
+        guard deadline.map({ operations.now() < $0 }) ?? true else {
+            tick()
+            return rejectSettings(Self.restartExpired)
+        }
+        settingsResult = .pending()
         restartRequest = request
         isRestarting = true
         guardianExitWaitSince = nil
         closedLid = enabled
         requestStop()
+        let result = settingsResult ?? rejectSettings(Self.settingsFailure)
+        if case .pending = result, waitingForPassword {
+            return .pending("Confirm the macOS authorization prompt if it appears.")
+        }
+        return result
     }
 
     private func becameActive() {
+        let start = pendingStart
+        pendingStart = nil
         let restart = restartRequest
         let wasRestarting = isRestarting
         isRestarting = false
         restartRequest = nil
         guardianExitWaitSince = nil
         settingsMessage = nil
-        if let power = restart?.power {
+        if let start { closedLid = start.closedLid }
+        let previousPower = currentPowerSettings
+        if let power = start?.power ?? restart?.power {
             allowBattery = power.allowBattery
             threshold = power.threshold
         }
-        if let choice = restart?.duration {
+        if let choice = start?.endTime ?? restart?.duration {
             saveEndTimeChoice(choice)
-            durationEditDirty = false
+            if start != nil || restart?.appliesPanelDraft == true || !durationEditDirty {
+                endTimeChoice = choice
+                durationEditDirty = false
+            }
         }
-        closedLidDraft = nil
-        powerDraft = nil
-        if let mode = restart?.display {
-            setDisplayMode(mode)
+        if closedLidDraft == closedLid || restart?.appliesPanelDraft == true { closedLidDraft = nil }
+        reconcilePowerDraft(previous: previousPower, appliesPanelDraft: restart?.appliesPanelDraft == true)
+        if let start, start.display != displayMode {
+            display.setMode(start.display, running: true, now: operations.now(), assertionsAlreadyApplied: true)
+        } else if let mode = restart?.display {
+            _ = applySettingsDisplay(mode, afterOtherChanges: true, appliesPanelDraft: restart?.appliesPanelDraft == true)
         } else {
+            if wasRestarting { settingsResult = .completed }
             display.activateIfConfigured(at: operations.now())
         }
         saveOptions()
@@ -476,10 +556,34 @@ final class SessionModel: ObservableObject {
         }
     }
 
-    private func setDisplayMode(_ mode: DisplayMode) {
-        guard canChangeDisplayMode else { return }
-        display.setMode(mode, running: phase == .active, now: operations.now())
+    private func applySettingsDisplay(_ mode: DisplayMode, afterOtherChanges: Bool = false,
+                                      appliesPanelDraft: Bool) -> SessionOperationResult {
+        if appliesPanelDraft { discardDisplayModeDraft() }
+        func outcome(_ result: SessionOperationResult) -> SessionOperationResult {
+            if case .rejected(let issue) = result, afterOtherChanges { return .partiallyApplied(issue) }
+            return result
+        }
+        let result = setDisplayMode(mode) { [weak self] result in
+            guard let self, case .pending = self.settingsResult else { return }
+            if case .completed = result, self.displayMode != mode {
+                self.settingsResult = outcome(.rejected(Self.displayChangeInterrupted))
+            } else {
+                self.settingsResult = outcome(result)
+            }
+            if case .completed = result, self.displayModeDraft == self.displayMode { self.discardDisplayModeDraft() }
+        }
+        let recorded = outcome(result)
+        settingsResult = recorded
+        if case .completed = result, displayModeDraft == displayMode { discardDisplayModeDraft() }
+        return recorded
+    }
+
+    @discardableResult
+    private func setDisplayMode(_ mode: DisplayMode, completion: ((SessionOperationResult) -> Void)? = nil) -> SessionOperationResult {
+        guard canChangeDisplayMode else { return .rejected(Self.settingsFailure) }
+        let result = display.setMode(mode, running: phase == .active, now: operations.now(), completion: completion)
         statusDidChange?()
+        return result
     }
 
     func selectDisplayMode(_ mode: DisplayMode) {
@@ -529,45 +633,68 @@ final class SessionModel: ObservableObject {
         try display.validateShortcut(shortcut)
     }
 
-    func setDisplayShortcut(_ shortcut: DisplayShortcut?) throws {
+    @discardableResult
+    func setDisplayShortcut(_ shortcut: DisplayShortcut?) throws -> SessionOperationResult {
         guard canChangeDisplayShortcut else { throw WakecupError(message: "display.shortcut.locked") }
-        try display.setShortcut(shortcut, running: phase == .active)
+        let result = try display.setShortcut(shortcut, running: phase == .active)
         if shortcut == nil, displayModeDraft == .backlightOff { discardDisplayModeDraft() }
+        return result
     }
 
-    func start() {
-        guard !busy, !needsRecovery, !helper.working, !display.transitioning,
-              !(closedLid && helper.selected && helper.checking) else { return }
+    func start() { _ = try? start(with: nil) }
+
+    private func start(with candidate: StartSettings?) throws -> SessionOperationResult {
+        guard !busy, !needsRecovery, !helper.working, !display.transitioning else {
+            throw WakecupError(message: "Wakecup is busy. Check its status and try again.")
+        }
+        if (candidate?.closedLid ?? closedLid) && helper.selected && helper.checking {
+            throw WakecupError(message: "Wait for the helper check to finish.")
+        }
         // A previous failed brightness recovery keeps its escape action armed.
         // Resolve it before starting another timer or restoration child.
         if isBacklightOff {
             display.finish()
-            guard !isBacklightOff else { return }
+            guard !isBacklightOff else { throw WakecupError(message: "Restore brightness before starting Wakecup.") }
         }
         // Refresh here as well as on ticks: power can change just before a click.
         power = operations.readPower()
-        guard startPowerRestriction == nil else { return }
-        beginStart(restart: nil)
+        let targetPower = candidate?.power ?? currentPowerSettings
+        if let restriction = powerRestriction(power, mode: targetPower.mode, threshold: Int(targetPower.threshold)) {
+            throw WakecupError(message: SessionMessage(reason: restriction.reason).text(using: { $0 }))
+        }
+        settingsResult = nil
+        beginStart(restart: nil, candidate: candidate)
+        switch phase {
+        case .active: return .completed
+        case .authorizing, .stopping:
+            return .pending(waitingForPassword ? "Confirm the macOS authorization prompt if it appears." : nil)
+        default: return .rejected(message ?? "Wakecup could not start. Check the current status.")
+        }
     }
 
-    private func beginStart(restart: RestartRequest?) {
+    private func beginStart(restart: RestartRequest?, candidate: StartSettings? = nil) {
         settingsMessage = nil
         do {
             let duration: TimeInterval?
             if let restart { duration = restart.deadline.map { max(1, $0 - operations.now()) } }
-            else { duration = try selectedDuration() }
+            else if let choice = candidate?.endTime {
+                duration = try choice.validatedDuration(from: currentDate)
+            } else { duration = try selectedDuration() }
+            let choice = candidate?.endTime ?? endTimeChoice
             let absoluteDeadline: TimeInterval?
             if let restart { absoluteDeadline = restart.deadline }
-            else { absoluteDeadline = endTimeChoice.hasFixedDate ? duration.map { operations.now() + $0 } : nil }
+            else { absoluteDeadline = choice.hasFixedDate ? duration.map { operations.now() + $0 } : nil }
+            let targetPower = candidate?.power ?? restart?.power ?? currentPowerSettings
             let config = SessionConfiguration(id: UUID().uuidString, parentPID: getpid(), duration: duration,
-                powerMode: restart?.power?.mode ?? currentPowerSettings.mode,
-                threshold: Int(restart?.power?.threshold ?? threshold), closedLid: closedLid, keepDisplayOn: keepDisplayOn,
+                powerMode: targetPower.mode, threshold: Int(targetPower.threshold),
+                closedLid: candidate?.closedLid ?? closedLid, keepDisplayOn: candidate?.display.keepsDisplayOn ?? keepDisplayOn,
                 parentIdentity: processIdentity(getpid()), absoluteDeadline: absoluteDeadline)
             _ = try SessionMonitor(configuration: config, now: operations.now())
-            if closedLid, try operations.readSleepDisabled() {
+            if config.closedLid, try operations.readSleepDisabled() {
                 throw WakecupError(message: "Sleep is already disabled by a system setting. Wakecup will not change an existing setting.")
             }
             let newFiles = try config.closedLid ? operations.createFiles(config) : nil
+            pendingStart = candidate
             configuration = config
             files = newFiles
             monitor = nil
@@ -601,7 +728,7 @@ final class SessionModel: ObservableObject {
                 becameActive()
             }
             tick()
-        } catch let issue as EndTimeIssue {
+        } catch let issue as EndTimeSelection.Issue {
             fail(SessionMessage(issue.messageKey))
         } catch { fail(SessionMessage(reason: error.localizedDescription)) }
     }
@@ -807,31 +934,48 @@ final class SessionModel: ObservableObject {
         finish(SessionStatus(phase: "stopped", reason: "запуск отменён"))
     }
 
-    func stop() {
+    @discardableResult
+    func stop() -> SessionOperationResult {
+        if partialSettingsIssue == nil && !display.transitioning { settingsResult = nil }
+        pendingStart = nil
         if let restart = restartRequest { closedLid = restart.previousClosedLid }
         restartRequest = nil
         isRestarting = false
-        display.finish()
-        requestStop()
+        let displayResult = display.finish()
+        let stopResult = requestStop()
+        switch stopResult {
+        case .completed: return displayResult
+        default: return stopResult
+        }
     }
 
-    private func requestStop() {
-        displayModeDraft = nil
+    @discardableResult
+    private func requestStop() -> SessionOperationResult {
+        if !isRestarting { displayModeDraft = nil }
         display.cancelCountdown()
-        guard busy else { return }
+        guard busy else { return .completed }
+        defer { statusDidChange?() }
         if let files, configuration?.closedLid == true {
-            do { try sendGuardianStop(files); phase = .stopping }
-            catch { fail("Could not send the stop request to the guardian.", requiresSleepConfirmation: true) }
-            authorization?.cancel()
-        } else { finish(SessionStatus(phase: "stopped", reason: "остановлено")) }
-        statusDidChange?()
+            defer { authorization?.cancel() }
+            do {
+                try sendGuardianStop(files)
+                phase = .stopping
+                return .pending()
+            } catch {
+                let issue: SessionMessage = "Could not send the stop request to the guardian."
+                fail(issue, requiresSleepConfirmation: true)
+                return .rejected(issue)
+            }
+        }
+        finish(SessionStatus(phase: "stopped", reason: "остановлено"))
+        return .completed
     }
 
     private func finish(_ status: SessionStatus) {
+        pendingStart = nil
         let wasRestarting = isRestarting
         let wasApplying = settingsApplying || wasRestarting
         if !wasApplying && pendingError == nil && hasSettingsDraft { settingsMessage = nil }
-        displayModeDraft = nil
         if let restart = restartRequest {
             if pendingError == nil, status.phase == "stopped", status.sleepRestored, status.reason == "остановлено" {
                 lastStatus = status
@@ -855,6 +999,7 @@ final class SessionModel: ObservableObject {
             restartRequest = nil
             isRestarting = false
         }
+        displayModeDraft = nil
         powerDraft = nil
         closedLidDraft = nil
         pendingSettings = nil
@@ -880,9 +1025,11 @@ final class SessionModel: ObservableObject {
             notice = status.reason.isEmpty ? "Session ended." : SessionMessage("Session ended: %@.", arguments: [status.reason])
         }
         if wasApplying {
-            settingsMessage = notice ?? settingsMessage
+            rejectSettings(notice ?? settingsMessage ?? Self.settingsFailure)
             message = nil
         } else {
+            // A pending display change reports its outcome when brightness restoration finishes.
+            if case .pending = settingsResult, !display.transitioning { settingsResult = nil }
             message = notice
         }
         if status.sleepRestored, let files { discardFinishedFiles(files) }
@@ -891,6 +1038,8 @@ final class SessionModel: ObservableObject {
     }
 
     private func fail(_ text: SessionMessage, requiresSleepConfirmation: Bool = false) {
+        settingsResult = nil
+        pendingStart = nil
         let wasApplying = settingsApplying || isRestarting
         powerDraft = nil
         closedLidDraft = nil
@@ -907,7 +1056,7 @@ final class SessionModel: ObservableObject {
         if busy, let files { try? sendGuardianStop(files) }
         needsRecovery = requiresSleepConfirmation || (lastStatus?.ownsSleepChange == true && lastStatus?.sleepRestored != true)
         phase = .failed
-        if wasApplying { settingsMessage = text }
+        if wasApplying { rejectSettings(text) }
         message = wasApplying ? nil : text
         statusDidChange?()
     }
@@ -980,29 +1129,39 @@ final class SessionModel: ObservableObject {
         return false
     }
 
-    func recover() {
-        guard needsRecovery, let files, !busy, !helper.working else { return }
+    @discardableResult
+    func recover() -> SessionOperationResult {
+        guard !busy, !helper.working else { return .rejected("Wait until Wakecup has stopped.") }
+        guard needsRecovery else { return .completed }
+        let recoveryFailure: SessionMessage = "Could not restore sleep. Try recovery again; if it still fails, use the manual recovery guide."
+        guard let files else { return .rejected(recoveryFailure) }
         settingsMessage = nil
-        if refreshRecoveryStatus() { return }
+        if refreshRecoveryStatus() { return .completed }
         let status = try? files.read("status.json", as: SessionStatus.self)
+        let stopFailure: SessionMessage = "Could not send the stop request to the guardian."
         if status == nil || status?.phase == "preparing" {
             do {
-                if try confirmGuardianDidNotStart(files, checkSystemSleep: true) { finishCancelledStartup() }
-                else { message = "Could not restore sleep. Try recovery again; if it still fails, use the manual recovery guide." }
+                if try confirmGuardianDidNotStart(files, checkSystemSleep: true) {
+                    finishCancelledStartup()
+                    return .completed
+                }
+                message = recoveryFailure
+                return .rejected(recoveryFailure)
             } catch {
-                message = "Could not send the stop request to the guardian."
+                message = stopFailure
+                return .rejected(stopFailure)
             }
-            return
         }
         if let status, ["arming", "active", "restoring"].contains(status.phase),
            operations.guardianResponding(status, operations.now()) {
             do {
                 try sendGuardianStop(files)
                 message = "Stopping…"
+                return .pending()
             } catch {
-                message = "Could not send the stop request to the guardian."
+                message = stopFailure
+                return .rejected(stopFailure)
             }
-            return
         }
         phase = .authorizing
         recovering = true
@@ -1015,6 +1174,8 @@ final class SessionModel: ObservableObject {
             authorization = task
             runAuthorization(task)
         }
+        if phase == .failed { return .rejected(message ?? recoveryFailure) }
+        return needsRecovery ? .pending(waitingForPassword ? "Confirm the macOS authorization prompt." : nil) : .completed
     }
 
     func refreshLoginState() {

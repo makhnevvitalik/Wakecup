@@ -35,7 +35,7 @@ import SwiftUI
         operations.restoreBacklight = { $0(.success(())) }
         operations.validateDisplayShortcut = { _ in }
         let helper = PrivilegedHelperController(defaults: defaults, inspectInstallation: { .init(state: .missing) },
-            requestInformation: { _ in }, interaction: .inert)
+            requestInformation: { _ in })
         let model = SessionModel(defaults: defaults, operations: operations, helper: helper)
         model.editClosedLid(false)
         try model.setDisplayShortcut(DisplayShortcut(keyCode: 120, modifiers: DisplayShortcut.control))

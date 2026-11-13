@@ -185,7 +185,7 @@ final class DisplayShortcutEditor: NSObject, NSWindowDelegate {
         defer { model.endDisplayShortcutEditing() }
         let editor = DisplayShortcutEditor(currentShortcut: model.displayShortcut,
             canEdit: { model.canChangeDisplayShortcut }, validate: model.validateDisplayShortcut,
-            save: model.setDisplayShortcut, requiresShortcut: requiresShortcut, finish: { NSApp.stopModal() })
+            save: { _ = try model.setDisplayShortcut($0) }, requiresShortcut: requiresShortcut, finish: { NSApp.stopModal() })
         editor.prepareForPresentation(relativeTo: owner)
         editor.eventMonitor = NSEvent.addLocalMonitorForEvents(matching: [.keyDown]) { [weak editor] event in
             guard let editor else { return event }

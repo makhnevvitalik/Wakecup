@@ -15,8 +15,7 @@ import SwiftUI
         let defaults = UserDefaults(suiteName: suite)!
         defer { defaults.removePersistentDomain(forName: suite) }
         let helper = PrivilegedHelperController(defaults: defaults,
-            inspectInstallation: { .init(state: .missing) }, requestInformation: { _ in },
-            interaction: .inert)
+            inspectInstallation: { .init(state: .missing) }, requestInformation: { _ in })
         var currentPower: PowerState? = .init(onAC: true, percent: 42)
         let operations = SessionOperations(now: { 1000 }, readPower: { currentPower },
             readSleepDisabled: { false }, startAssertions: { _ in }, stopAssertions: {},

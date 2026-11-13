@@ -18,7 +18,7 @@ struct StopTimeCard: View {
         calendar.locale = Locale(identifier: localization.language.rawValue)
         return calendar
     }
-    private var visibleIssue: SessionModel.EndTimeIssue? {
+    private var visibleIssue: EndTimeSelection.Issue? {
         let issue = model.endTimeIssue
         return editingTime && issue == .incomplete ? nil : issue
     }
@@ -29,9 +29,10 @@ struct StopTimeCard: View {
         guard let date = model.selectedEndDate else { return localized("Until stopped manually") }
         let formatter = DateComponentsFormatter()
         formatter.calendar = calendar
-        formatter.allowedUnits = [.day, .hour, .minute]
+        let remaining = max(1, ceil(date.timeIntervalSince(model.currentDate)))
+        formatter.allowedUnits = remaining < 60 ? [.second] : [.day, .hour, .minute]
         formatter.maximumUnitCount = 2; formatter.unitsStyle = .abbreviated
-        let seconds = max(60, ceil(date.timeIntervalSince(model.currentDate) / 60) * 60)
+        let seconds = remaining < 60 ? remaining : ceil(remaining / 60) * 60
         return localizedFormat("Stops in %@", formatter.string(from: seconds) ?? "")
     }
     var body: some View {

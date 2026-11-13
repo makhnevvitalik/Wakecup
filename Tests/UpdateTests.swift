@@ -79,11 +79,10 @@ struct UpdateTests {
         expect(captured?.url == UpdateChecker.latestReleaseAPIURL && captured?.value(forHTTPHeaderField: "Accept") == "application/vnd.github+json", "expected endpoint and JSON accept header")
         checker.check()
         expect(requests.count == 1, "no overlapping requests")
-        checker.cancel()
-        expect(requests[0].cancelled && checker.state == .idle, "cancel clears state")
-        completions[0](payload("1"), response(200), nil)
+        completions[0](payload("1", url: "https://example.org/release"), response(200), nil)
         drainMainQueue()
-        expect(checker.state == .idle, "late cancelled callback ignored")
+        expect(checker.state == .finished(.updateAvailable(tag: "1", url: UpdateChecker.latestReleaseURL)),
+               "first request finishes")
         checker.check()
         completions[0](nil, response(404), nil)
         drainMainQueue()
@@ -96,7 +95,11 @@ struct UpdateTests {
         expect(checker.state == .finished(.upToDate), "duplicate completed callback ignored")
         checker.check()
         expect(requests.count == 3, "check again after completion")
-        checker.cancel()
+        let cancelled = FakeRequest()
+        var disposable: UpdateChecker? = UpdateChecker(transport: { _, _ in cancelled })
+        disposable?.check()
+        disposable = nil
+        expect(cancelled.cancelled, "an in-flight request is cancelled when the checker is released")
         print("Update checks: \(count), failures: \(failures.count)")
         failures.forEach { print("FAIL: " + $0) }
         exit(failures.isEmpty ? 0 : 1)

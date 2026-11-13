@@ -16,7 +16,6 @@ import Foundation
     }
 
     private static func run() throws {
-        let ui = HeadlessInteraction()
         let suite = "WakecupHelperStateTest-" + UUID().uuidString
         let defaults = UserDefaults(suiteName: suite)!
         defer { defaults.removePersistentDomain(forName: suite) }
@@ -24,7 +23,7 @@ import Foundation
         var inspection = PrivilegedHelperController.Inspection(state: .ready, manifest: manifest)
         var replies: [(Result<HelperInformation, Error>) -> Void] = []
         let helper = PrivilegedHelperController(defaults: defaults,
-            inspectInstallation: { inspection }, requestInformation: { replies.append($0) }, interaction: ui.value)
+            inspectInstallation: { inspection }, requestInformation: { replies.append($0) })
         try expect(helper.selected && !helper.usesHelper && helper.checking && !helper.working,
                    "A file-only inspection must wait for mutual trust without losing helper intent")
         helper.refresh(); helper.refresh()
@@ -79,32 +78,29 @@ import Foundation
     }
 
     private static func checkInstallation(defaults: UserDefaults) throws {
-        let ui = HeadlessInteraction()
+        var failures: [String] = []
         defaults.set(true, forKey: "useInstalledHelper")
         var replies: [(Result<HelperInformation, Error>) -> Void] = []
         var inspection = PrivilegedHelperController.Inspection(state: .ready, manifest: manifest)
         let cancelled = PrivilegedHelperController(defaults: defaults, makeInstallationTask: { _ in
             task("printf '%s' '-128'; exit 1")
-        }, inspectInstallation: { inspection }, requestInformation: { replies.append($0) }, interaction: ui.value)
+        }, inspectInstallation: { inspection }, requestInformation: { replies.append($0) })
         let stale = replies[0]
-        cancelled.changeInstallation(remove: false)
+        _ = cancelled.requestInstallation(remove: false) { failures.append($0) }
         try expect(cancelled.working && !cancelled.checking, "An installation must invalidate its pending health check")
         cancelled.select(false)
         stale(.success(HelperInformation(manifest: manifest, clientConfirmed: true)))
         try expect(cancelled.selected && !cancelled.usesHelper, "A stale reply or preference change during installation must be ignored")
         try waitUntil { !cancelled.working }
         try expect(cancelled.selected && defaults.bool(forKey: "useInstalledHelper"), "Cancelled authorization must preserve prior helper intent")
-        inspection = .init(state: .unavailable)
-        cancelled.refresh()
-        ui.responses = [.cancel]
-        cancelled.changeInstallation(remove: true)
-        try expect(cancelled.selected, "Cancelling removal must preserve helper intent")
+        try expect(cancelled.installationError == "macOS authorization was cancelled." && failures.isEmpty,
+                   "Authorization cancellation is available to callers without reporting an installation failure")
 
         defaults.set(false, forKey: "useInstalledHelper")
         let installed = PrivilegedHelperController(defaults: defaults, makeInstallationTask: { _ in task("exit 0") },
             inspectInstallation: { .init(state: .ready, manifest: manifest) },
-            requestInformation: { reply in reply(.failure(WakecupError(message: "daemon unavailable"))) }, interaction: ui.value)
-        installed.changeInstallation(remove: false)
+            requestInformation: { reply in reply(.failure(WakecupError(message: "daemon unavailable"))) })
+        _ = installed.requestInstallation(remove: false) { failures.append($0) }
         try waitUntil { !installed.working }
         try expect(installed.selected && defaults.bool(forKey: "useInstalledHelper") && installed.state == .unavailable && !installed.usesHelper,
                    "Successful installation with failed confirmation must remember helper intent without enabling it")
@@ -112,16 +108,16 @@ import Foundation
         defaults.set(false, forKey: "useInstalledHelper")
         let healthy = PrivilegedHelperController(defaults: defaults, makeInstallationTask: { _ in task("exit 0") },
             inspectInstallation: { .init(state: .ready, manifest: manifest) },
-            requestInformation: { reply in reply(.success(HelperInformation(manifest: manifest, clientConfirmed: true))) }, interaction: ui.value)
-        healthy.changeInstallation(remove: false)
+            requestInformation: { reply in reply(.success(HelperInformation(manifest: manifest, clientConfirmed: true))) })
+        _ = healthy.requestInstallation(remove: false) { failures.append($0) }
         try waitUntil { !healthy.working }
         try expect(healthy.selected && healthy.usesHelper && !healthy.checking,
                    "Successful installation with mutual trust must enable and remember the helper")
 
         defaults.set(true, forKey: "useInstalledHelper")
         let failed = PrivilegedHelperController(defaults: defaults, makeInstallationTask: { _ in task("exit 1") },
-            inspectInstallation: { .init(state: .unavailable) }, requestInformation: { _ in }, interaction: ui.value)
-        failed.changeInstallation(remove: false)
+            inspectInstallation: { .init(state: .unavailable) }, requestInformation: { _ in })
+        _ = failed.requestInstallation(remove: false) { failures.append($0) }
         try waitUntil { !failed.working }
         try expect(failed.selected && defaults.bool(forKey: "useInstalledHelper"), "Failed update must preserve prior helper intent")
 
@@ -129,13 +125,13 @@ import Foundation
         let removal = PrivilegedHelperController(defaults: defaults, makeInstallationTask: { remove in
             removed = remove
             return task("exit 0")
-        }, inspectInstallation: { .init(state: removed ? .missing : .unavailable) }, requestInformation: { _ in }, interaction: ui.value)
-        removal.changeInstallation(remove: true)
+        }, inspectInstallation: { .init(state: removed ? .missing : .unavailable) }, requestInformation: { _ in })
+        _ = removal.requestInstallation(remove: true) { failures.append($0) }
         try waitUntil { !removal.working }
         try expect(removed && removal.state == .missing && !removal.selected && !defaults.bool(forKey: "useInstalledHelper"),
                    "Successful removal must turn off helper intent")
-        try expect(ui.failures.count == 2,
-                   "Failed installation and confirmation must report their warnings through the injected interaction")
+        try expect(failures.count == 2,
+                   "Failed installation and confirmation must report their warnings to the caller")
     }
 
     private static func task(_ script: String) -> Process {
@@ -152,17 +148,5 @@ import Foundation
         let deadline = Date().addingTimeInterval(3)
         while !condition(), Date() < deadline { RunLoop.main.run(until: Date().addingTimeInterval(0.01)) }
         try expect(condition(), "Timed out waiting for a safe local installer stub")
-    }
-    private final class HeadlessInteraction {
-        var responses: [HelperInteraction.Response] = []
-        var failures: [String] = []
-        var value: HelperInteraction {
-            .init(present: { [self] request in
-                if case .failure(let message, _, _) = request { failures.append(message) }
-                if !responses.isEmpty { return responses.removeFirst() }
-                if case .confirmRemoval = request { return .confirm }
-                return .primary
-            })
-        }
     }
 }

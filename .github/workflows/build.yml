@@ -80,7 +80,7 @@ jobs:
           retention-days: 3
 
   release:
-    name: Signed release draft
+    name: Signed release packages
     if: startsWith(github.ref, 'refs/tags/')
     needs: [reuse, checks]
     runs-on: macos-26
@@ -107,7 +107,7 @@ jobs:
           SIGNING_CERTIFICATE_NAME: ${{ vars.SIGNING_CERTIFICATE_NAME || 'Wakecup Release Signing' }}
           SIGNING_CERTIFICATE_SHA1: ${{ vars.SIGNING_CERTIFICATE_SHA1 || '83DEFBD5CC931816072976562C3FDF2D2CE64085' }}
         run: .github/scripts/build-signed-release.sh
-      - name: Create or update a draft for review
+      - name: Create release draft or replace release assets
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
@@ -116,8 +116,7 @@ jobs:
         run: |
           set -euo pipefail
           assets=("$PACKAGE_DIRECTORY"/*.zip "$PACKAGE_DIRECTORY"/*.dmg "$PACKAGE_DIRECTORY/SHA256SUMS.txt")
-          if gh release view "$RELEASE_TAG" --json isDraft > "$RUNNER_TEMP/wakecup-release.json"; then
-            python3 -c 'import json,sys; sys.exit(0 if json.load(open(sys.argv[1]))["isDraft"] else "Refusing to replace a published release")' "$RUNNER_TEMP/wakecup-release.json"
+          if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
             gh release upload "$RELEASE_TAG" "${assets[@]}" --clobber
           else
             gh release create "$RELEASE_TAG" "${assets[@]}" --verify-tag --draft \

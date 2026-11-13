@@ -74,10 +74,15 @@ final class MenuPanelController {
 
     var isVisible: Bool { panel.isVisible }
 
-    init(model: SessionModel, statusButton: @escaping () -> NSStatusBarButton?, showHelp: @escaping () -> Void = {}, showAbout: @escaping () -> Void = {}, configureDisplayShortcut: @escaping (Bool) -> Bool) {
+    init(model: SessionModel, statusButton: @escaping () -> NSStatusBarButton?, showHelp: @escaping () -> Void = {},
+         showAbout: @escaping () -> Void = {}, showMCPSetup: @escaping () -> Void = {},
+         configureDisplayShortcut: @escaping (Bool) -> Bool, helperInteraction: HelperInteraction = .init(),
+         isMCPEnabled: @escaping () -> Bool = { false }, setMCPEnabled: @escaping (Bool) -> Void = { _ in }) {
         self.model = model
         self.statusButton = statusButton
-        hosting = MenuHostingController(rootView: WakecupView(model: model, showAbout: showAbout, configureDisplayShortcut: configureDisplayShortcut))
+        hosting = MenuHostingController(rootView: WakecupView(model: model, showAbout: showAbout,
+            configureDisplayShortcut: configureDisplayShortcut, showMCPSetup: showMCPSetup,
+            helperInteraction: helperInteraction, isMCPEnabled: isMCPEnabled, setMCPEnabled: setMCPEnabled))
         hosting.sizingOptions = [.preferredContentSize]
         footer = NSHostingController(rootView: SessionSettingsFooter(model: model, showHelp: showHelp))
         footer.sizingOptions = []
@@ -139,7 +144,6 @@ final class MenuPanelController {
         }
         screenObservation = NotificationCenter.default.addObserver(forName: NSApplication.didChangeScreenParametersNotification,
             object: nil, queue: .main) { [weak self] _ in self?.resizeVisiblePanel() }
-        model.helper.willPresentDialog = { [weak self] in self?.close() }
     }
 
     deinit {
@@ -176,7 +180,7 @@ final class MenuPanelController {
         panel.makeFirstResponder(nil)
         panel.orderOut(nil)
         removeMonitors()
-        if model.hasSettingsDraft { model.discardSettingsDraft() }
+        if model.hasSettingsDraft || model.endTimeInputInvalid { model.discardSettingsDraft() }
     }
 
     func presentShortcutEditor(_ present: (NSWindow) -> Bool) -> Bool {

@@ -17,6 +17,7 @@ Wakecup keeps your Mac awake while your AI agent works. You can set a stop time 
   - [Display backlight](#display-backlight)
   - [Battery and closed lid](#battery-and-closed-lid)
   - [Settings and updates](#settings-and-updates)
+  - [CLI and MCP](#cli-and-mcp)
   - [If your Mac does not sleep after Wakecup is off](#if-your-mac-does-not-sleep-after-wakecup-is-off)
   - [Privacy and license](#privacy-and-license)
 - [Русский](#русский)
@@ -26,6 +27,7 @@ Wakecup keeps your Mac awake while your AI agent works. You can set a stop time 
   - [Подсветка экрана](#подсветка-экрана)
   - [Аккумулятор и закрытая крышка](#аккумулятор-и-закрытая-крышка)
   - [Настройки и обновления](#настройки-и-обновления)
+  - [CLI и MCP](#cli-и-mcp)
   - [Если Wakecup выключен, а Mac не засыпает](#если-wakecup-выключен-а-mac-не-засыпает)
   - [Приватность и лицензия](#приватность-и-лицензия)
 
@@ -38,7 +40,7 @@ Wakecup keeps your Mac awake while your AI agent works. You can set a stop time 
 - Optionally keep the Mac awake with the lid closed.
 - Choose whether to continue on battery and stop at a selected charge level from 10% to 90%.
 - Install an optional helper to enable closed-lid mode without entering an administrator password every time.
-- English and Russian interface, launch at login and manual GitHub update checks.
+- English and Russian interface, launch at login and GitHub update checks.
 
 ### Install and start
 
@@ -91,7 +93,41 @@ Keep ventilation clear when using closed-lid mode. Wakecup requests that macOS s
 
 ### Settings and updates
 
-Open the gear menu to change **Language**, enable **Open at Login**, or show the remaining time in the menu bar. To check for a new release, choose **About… → Check for Updates**.
+Open the gear menu to change **Language**, enable **Open at Login**, or show the remaining time in the menu bar. Wakecup checks GitHub when it starts and shows a macOS notification when a new version is available. You can also check manually in **About… → Check for Updates**.
+
+### CLI and MCP
+
+The command line and MCP both control the Wakecup timer shown in the menu bar. Open Wakecup, or start it in the background with the CLI's `start` command.
+
+```sh
+/Applications/Wakecup.app/Contents/MacOS/Wakecup --cli status
+/Applications/Wakecup.app/Contents/MacOS/Wakecup --cli start 3h --lid off
+/Applications/Wakecup.app/Contents/MacOS/Wakecup --cli extend 30m
+/Applications/Wakecup.app/Contents/MacOS/Wakecup --cli --help
+```
+
+Set a new end time at least 10 seconds ahead. To extend or shorten a timer, specify at least 10 seconds. The CLI returns JSON. When a command returns `pending`, check `status` for the result. If a command returns `partiallyApplied`, its timer or power changes may already be active. Retry only the display change. macOS can request administrator approval for closed-lid mode or helper changes.
+
+#### Connect Wakecup to Codex
+
+1. Open Wakecup from **Applications** and select **MCP → Enable MCP** in the gear menu.
+2. Run this command in Terminal on the same Mac.
+
+   ```sh
+   codex mcp add wakecup -- /Applications/Wakecup.app/Contents/MacOS/Wakecup --cli mcp
+   ```
+
+3. Restart Codex and ask “What’s the Wakecup status?” Keep Wakecup running while using MCP.
+
+You can also add Wakecup directly to the Codex configuration file, `~/.codex/config.toml`.
+
+```toml
+[mcp_servers.wakecup]
+command = "/Applications/Wakecup.app/Contents/MacOS/Wakecup"
+args = ["--cli", "mcp"]
+```
+
+Wakecup must be running with **Enable MCP** selected for the server to start. Turning it off disconnects MCP clients. After turning it back on, reconnect the client. The timer and CLI stay available.
 
 ### If your Mac does not sleep after Wakecup is off
 
@@ -109,7 +145,7 @@ This clears the sleep block regardless of which app enabled it. Run `/usr/bin/pm
 
 ### Privacy and license
 
-No analytics or external accounts. A manual update check contacts GitHub to read the latest public release. Wakecup does not require Accessibility or Input Monitoring access.
+No analytics or external accounts. Automatic and manual update checks contact GitHub to read the latest public release. Wakecup does not require Accessibility or Input Monitoring access.
 
 The original Wakecup source code, documentation and artwork are available under the [MIT License with the Commons Clause License Condition v1.0](LICENSE). You can use, modify and share Wakecup for free. The license prohibits selling Wakecup or a product or service whose value comes largely from it. Apple frameworks and system interface symbols remain under Apple’s terms. Wakecup bundles no third-party libraries or data.
 
@@ -126,7 +162,7 @@ Wakecup не даёт Mac уснуть, пока ИИ-агент выполня�
 - При необходимости работать с закрытой крышкой.
 - Разрешать работу от аккумулятора и останавливать Wakecup при выбранном заряде от 10% до 90%.
 - Установить необязательного помощника, чтобы не вводить пароль администратора при каждом включении режима с закрытой крышкой.
-- Русский и английский интерфейс, запуск при входе и ручная проверка обновлений на GitHub.
+- Русский и английский интерфейс, запуск при входе и проверка обновлений на GitHub.
 
 ### Установка и первый запуск
 
@@ -179,7 +215,35 @@ Wakecup требует **macOS 14 или новее**.
 
 ### Настройки и обновления
 
-В меню шестерёнки можно выбрать **Язык**, включить **Запускать при входе** или показать **Остаток времени в строке меню**. Чтобы проверить новую версию, откройте **О приложении… → Проверить обновления**.
+В меню шестерёнки можно выбрать **Язык**, включить **Запускать при входе** или показать **Остаток времени в строке меню**. При запуске Wakecup проверяет GitHub и показывает уведомление macOS, если вышла новая версия. Проверить обновления вручную можно через **О приложении… → Проверить обновления**.
+
+### CLI и MCP
+
+CLI и MCP управляют тем же таймером, что и панель Wakecup. Откройте приложение или запустите его в фоне командой CLI `start`.
+
+```sh
+/Applications/Wakecup.app/Contents/MacOS/Wakecup --cli status
+/Applications/Wakecup.app/Contents/MacOS/Wakecup --cli start 3h --lid off
+/Applications/Wakecup.app/Contents/MacOS/Wakecup --cli extend 30m
+/Applications/Wakecup.app/Contents/MacOS/Wakecup --cli --help
+```
+
+До нового времени остановки должно оставаться не меньше 10 секунд. Продлить или сократить таймер можно минимум на 10 секунд. CLI возвращает результат в JSON. Если команда вернула `pending`, проверьте результат через `status`. При ответе `partiallyApplied` изменения таймера или питания могли уже вступить в силу. Повторите только изменение подсветки. Для работы с закрытой крышкой и управления помощником macOS может запросить разрешение администратора.
+
+#### Подключение к Codex
+
+1. Откройте Wakecup из папки «Программы» и выберите **MCP → Включить MCP** в меню шестерёнки.
+2. Выполните команду в Терминале на том же Mac.
+
+   ```sh
+   codex mcp add wakecup -- /Applications/Wakecup.app/Contents/MacOS/Wakecup --cli mcp
+   ```
+
+3. Перезапустите Codex и спросите «Какой сейчас статус Wakecup?». Для работы MCP оставьте Wakecup запущенным.
+
+Если удобнее настроить подключение вручную, добавьте [блок конфигурации](#connect-wakecup-to-codex) в файл `~/.codex/config.toml`.
+
+Сервер запускается, когда Wakecup открыт и MCP включён. Если выключить MCP в меню, подключение закроется. После повторного включения подключите клиент снова. Таймер и CLI останутся доступны.
 
 ### Если Wakecup выключен, а Mac не засыпает
 
@@ -197,6 +261,6 @@ sudo /usr/bin/pmset disablesleep 0
 
 ### Приватность и лицензия
 
-Аналитики и внешних аккаунтов нет. При ручной проверке обновлений приложение обращается к GitHub за последним публичным релизом. Доступ к Универсальному доступу и Мониторингу ввода не требуется.
+Аналитики и внешних аккаунтов нет. При автоматической и ручной проверке обновлений приложение обращается к GitHub за последним публичным релизом. Доступ к Универсальному доступу и Мониторингу ввода не требуется.
 
 Исходный код, документация и оригинальная графика Wakecup доступны по [лицензии MIT с условием Commons Clause License Condition v1.0](LICENSE). Wakecup можно использовать, изменять и распространять бесплатно. Лицензия запрещает продавать Wakecup, а также продукты и услуги, ценность которых в значительной степени основана на нём. На системные компоненты и символы интерфейса распространяются условия Apple. В Wakecup нет сторонних библиотек и наборов данных.

@@ -3,10 +3,10 @@ import Combine
 import SwiftUI
 
 @MainActor
-final class AboutWindowController: NSObject, NSWindowDelegate {
+final class AboutWindowController: NSObject {
     private var window: NSWindow?
     private var licenseWindow: NSWindow?
-    private let updates = UpdateChecker()
+    private let updates: UpdateChecker
     private var languageObserver: AnyCancellable?
     private var updateObserver: AnyCancellable?
     private var versionLabel: NSTextField?
@@ -16,12 +16,13 @@ final class AboutWindowController: NSObject, NSWindowDelegate {
     private var updateProgressIndicator: NSProgressIndicator?
     private var updateStatusLabel: NSTextField?
 
-    override init() {
+    init(updates: UpdateChecker? = nil) {
+        self.updates = updates ?? UpdateChecker()
         super.init()
         languageObserver = AppLocalization.shared.$language.sink { [weak self] _ in
             DispatchQueue.main.async { self?.refreshPresentation() }
         }
-        updateObserver = updates.$state.sink { [weak self] _ in
+        updateObserver = self.updates.$state.sink { [weak self] _ in
             DispatchQueue.main.async { self?.refreshPresentation() }
         }
     }
@@ -31,10 +32,6 @@ final class AboutWindowController: NSObject, NSWindowDelegate {
         refreshPresentation()
         NSApp.activate(ignoringOtherApps: true)
         window?.makeKeyAndOrderFront(nil)
-    }
-
-    func windowWillClose(_ notification: Notification) {
-        if let closed = notification.object as? NSWindow, closed === window { updates.cancel() }
     }
 
     private func refreshPresentation() {
@@ -213,7 +210,6 @@ final class AboutWindowController: NSObject, NSWindowDelegate {
         window.title = localized("About Wakecup")
         window.titleVisibility = .hidden
         window.isReleasedWhenClosed = false
-        window.delegate = self
         window.contentView = windowContent
         window.center()
 

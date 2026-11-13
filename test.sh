@@ -53,7 +53,12 @@ swiftc "$project_root/Core/PowerPolicy.swift" "$project_root/Core/SessionCore.sw
   "$project_root/System/HelperRecoveryCompletion.swift" "$project_root/Tests/HelperRecoveryTests.swift" \
   -o "$project_root/.build/helper-recovery-tests" -module-cache-path "$project_root/.build/module-cache"
 "$project_root/.build/helper-recovery-tests"
+swiftc "$project_root"/Core/*.swift "$project_root/App/AutomationProtocol.swift" "$project_root/App/AutomationSocket.swift" \
+  "$project_root/App/AutomationCLI.swift" "$project_root/App/AutomationMCP.swift" "$project_root/Tests/AutomationTransportTests.swift" \
+  -o "$project_root/.build/automation-transport-tests" -module-cache-path "$project_root/.build/module-cache"
+"$project_root/.build/automation-transport-tests"
 swiftc "$project_root"/Core/*.swift "$project_root"/System/*.swift "$project_root"/Application/*.swift "$project_root/.build/HelperBuildIdentity.swift" \
+  "$project_root/App/AutomationProtocol.swift" "$project_root/App/AutomationController.swift" \
   "$project_root/Tests/SessionModelTests.swift" -o "$project_root/.build/model-tests" \
   -module-cache-path "$project_root/.build/module-cache" -framework AppKit -framework IOKit -framework ServiceManagement
 "$project_root/.build/model-tests"
@@ -78,7 +83,7 @@ swiftc "$project_root/Core/AppVersion.swift" "$project_root/Application/UpdateCh
 "$project_root/.build/update-tests"
 python3 -m unittest discover -s "$project_root/Tests" -p 'test_*.py'
 swiftc "$project_root"/Core/*.swift "$project_root"/System/*.swift "$project_root"/Application/*.swift "$project_root/.build/HelperBuildIdentity.swift" \
-  "$project_root/Tests/HelperPresentationTests.swift" -o "$project_root/.build/helper-presentation-tests" \
+  "$project_root/Presentation/HelperInteraction.swift" "$project_root/Tests/HelperPresentationTests.swift" -o "$project_root/.build/helper-presentation-tests" \
   -module-cache-path "$project_root/.build/module-cache" -framework AppKit -framework IOKit -framework ServiceManagement
 "$project_root/.build/helper-presentation-tests"
 "$project_root/Tests/BuildMetadataTests.sh"

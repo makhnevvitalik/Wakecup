@@ -28,16 +28,15 @@ import AppKit
                     installationRequests += 1
                     throw WakecupError(message: "Unexpected installation in layout test")
                 }, inspectInstallation: { .init(state: state, detail: name == "long-error" ? String(repeating: "Long diagnostic message. ", count: 300) : "", manifest: state == .ready ? manifest : nil) },
-                   requestInformation: { $0(.success(HelperInformation(manifest: manifest, clientConfirmed: true))) },
-                   interaction: .inert)
-                helper.interaction = HelperPresentation(activate: {}, presentAlert: { _ in .abort }, presentSettings: { alert in
+                   requestInformation: { $0(.success(HelperInformation(manifest: manifest, clientConfirmed: true))) })
+                let interaction = HelperPresentation(activate: {}, presentAlert: { _ in .abort }, presentSettings: { alert in
                     var response: NSApplication.ModalResponse?
                     let dialog = HelperSettingsDialog(alert: alert) { response = $0 }
                     captured = dialog
                     (acceptChange ? dialog.buttons.first : dialog.buttons.last)?.performClick(nil)
                     return response ?? .abort
                 }).interaction
-                helper.showSettings()
+                interaction.showSettings(for: helper)
                 guard let dialog = captured, let content = dialog.window.contentView else {
                     throw WakecupError(message: "Helper settings presenter was not used")
                 }
@@ -75,12 +74,12 @@ import AppKit
                     try expect(dialog.buttons.first?.title == localized(selected ? "Switch to password prompts" : "Use helper"),
                                "Permission-mode action must explain its destination")
                     acceptChange = true
-                    helper.showSettings()
+                    interaction.showSettings(for: helper)
                     try expect(helper.selected != selected && helper.usesHelper != selected,
                                "Mode selection must switch helper usage without authorization or installation")
                 }
                 acceptChange = false
-                helper.showSettings(allowInstallationChanges: false)
+                interaction.showSettings(for: helper, allowInstallationChanges: false)
                 try expect(captured?.buttons.first?.isEnabled == (state == .ready),
                            "Read-only settings must disable installation/update while allowing permission-mode selection")
                 try expect(installationRequests == 0, "Layout and mode selection must not install the helper")

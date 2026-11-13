@@ -16,9 +16,15 @@ private final class SettingsIconButton: NSPopUpButton {
 struct SettingsMenu: NSViewRepresentable {
     let model: SessionModel
     let showAbout: () -> Void
+    let showMCPSetup: () -> Void
+    let helperInteraction: HelperInteraction
+    let isMCPEnabled: () -> Bool
+    let setMCPEnabled: (Bool) -> Void
     @ObservedObject private var localization = AppLocalization.shared
 
-    func makeCoordinator() -> Coordinator { Coordinator(model: model, showAbout: showAbout) }
+    func makeCoordinator() -> Coordinator {
+        Coordinator(settings: self)
+    }
     func makeNSView(context: Context) -> NSPopUpButton {
         let button = SettingsIconButton(frame: .zero, pullsDown: true)
         button.menu = context.coordinator.makeMenu()
@@ -35,19 +41,25 @@ struct SettingsMenu: NSViewRepresentable {
     func updateNSView(_ button: NSPopUpButton, context: Context) {
         button.toolTip = localized("Wakecup Settings")
         button.setAccessibilityLabel(localized("Wakecup Settings"))
+        context.coordinator.settings = self
         context.coordinator.refresh()
     }
 
     final class Coordinator: NSObject, NSMenuDelegate {
-        let model: SessionModel
-        let showAbout: () -> Void
+        var settings: SettingsMenu
+        private var model: SessionModel { settings.model }
+        private var helperInteraction: HelperInteraction { settings.helperInteraction }
         private let remainingItem = NSMenuItem()
         private let loginItem = NSMenuItem()
+        private let mcpItem = NSMenuItem(title: "MCP", action: nil, keyEquivalent: "")
+        private let mcpEnabledItem = NSMenuItem()
+        private let mcpSetupItem = NSMenuItem()
         private let languageItem = NSMenuItem()
         private let aboutItem = NSMenuItem()
         private let quitItem = NSMenuItem()
         private let languageMenu = NSMenu()
         private let helperMenu = NSMenu()
+        private let mcpMenu = NSMenu()
         private let helperItem = NSMenuItem()
         private let passwordItem = NSMenuItem()
         private let installedItem = NSMenuItem()
@@ -55,9 +67,7 @@ struct SettingsMenu: NSViewRepresentable {
         private let removeItem = NSMenuItem()
         private let helperExplanationItem = NSMenuItem()
 
-        init(model: SessionModel, showAbout: @escaping () -> Void) {
-            self.model = model; self.showAbout = showAbout
-        }
+        init(settings: SettingsMenu) { self.settings = settings }
         func makeMenu() -> NSMenu {
             let menu = NSMenu()
             menu.font = AppStyle.Font.body
@@ -79,6 +89,14 @@ struct SettingsMenu: NSViewRepresentable {
             menu.addItem(title)
             remainingItem.action = #selector(toggleRemaining)
             loginItem.action = #selector(toggleLogin)
+            mcpMenu.font = menu.font
+            mcpEnabledItem.action = #selector(toggleMCP)
+            mcpSetupItem.action = #selector(openMCPSetup)
+            for item in [mcpEnabledItem, mcpSetupItem] {
+                item.target = self
+                mcpMenu.addItem(item)
+            }
+            mcpItem.submenu = mcpMenu
             aboutItem.action = #selector(openAbout)
             quitItem.action = #selector(quit)
             for item in [remainingItem, loginItem, aboutItem, quitItem] { item.target = self }
@@ -89,7 +107,7 @@ struct SettingsMenu: NSViewRepresentable {
                 languageMenu.addItem(item)
             }
             languageItem.submenu = languageMenu
-            for item in [remainingItem, loginItem, languageItem, helperItem, .separator(), aboutItem, .separator(), quitItem] {
+            for item in [remainingItem, loginItem, languageItem, helperItem, mcpItem, .separator(), aboutItem, .separator(), quitItem] {
                 menu.addItem(item)
             }
             refresh()
@@ -100,6 +118,9 @@ struct SettingsMenu: NSViewRepresentable {
             remainingItem.state = model.showRemaining ? .on : .off
             loginItem.title = localized(model.loginNeedsApproval ? "Allow login item in macOS…" : "Open at Login")
             loginItem.state = model.loginEnabled ? .on : .off
+            mcpEnabledItem.title = localized("Enable MCP")
+            mcpSetupItem.title = localized("How to connect MCP…")
+            mcpEnabledItem.state = settings.isMCPEnabled() ? .on : .off
             languageItem.title = localized("Language")
             helperItem.title = localized("Closed-lid permission")
             passwordItem.title = localized("Ask for a password each session")
@@ -122,12 +143,14 @@ struct SettingsMenu: NSViewRepresentable {
         func menuWillOpen(_ menu: NSMenu) { model.refreshLoginState(); model.helper.refresh(); refresh() }
         @objc private func selectPasswordMode() { guard model.canSelectHelperMode else { return }; model.helper.select(false) }
         @objc private func selectHelperMode() { guard model.canSelectHelperMode else { return }; model.helper.select(true) }
-        @objc private func installHelper() { guard model.canChangeHelper else { return }; model.helper.changeInstallation(remove: false) }
-        @objc private func removeHelper() { guard model.canChangeHelper else { return }; model.helper.changeInstallation(remove: true) }
-        @objc private func explainHelper() { model.helper.showExplanation() }
+        @objc private func installHelper() { guard model.canChangeHelper else { return }; helperInteraction.changeInstallation(for: model.helper, remove: false) }
+        @objc private func removeHelper() { guard model.canChangeHelper else { return }; helperInteraction.changeInstallation(for: model.helper, remove: true) }
+        @objc private func explainHelper() { helperInteraction.showExplanation() }
         @objc private func toggleRemaining() { model.showRemaining.toggle() }
+        @objc private func toggleMCP() { settings.setMCPEnabled(!settings.isMCPEnabled()); refresh() }
+        @objc private func openMCPSetup() { settings.showMCPSetup() }
         @objc private func toggleLogin() { model.toggleLogin() }
-        @objc private func openAbout() { showAbout() }
+        @objc private func openAbout() { settings.showAbout() }
         @objc private func selectLanguage(_ sender: NSMenuItem) {
             guard let raw = sender.representedObject as? String, let language = AppLanguage(rawValue: raw) else { return }
             AppLocalization.shared.select(language)

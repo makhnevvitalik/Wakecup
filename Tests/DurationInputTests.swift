@@ -23,7 +23,7 @@ import SwiftUI
             loginItem: .init(readStatus: { .notRegistered }, register: {}, unregister: {}, openSettings: {}), scheduleTicks: { _ in {} })
         operations.wallNow = { base }
         let helper = PrivilegedHelperController(defaults: defaults, inspectInstallation: { .init(state: .missing) },
-            requestInformation: { _ in }, interaction: .inert)
+            requestInformation: { _ in })
         let model = SessionModel(defaults: defaults, operations: operations, helper: helper)
         let host = NSHostingController(rootView: StopTimeCard(model: model).frame(width: 360))
         let window = WakecupPanel(contentRect: NSRect(x: 0, y: 0, width: 360, height: 160), styleMask: [.borderless], backing: .buffered, defer: false)

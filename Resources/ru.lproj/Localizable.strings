@@ -705,6 +705,8 @@ Wakecup не меняет таймеры сна, выключения экран
 	<string>Остановка через %@</string>
 	<key>This time has already passed.</key>
 	<string>Это время уже прошло.</string>
+	<key>Choose a duration of at least 10 seconds.</key>
+	<string>Выберите время хотя бы на 10 секунд позже.</string>
 	<key>Choose an end date within the next 30 days.</key>
 	<string>Выберите дату окончания в пределах 30 дней.</string>
 	<key>Indefinitely</key>
@@ -717,5 +719,33 @@ Wakecup не меняет таймеры сна, выключения экран
 	<string>Затем нажмите F1–F20.</string>
 	<key>Cancel edits</key>
 	<string>Отменить</string>
+	<key>Wakecup update available</key>
+	<string>Доступно обновление Wakecup</string>
+	<key>Enable MCP</key>
+	<string>Включить MCP</string>
+	<key>How to connect MCP…</key>
+	<string>Как подключить MCP…</string>
+	<key>How to connect MCP</key>
+	<string>Как подключить MCP</string>
+	<key>Move Wakecup to Applications and open it from there to set up MCP.</key>
+	<string>Переместите Wakecup в папку «Программы» и откройте его оттуда, чтобы настроить MCP.</string>
+	<key>MCP client</key>
+	<string>Клиент MCP</string>
+	<key>To test the connection, ask “What’s the Wakecup status?”</key>
+	<string>Чтобы проверить подключение, спросите: «Какой сейчас статус Wakecup?»</string>
+	<key>In Codex, open Settings → MCP servers → Add server. Name it wakecup and choose STDIO.</key>
+	<string>В Codex откройте Settings → MCP servers → Add server. Укажите имя wakecup и выберите STDIO.</string>
+	<key>Command</key>
+	<string>Команда</string>
+	<key>Under Arguments, click “Add argument” and enter %@. Click “Add argument” again and enter %@ in the second field. Save the server and restart Codex.</key>
+	<string>В разделе Arguments нажмите «Add argument» и введите %@. Нажмите «Add argument» ещё раз и введите %@ во второе поле. Сохраните настройки сервера и перезапустите Codex.</string>
+	<key>Open this Claude Desktop configuration file. Create it if it does not exist.</key>
+	<string>Откройте файл настроек Claude Desktop. Если файла ещё нет, создайте его.</string>
+	<key>Paste the configuration below into an empty file. If mcpServers already exists, add the wakecup entry to it and keep the other entries.</key>
+	<string>Вставьте конфигурацию ниже в пустой файл. Если раздел mcpServers уже есть, добавьте в него запись wakecup и сохраните остальные записи.</string>
+	<key>Quit Claude Desktop completely and reopen it.</key>
+	<string>Завершите Claude Desktop через ⌘Q и откройте его снова.</string>
+	<key>Run this command in Terminal to add Wakecup for your macOS user account. Then open Claude Code and use /mcp to check the connection.</key>
+	<string>Выполните команду в Терминале, чтобы добавить Wakecup для вашей учётной записи. Затем откройте Claude Code и проверьте подключение через /mcp.</string>
 </dict>
 </plist>

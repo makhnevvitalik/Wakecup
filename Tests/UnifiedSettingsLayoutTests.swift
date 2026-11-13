@@ -29,8 +29,7 @@ import SwiftUI
         let fixture = Fixture()
         let helper = PrivilegedHelperController(defaults: defaults,
             makeInstallationTask: { _ in throw WakecupError(message: "Unexpected helper installation") },
-            inspectInstallation: { .init(state: .unavailable) }, requestInformation: { _ in },
-            interaction: .inert)
+            inspectInstallation: { .init(state: .unavailable) }, requestInformation: { _ in })
         var operations = SessionOperations(now: { fixture.now }, readPower: { .init(onAC: true, percent: 80) },
             readSleepDisabled: { false }, startAssertions: { _ in
                 if fixture.rejectDisplay { throw WakecupError(message: "Fake display assertion failure") }

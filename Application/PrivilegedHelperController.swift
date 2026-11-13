@@ -2,7 +2,7 @@ import Combine
 import Foundation
 
 final class PrivilegedHelperController: ObservableObject {
-    typealias State = HelperInstallationState
+    enum State: String { case missing, ready, updateRequired, unavailable }
     @Published private(set) var state: State = .missing
     @Published private(set) var working = false
     @Published private(set) var checking = false
@@ -15,7 +15,6 @@ final class PrivilegedHelperController: ObservableObject {
             self.state = state; self.detail = detail; self.manifest = manifest
         }
     }
-    var interaction: HelperInteraction
     private let defaults: UserDefaults
     private let installationTaskFactory: ((Bool) throws -> Process)?
     private let inspectInstallation: () throws -> Inspection
@@ -24,16 +23,14 @@ final class PrivilegedHelperController: ObservableObject {
     private var availabilityCheck: (id: UUID, manifest: HelperManifest)?
     private var confirmedManifest: HelperManifest?
     private(set) var detail = ""
-    var willPresentDialog: (() -> Void)?
+    private(set) var installationError: String?
 
     var usesHelper: Bool { selected && state == .ready }
     var installed: Bool { state != .missing }
     init(defaults: UserDefaults = .standard, makeInstallationTask: ((Bool) throws -> Process)? = nil,
          inspectInstallation: (() throws -> Inspection)? = nil,
          requestInformation: ((@escaping (Result<HelperInformation, Error>) -> Void) -> Void)? = nil,
-         requestStart: ((String, Bool, @escaping (Result<Int32, Error>) -> Void) -> Void)? = nil,
-         interaction: HelperInteraction = .inert) {
-        self.interaction = interaction
+         requestStart: ((String, Bool, @escaping (Result<Int32, Error>) -> Void) -> Void)? = nil) {
         self.defaults = defaults
         installationTaskFactory = makeInstallationTask
         self.inspectInstallation = inspectInstallation ?? Self.inspect
@@ -43,7 +40,7 @@ final class PrivilegedHelperController: ObservableObject {
         selected = defaults.bool(forKey: "useInstalledHelper")
         refresh()
     }
-    func refresh() { refresh(confirmInstallation: false) }
+    func refresh() { inspectAvailability() }
 
     private static func inspect() throws -> Inspection {
         guard let manifest = try HelperTrust.manifest() else {
@@ -63,17 +60,22 @@ final class PrivilegedHelperController: ObservableObject {
         return Inspection(state: .ready, manifest: manifest)
     }
 
-    private func refresh(confirmInstallation: Bool) {
+    private func inspectAvailability(installationFailure: ((String) -> Void)? = nil) {
+        let confirmInstallation = installationFailure != nil
         guard !working else { return }
         let inspection: Inspection
         do { inspection = try inspectInstallation() }
-        catch { applyUnavailable(error.localizedDescription, confirmInstallation: confirmInstallation); return }
+        catch {
+            applyUnavailable(error.localizedDescription)
+            installationFailure?(error.localizedDescription)
+            return
+        }
         guard inspection.state == .ready, let manifest = inspection.manifest else {
             invalidateAvailabilityCheck()
             confirmedManifest = nil
             state = confirmInstallation || inspection.state == .ready ? .unavailable : inspection.state
             detail = inspection.detail
-            if confirmInstallation { showFailure("The installed helper identity could not be confirmed.", refreshState: false) }
+            installationFailure?("The installed helper identity could not be confirmed.")
             return
         }
         // A trusted file on disk does not establish that the daemon is usable.
@@ -96,9 +98,12 @@ final class PrivilegedHelperController: ObservableObject {
                 self.confirmedManifest = manifest
                 self.state = .ready; self.detail = ""
             case .success:
-                self.applyUnavailable("The installed helper identity could not be confirmed.", confirmInstallation: confirmInstallation)
+                let message = "The installed helper identity could not be confirmed."
+                self.applyUnavailable(message)
+                installationFailure?(message)
             case .failure(let error):
-                self.applyUnavailable(error.localizedDescription, confirmInstallation: confirmInstallation)
+                self.applyUnavailable(error.localizedDescription)
+                installationFailure?(error.localizedDescription)
             }
         }
     }
@@ -106,11 +111,10 @@ final class PrivilegedHelperController: ObservableObject {
         availabilityCheck = nil
         checking = false
     }
-    private func applyUnavailable(_ message: String, confirmInstallation: Bool) {
+    private func applyUnavailable(_ message: String) {
         invalidateAvailabilityCheck()
         confirmedManifest = nil
         state = .unavailable; detail = message
-        if confirmInstallation { showFailure(message, refreshState: false) }
     }
     private func rememberSelection(_ enabled: Bool) {
         selected = enabled
@@ -123,57 +127,20 @@ final class PrivilegedHelperController: ObservableObject {
     func start(path: String, restoreOnly: Bool, completion: @escaping (Result<Int32, Error>) -> Void) {
         requestStart(path, restoreOnly) { [weak self] result in
             if case .failure(let error) = result, !(error is HelperOperationRejection) {
-                self?.applyUnavailable(error.localizedDescription, confirmInstallation: false)
+                self?.applyUnavailable(error.localizedDescription)
             }
             completion(result)
         }
     }
 
-    func showSettings(allowInstallationChanges: Bool = true) {
-        guard !working else { return }
-        refresh()
-        let helperWasSelected = selected
-        let hasInstalledHelper = installed
-        let needsInstallation = state != .ready
-        let snapshot = HelperInteraction.Snapshot(state: state, selected: selected, usesHelper: usesHelper,
-            detail: detail, allowInstallationChanges: allowInstallationChanges)
-        switch present(.settings(snapshot)) {
-        case .primary:
-            if needsInstallation { if allowInstallationChanges { performInstallation(remove: false) } }
-            else { select(!helperWasSelected) }
-        case .remove:
-            if hasInstalledHelper && allowInstallationChanges { changeInstallation(remove: true) }
-        default: break
+    // The caller has explicitly selected the operation. The system still requests authorization.
+    func requestInstallation(remove: Bool, onFailure: ((String) -> Void)? = nil) -> SessionOperationResult {
+        guard !working else { return .rejected("Wait for the helper operation to finish.") }
+        installationError = nil
+        let reportFailure: (String) -> Void = { [weak self] message in
+            self?.installationError = message
+            onFailure?(message)
         }
-    }
-
-    func showExplanation() { _ = present(.explanation) }
-
-    private func present(_ request: HelperInteraction.Request) -> HelperInteraction.Response {
-        willPresentDialog?()
-        interaction.activate()
-        return interaction.present(request)
-    }
-
-    func changeInstallation(remove: Bool) {
-        guard !working else { return }
-        refresh()
-        if remove {
-            guard present(.confirmRemoval) == .confirm else { return }
-            performInstallation(remove: true)
-        } else if installed {
-            // An explicit update is already an informed action. macOS supplies
-            // the administrator authorization; no second explanation is needed.
-            performInstallation(remove: false)
-        } else {
-            showSettings()
-        }
-    }
-
-    private func performInstallation(remove: Bool) {
-        guard !working else { return }
-        willPresentDialog?()
-        interaction.activate()
         do {
             let task: Process
             if let installationTaskFactory { task = try installationTaskFactory(remove) }
@@ -193,15 +160,26 @@ final class PrivilegedHelperController: ObservableObject {
                         // when the subsequent health/trust confirmation cannot finish.
                         self.rememberSelection(!remove)
                         self.confirmedManifest = nil
-                        self.refresh(confirmInstallation: !remove)
+                        if remove { self.refresh() }
+                        else { self.inspectAvailability(installationFailure: reportFailure) }
                     } else {
                         let output = String(decoding: data.prefix(8192), as: UTF8.self)
                         self.refresh()
-                        if !output.contains("-128") { self.showFailure(output) }
+                        if output.contains("-128") {
+                            self.installationError = "macOS authorization was cancelled."
+                        } else {
+                            reportFailure(output.isEmpty ? "The helper operation failed." : output)
+                        }
                     }
                 }
             }
-        } catch { working = false; showFailure(error.localizedDescription) }
+            return .pending("Confirm the macOS authorization prompt if it appears.")
+        } catch {
+            working = false
+            refresh()
+            reportFailure(error.localizedDescription)
+            return .rejected(SessionMessage(reason: error.localizedDescription))
+        }
     }
 
     private func confirmDuringInstallation(_ task: Process) {
@@ -212,8 +190,4 @@ final class PrivilegedHelperController: ObservableObject {
         }
     }
 
-    private func showFailure(_ message: String, refreshState: Bool = true) {
-        if refreshState { refresh() }
-        _ = present(.failure(message: message, usesHelper: usesHelper, checking: checking))
-    }
 }

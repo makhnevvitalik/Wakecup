@@ -16,7 +16,7 @@ import Foundation
         var dialogs: [HelperInteraction.Request] = []
         var installations: [Bool] = []
         var events: [String] = []
-        let interaction = HelperInteraction(activate: { events.append("activate") }, present: { request in
+        var interaction = HelperInteraction(activate: { events.append("activate") }, present: { request in
             events.append("present")
             dialogs.append(request)
             return response
@@ -28,9 +28,9 @@ import Foundation
             return task
         }, inspectInstallation: { .init(state: .updateRequired) }, requestInformation: { reply in
             reply(.failure(WakecupError(message: "test cancellation")))
-        }, interaction: interaction)
-        helper.willPresentDialog = { events.append("dismiss") }
-        helper.showSettings()
+        })
+        interaction.dismissPanel = { events.append("dismiss") }
+        interaction.showSettings(for: helper)
         try settle(helper)
         try expect(dialogs.count == 1 && installations == [false], "Update needs one overview without a repeated explanation")
         guard case .settings(let snapshot) = dialogs[0] else { throw WakecupError(message: "Missing typed settings request") }
@@ -40,27 +40,27 @@ import Foundation
         try expect(events == ["dismiss", "activate", "present", "dismiss", "activate"],
                    "Each dialog and authorization must close the menu before activation")
         dialogs.removeAll(); installations.removeAll(); events.removeAll()
-        helper.changeInstallation(remove: false)
+        interaction.changeInstallation(for: helper, remove: false)
         try settle(helper)
         try expect(dialogs.isEmpty && installations == [false] && events == ["dismiss", "activate"],
                    "Explicit update must go directly to authorization after closing the menu")
         dialogs.removeAll(); installations.removeAll(); response = .close
-        helper.showSettings()
+        interaction.showSettings(for: helper)
         try expect(dialogs.count == 1 && installations.isEmpty && helper.selected, "Close must preserve the helper")
         dialogs.removeAll(); response = .primary
-        helper.showSettings(allowInstallationChanges: false)
+        interaction.showSettings(for: helper, allowInstallationChanges: false)
         guard case .settings(let readOnly) = dialogs[0] else { throw WakecupError(message: "Missing read-only settings") }
         try expect(!readOnly.allowInstallationChanges && installations.isEmpty,
                    "Read-only settings must not install/update even when a primary response is supplied")
         dialogs.removeAll(); response = .remove
-        helper.showSettings(allowInstallationChanges: false)
+        interaction.showSettings(for: helper, allowInstallationChanges: false)
         try expect(dialogs.count == 1 && installations.isEmpty, "Read-only settings must not confirm or perform removal")
         dialogs.removeAll(); response = .cancel
-        helper.changeInstallation(remove: true)
+        interaction.changeInstallation(for: helper, remove: true)
         guard case .confirmRemoval = dialogs.first else { throw WakecupError(message: "Removal needs a typed confirmation") }
         try expect(dialogs.count == 1 && installations.isEmpty && helper.selected, "Cancelled removal must preserve helper intent")
         dialogs.removeAll(); response = .close
-        helper.showExplanation()
+        interaction.showExplanation()
         guard case .explanation = dialogs.first else { throw WakecupError(message: "Missing typed explanation request") }
         try expect(dialogs.count == 1, "Explanation needs exactly one information dialog")
 
@@ -69,24 +69,26 @@ import Foundation
         let missing = PrivilegedHelperController(defaults: defaults, makeInstallationTask: { remove in
             let task = Process(); task.executableURL = URL(fileURLWithPath: "/bin/sh")
             task.arguments = ["-c", "printf '%s' '-128'; exit 1"]; installations.append(remove); return task
-        }, inspectInstallation: { .init(state: .missing) }, requestInformation: { _ in }, interaction: interaction)
-        missing.willPresentDialog = { events.append("dismiss") }
-        missing.changeInstallation(remove: false)
+        }, inspectInstallation: { .init(state: .missing) }, requestInformation: { _ in })
+        interaction.changeInstallation(for: missing, remove: false)
         try settle(missing)
         guard case .settings(let firstInstall) = dialogs[0] else { throw WakecupError(message: "First install requires settings") }
         try expect(dialogs.count == 1 && firstInstall.state == .missing && installations == [false],
                    "First installation needs one explanation")
         dialogs.removeAll(); installations.removeAll(); response = .close
-        missing.showSettings()
+        interaction.showSettings(for: missing)
         try expect(installations.isEmpty && !missing.selected, "Closing missing-helper settings must preserve password mode")
         response = .remove
-        missing.showSettings()
+        interaction.showSettings(for: missing)
         try expect(installations.isEmpty && !missing.selected, "A missing helper cannot be removed through a scripted response")
 
         let inert = PrivilegedHelperController(defaults: defaults, makeInstallationTask: { _ in
             throw WakecupError(message: "Inert interaction must never install")
         }, inspectInstallation: { .init(state: .missing) }, requestInformation: { _ in })
-        inert.showSettings(); inert.showExplanation(); inert.changeInstallation(remove: true)
+        let inertInteraction = HelperInteraction()
+        inertInteraction.showSettings(for: inert)
+        inertInteraction.showExplanation()
+        inertInteraction.changeInstallation(for: inert, remove: true)
         try expect(!inert.selected && !inert.working, "Default UI interaction must be inert")
         print("PASS: typed helper overview, direct update, Close, read-only actions, cancellation, first install, removal and inert defaults")
     }

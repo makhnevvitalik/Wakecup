@@ -35,7 +35,7 @@ import Foundation
         }
         operations.readLidClosed = { false }
         let helper = PrivilegedHelperController(defaults: defaults, inspectInstallation: { .init(state: .missing) },
-            requestInformation: { _ in }, interaction: .inert)
+            requestInformation: { _ in })
         let model = SessionModel(defaults: defaults, operations: operations, helper: helper)
         try expect(try model.selectedDuration() == 3_600 && model.displayMode == .mayTurnOff,
                    "Obsolete duration and display preferences must not influence the current defaults")
@@ -126,10 +126,10 @@ import Foundation
                    "Cancel from an invalid finite draft must restore the active unlimited mode")
         model.selectEndDate(base.addingTimeInterval(1_900)); model.applySettingsDraft()
         try expect(model.deadline == 2_900 && sessions.isEmpty, "Typing a time must leave infinity in the same session")
-        model.selectEndDate(model.currentDate.addingTimeInterval(2))
+        model.selectEndDate(model.currentDate.addingTimeInterval(10))
         wallStep = 1.25
         let snapshotDuration = try model.selectedDuration()
-        try expect(snapshotDuration == 2, "Validation and conversion must use one clock snapshot near the end-time boundary")
+        try expect(snapshotDuration == 10, "Validation and conversion must use one clock snapshot near the end-time boundary")
         wallStep = 0; wallAdvance = 0
         model.selectEndDate(base.addingTimeInterval(-60))
         try expect(!model.durationInputIsValid && model.endTimeIssue == .past, "A past end time must report a passed clock time rather than the duration limit")

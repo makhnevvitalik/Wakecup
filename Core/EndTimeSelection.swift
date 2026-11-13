@@ -4,6 +4,32 @@ import Foundation
 // times (for example during a daylight-saving jump) never roll to another time.
 enum EndTimeSelection {
     static let daysAhead = 30
+    static let minimumDurationSeconds = 10
+
+    enum Issue: Equatable, LocalizedError {
+        case incomplete, past, tooSoon, tooFar
+
+        var errorDescription: String? { messageKey }
+        var messageKey: String {
+            switch self {
+            case .incomplete: "Enter a time such as 18:30."
+            case .past: "This time has already passed."
+            case .tooSoon: "Choose a duration of at least 10 seconds."
+            case .tooFar: "Choose an end date within the next 30 days."
+            }
+        }
+    }
+
+    static func issue(for date: Date, from now: Date) -> Issue? {
+        let duration = date.timeIntervalSince(now)
+        if duration <= 0 { return .past }
+        if duration < Double(minimumDurationSeconds) { return .tooSoon }
+        return date < endOfWindow(from: now) ? nil : .tooFar
+    }
+
+    static func validateDuration(_ seconds: Int) throws {
+        guard seconds >= minimumDurationSeconds else { throw Issue.tooSoon }
+    }
 
     enum Preset: Int, Codable {
         case indefinitely = 0
@@ -19,6 +45,7 @@ enum EndTimeSelection {
     enum Choice: Codable {
         case preset(Preset, date: Date?)
         case date(Date)
+        case duration(seconds: Int)
 
         static let oneHour = Choice.preset(.oneHour, date: nil)
 
@@ -28,13 +55,22 @@ enum EndTimeSelection {
                 return date ?? preset.duration.map { now.addingTimeInterval($0) }
             case .date(let date):
                 return date
+            case .duration(let seconds):
+                return now.addingTimeInterval(Double(seconds))
             }
+        }
+
+        func validatedDuration(from now: Date) throws -> TimeInterval? {
+            guard let date = date(from: now) else { return nil }
+            if let issue = EndTimeSelection.issue(for: date, from: now) { throw issue }
+            return date.timeIntervalSince(now)
         }
 
         var hasFixedDate: Bool {
             switch self {
             case .preset(_, let date): date != nil
             case .date: true
+            case .duration: false
             }
         }
 

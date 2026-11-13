@@ -4,6 +4,7 @@ import SwiftUI
 struct SessionOptionsView: View {
     @ObservedObject var model: SessionModel
     let configureDisplayShortcut: (Bool) -> Bool
+    let helperInteraction: HelperInteraction
     @ObservedObject private var localization = AppLocalization.shared
     @State private var showingDisplayHint = false
     var body: some View {
@@ -78,9 +79,9 @@ struct SessionOptionsView: View {
         return HelperStatusRow(presentation: presentation, actionEnabled: canAct) {
             guard canAct else { return }
             switch presentation.action {
-            case .install, .update: model.helper.changeInstallation(remove: false)
+            case .install, .update: helperInteraction.changeInstallation(for: model.helper, remove: false)
             case .settings, .details:
-                model.helper.showSettings(allowInstallationChanges: model.canChangeHelper)
+                helperInteraction.showSettings(for: model.helper, allowInstallationChanges: model.canChangeHelper)
             }
         }
     }

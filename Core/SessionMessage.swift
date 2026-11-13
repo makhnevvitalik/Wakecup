@@ -165,3 +165,11 @@ struct SessionMessage: ExpressibleByStringLiteral {
         "Сон уже отключён системной настройкой. Wakecup не будет менять чужое состояние.": "Sleep is already disabled by a system setting. Wakecup will not change an existing setting.",
     ]
 }
+
+/// The result of this operation, independent of other work in progress.
+enum SessionOperationResult {
+    case completed
+    case pending(SessionMessage? = nil)
+    case rejected(SessionMessage)
+    case partiallyApplied(SessionMessage)
+}

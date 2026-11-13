@@ -3,7 +3,10 @@ import SwiftUI
 import Foundation
 
 let arguments = CommandLine.arguments
-if arguments.contains("--restore-backlight") {
+if arguments.dropFirst().first == "--cli" {
+    let command = Array(arguments.dropFirst(2))
+    exit(command == ["mcp"] ? AutomationMCP.run() : AutomationCLI.run(command))
+} else if arguments.contains("--restore-backlight") {
     exit(BacklightRestoreCommand.main(arguments: arguments))
 } else if arguments.contains("--recovery-guide") {
     let languageIndex = arguments.firstIndex(of: "--language")
