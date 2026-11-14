@@ -39,7 +39,7 @@ for binary in "$app_path/Contents/MacOS/$executable" "$helper"; do
     if [[ -n "$entitlements" ]]; then
       for key in com.apple.security.get-task-allow com.apple.security.cs.allow-dyld-environment-variables \
         com.apple.security.cs.disable-library-validation com.apple.security.cs.allow-unsigned-executable-memory; do
-        key_path=${key//./\.}
+        key_path=${key//./\\.}
         enabled=$(print -rn -- "$entitlements" | /usr/bin/plutil -extract "$key_path" raw -o - - 2>/dev/null || true)
         [[ "$enabled" != true ]] || fail "unsafe entitlement $key: $binary"
       done
