@@ -11,7 +11,7 @@ Wakecup keeps your Mac awake while your AI agent works. Turn off the built-in di
 - The panel keeps its position when a calendar edit adds the Apply and Cancel buttons.
 - English and Russian interface, login startup and GitHub release checks.
 
-Requires macOS 14 or later. Download **arm64** for Apple Silicon or **x86_64** for Intel. Open the DMG and drag Wakecup into Applications; a ZIP is also available. See the [user guide](https://github.com/makhnevvitalik/Wakecup#english) for first-launch and sleep-recovery instructions.
+Requires macOS 14 or later. Download the universal package for Apple Silicon and Intel. Open the DMG and drag Wakecup into Applications; a ZIP is also available. See the [user guide](https://github.com/makhnevvitalik/Wakecup#english) for first-launch and sleep-recovery instructions.
 
 Before updating Wakecup, stop the active session. If it asks to update the helper, use **Helper → Update** before starting closed-lid mode again.
 
@@ -28,6 +28,6 @@ Before updating Wakecup, stop the active session. If it asks to update the helpe
 - Панель сохраняет положение, когда после выбора даты появляются кнопки «Применить» и «Отменить».
 - Русский и английский интерфейс, автозапуск и проверка релизов GitHub.
 
-Нужна macOS 14 или новее. Выберите **arm64** для Apple Silicon или **x86_64** для Intel. Откройте DMG и перенесите Wakecup в «Программы»; также доступен ZIP. Первый запуск и восстановление сна описаны в [инструкции](https://github.com/makhnevvitalik/Wakecup#русский).
+Нужна macOS 14 или новее. Скачайте универсальный пакет для Apple Silicon и Intel. Откройте DMG и перенесите Wakecup в «Программы»; также доступен ZIP. Первый запуск и восстановление сна описаны в [инструкции](https://github.com/makhnevvitalik/Wakecup#русский).
 
 Перед обновлением Wakecup остановите активный сеанс. Если приложение предложит обновить помощника, нажмите **Помощник → Обновить**, прежде чем снова включать режим с закрытой крышкой.

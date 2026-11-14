@@ -99,7 +99,7 @@ jobs:
         run: |
           python3 Tools/release_metadata.py --tag "$RELEASE_TAG"
           git merge-base --is-ancestor "$GITHUB_SHA" origin/main
-      - name: Build signed Apple Silicon and Intel packages
+      - name: Build signed universal packages
         id: packages
         env:
           SIGNING_CERTIFICATE_P12: ${{ secrets.MACOS_SIGNING_CERTIFICATE_P12 }}

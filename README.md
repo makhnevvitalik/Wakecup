@@ -46,7 +46,7 @@ Wakecup keeps your Mac awake while your AI agent works. You can set a stop time 
 
 Wakecup requires **macOS 14 or later**.
 
-1. Download the DMG for your Mac from the [latest release](https://github.com/makhnevvitalik/Wakecup/releases/latest). Choose `arm64` for Apple Silicon or `x86_64` for Intel.
+1. Download the universal DMG from the [latest release](https://github.com/makhnevvitalik/Wakecup/releases/latest). It works on Apple Silicon and Intel.
 2. Open the DMG and drag **Wakecup.app** to **Applications**.
 3. Open Wakecup from Applications or Spotlight to show its window. The cup icon in the menu bar opens the same controls in a panel. With **Open at Login** enabled, Wakecup starts in the background.
 4. Leave the lid open, turn off **Keep awake with lid closed**, choose **1 hour**, and click **Start**. Click **Stop** to end the timer early.
@@ -168,7 +168,7 @@ Wakecup не даёт Mac уснуть, пока ИИ-агент выполня�
 
 Wakecup требует **macOS 14 или новее**.
 
-1. Скачайте DMG для своего Mac из [последнего релиза](https://github.com/makhnevvitalik/Wakecup/releases/latest). Для Apple Silicon выберите файл с `arm64`, для Intel — с `x86_64`.
+1. Скачайте универсальный DMG из [последнего релиза](https://github.com/makhnevvitalik/Wakecup/releases/latest). Он подходит для Apple Silicon и Intel.
 2. Откройте DMG и перетащите **Wakecup.app** в папку **Программы**.
 3. Откройте Wakecup из папки «Программы» или через Spotlight, чтобы показать его окно. Значок кружки в строке меню открывает панель с теми же настройками. При включённом автозапуске Wakecup запускается в фоне.
 4. Оставьте крышку открытой, отключите **Не засыпать с закрытой крышкой**, выберите **1 час** и нажмите **Включить**. Чтобы закончить раньше, нажмите **Остановить**.
