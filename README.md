@@ -93,7 +93,7 @@ Keep ventilation clear when using closed-lid mode. Wakecup requests that macOS s
 
 ### Settings and updates
 
-Open the gear menu to change **Language**, enable **Open at Login**, or manage the icon and remaining time in the menu bar. **Show in Menu Bar** is on by default. If you hide the icon, open Wakecup from Applications or Spotlight to show the window and turn the icon back on. Wakecup checks GitHub in the background at launch. When Wakecup is idle, the **Update available** link below the app name opens the new release. While Wakecup is active, that line shows the session status. You can also check manually in **About… → Check for Updates**.
+Open the gear menu to change **Language**, enable **Open at Login**, or manage the icon and remaining time in the menu bar. **Show in Menu Bar** is on by default. To restore the hidden icon, open Wakecup from **Applications** or Spotlight, then enable **Show in Menu Bar** in the gear menu. Wakecup checks GitHub in the background at launch. When Wakecup is idle, the **Update available** link below the app name opens the new release. While Wakecup is active, that line shows the session status. You can also check manually in **About… → Check for Updates**.
 
 ### CLI and MCP
 
@@ -215,7 +215,7 @@ Wakecup требует **macOS 14 или новее**.
 
 ### Настройки и обновления
 
-В меню шестерёнки можно выбрать **Язык**, включить **Запускать при входе**, настроить значок и остаток времени в строке меню. Пункт **Показывать в строке меню** включён по умолчанию. Если скрыли значок, откройте Wakecup из папки «Программы» или через Spotlight, чтобы вернуть его. При запуске Wakecup проверяет GitHub в фоне. Если вышла новая версия, под названием появится ссылка **Доступно обновление**. Пока Wakecup активен, на этой строке виден статус работы. Проверить обновления вручную можно через **О приложении… → Проверить обновления**.
+В меню шестерёнки можно выбрать **Язык**, включить **Запускать при входе**, настроить значок и остаток времени в строке меню. Пункт **Показывать в строке меню** включён по умолчанию. Чтобы вернуть скрытый значок, откройте Wakecup из папки **«Программы»** или через Spotlight, затем включите **Показывать в строке меню** в меню шестерёнки. При запуске Wakecup проверяет GitHub в фоне. Если вышла новая версия, под названием появится ссылка **Доступно обновление**. Пока Wakecup активен, на этой строке виден статус работы. Проверить обновления вручную можно через **О приложении… → Проверить обновления**.
 
 ### CLI и MCP
 
