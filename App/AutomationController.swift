@@ -3,6 +3,7 @@ import Foundation
 /// Both command-line clients use the application model that owns the current session.
 final class AutomationController {
     private static let mcpKey = "mcpEnabled"
+    private static let mcpSessionKey = "mcpSession"
     private unowned let model: SessionModel
     private let defaults: UserDefaults
     private var mcpSession: UUID?
@@ -10,15 +11,31 @@ final class AutomationController {
     init(model: SessionModel, defaults: UserDefaults = .standard) {
         self.model = model
         self.defaults = defaults
-        mcpSession = defaults.bool(forKey: Self.mcpKey) ? UUID() : nil
+        guard defaults.bool(forKey: Self.mcpKey) else { return }
+        if let stored = defaults.string(forKey: Self.mcpSessionKey), let session = UUID(uuidString: stored) {
+            mcpSession = session
+        } else {
+            // Older builds persisted only the enabled setting.
+            let session = UUID()
+            defaults.set(session.uuidString, forKey: Self.mcpSessionKey)
+            mcpSession = session
+        }
     }
 
     var mcpEnabled: Bool {
         get { mcpSession != nil }
         set {
             guard newValue != mcpEnabled else { return }
-            mcpSession = newValue ? UUID() : nil
-            defaults.set(newValue, forKey: Self.mcpKey)
+            if newValue {
+                let session = UUID()
+                defaults.set(session.uuidString, forKey: Self.mcpSessionKey)
+                defaults.set(true, forKey: Self.mcpKey)
+                mcpSession = session
+            } else {
+                defaults.set(false, forKey: Self.mcpKey)
+                defaults.removeObject(forKey: Self.mcpSessionKey)
+                mcpSession = nil
+            }
         }
     }
 
@@ -55,10 +72,7 @@ final class AutomationController {
 
     private func perform(_ request: AutomationRequest) throws -> SessionOperationResult {
         switch request.action {
-        case .status:
-            return .completed
-        case .helperStatus:
-            model.helper.refresh()
+        case .status, .helperStatus:
             return .completed
         case .start, .configure, .adjust:
             let end = try endTime(for: request)

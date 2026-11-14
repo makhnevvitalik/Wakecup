@@ -100,6 +100,12 @@ import SwiftUI
         window.makeFirstResponder(nil)
         model.selectEndTimePreset(180); settle()
         try expect(field.stringValue == "19:20" && model.durationInputIsValid, "A quick preset must replace invalid input and fill the concrete endpoint")
+        let preset = descendants(host.view).compactMap { $0 as? NSSegmentedControl }.first!
+        try expect(window.makeFirstResponder(preset), "The duration preset must accept keyboard focus")
+        preset.trackingMode = .selectOne
+        preset.selectedSegment = 1
+        preset.sendAction(preset.action, to: preset.target)
+        try expect(window.firstResponder === preset, "Selecting a duration preset must keep keyboard focus")
         let stepper = descendants(host.view).compactMap { $0 as? NSStepper }.first!
         stepper.integerValue += 1
         stepper.sendAction(stepper.action, to: stepper.target); settle()

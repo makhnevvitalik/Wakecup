@@ -1,5 +1,5 @@
 import AppKit
-import SwiftUI
+import CoreServices
 
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
@@ -10,7 +10,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private let sleepHelp = SleepHelpWindowController()
     private let mcpSetup = MCPSetupWindowController()
     private let updates = UpdateChecker()
-    private let updateNotifications = UpdateNotificationController()
     private lazy var about = AboutWindowController(updates: updates)
     var status: NSStatusItem!
     private lazy var inactiveStatusImage = makeStatusIcon(active: false)
@@ -18,6 +17,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private lazy var attentionStatusImage = makeStatusIcon(state: .attention)
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        let launchEvent = NSAppleEventManager.shared().currentAppleEvent
+        let launchedAtLogin = launchEvent?.eventID == kAEOpenApplication
+            && launchEvent?.paramDescriptor(forKeyword: keyAEPropData)?.enumCodeValue
+                == keyAELaunchedAsLogInItem
         NSApp.setActivationPolicy(.accessory)
         model.quitRequested = { NSApp.terminate(nil) }
         let autosaveName = "Wakecup"
@@ -28,7 +31,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         status = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
         status.autosaveName = autosaveName
-        status.isVisible = true
+        status.isVisible = model.showInMenuBar
         status.button?.contentTintColor = nil
         status.button?.font = AppStyle.Font.menuBarCountdown
         status.button?.target = self
@@ -36,7 +39,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         status.button?.toolTip = "Wakecup"
         var helperInteraction = HelperPresentation.system.interaction
         helperInteraction.dismissPanel = { [weak self] in self?.menuPanel.close() }
-        menuPanel = MenuPanelController(model: model,
+        menuPanel = MenuPanelController(model: model, updates: updates,
             statusButton: { [weak self] in self?.status?.button }, showHelp: { [weak self] in
                 self?.menuPanel.close()
                 self?.sleepHelp.show()
@@ -55,7 +58,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             isMCPEnabled: { [weak self] in self?.automation.mcpEnabled ?? false },
             setMCPEnabled: { [weak self] enabled in self?.automation.mcpEnabled = enabled })
         model.statusDidChange = { [weak self] in self?.updateStatus() }
-        model.showRequested = { [weak self] in self?.show() }
+        model.showRequested = { [weak self] in self?.showSessionFeedback() }
         updateStatus()
         if CommandLine.arguments.contains("--status-diagnostics") {
             DispatchQueue.main.asyncAfter(deadline: .now() + 1) { [weak self] in
@@ -72,13 +75,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         } catch {
             NSLog("Wakecup automation unavailable: %@", error.localizedDescription)
         }
-        updateNotifications.checkAtLaunch(using: updates)
-        if !CommandLine.arguments.contains("--automation-launch") {
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { self.show() }
-        }
+        updates.check()
+        if !launchedAtLogin, !CommandLine.arguments.contains("--automation-launch") { show() }
     }
 
     func updateStatus() {
+        if let status, status.isVisible != model.showInMenuBar {
+            status.isVisible = model.showInMenuBar
+            if !model.showInMenuBar, menuPanel.isVisible {
+                menuPanel.showWindow()
+            }
+        }
         let running = model.phase == .active || model.isRestarting
         status?.length = running && model.showRemaining ? NSStatusItem.variableLength : NSStatusItem.squareLength
         status?.button?.contentTintColor = nil
@@ -98,11 +105,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         } else { status?.button?.title = "" }
     }
 
-    @objc func toggle() { menuPanel.isVisible ? menuPanel.close() : show() }
+    @objc func toggle() {
+        model.refreshLoginState()
+        menuPanel.isVisible ? menuPanel.close() : menuPanel.show()
+    }
+    private func showSessionFeedback() {
+        guard !menuPanel.isVisible else { return }
+        show()
+    }
+
     func applicationDidBecomeActive(_ notification: Notification) { model.refreshLoginState() }
     func show() {
         model.refreshLoginState()
-        menuPanel.show()
+        menuPanel.showWindow()
     }
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool { show(); return false }
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {

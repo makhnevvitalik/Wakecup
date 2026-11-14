@@ -22,11 +22,21 @@ enum AutomationMCP {
 
         var definition: [String: Any] {
             let readOnly = action == .status || action == .helperStatus
+            var schema: [String: Any] = ["type": "object", "properties": properties,
+                                         "required": required, "additionalProperties": false]
+            if action == .start {
+                var startProperties = properties
+                startProperties["indefinite"] = ["type": "boolean", "const": true]
+                schema["properties"] = startProperties
+                schema["oneOf"] = AutomationMCP.startEndTimeFields.map { ["required": [$0]] }
+            }
             return ["name": "wakecup_" + name, "description": description,
-                    "inputSchema": ["type": "object", "properties": properties, "required": required, "additionalProperties": false],
+                    "inputSchema": schema,
                     "annotations": ["readOnlyHint": readOnly, "destructiveHint": !readOnly, "openWorldHint": false]]
         }
     }
+
+    private static let startEndTimeFields = ["seconds", "until", "indefinite"]
 
     private static let settings: [String: [String: Any]] = [
         "seconds": ["type": "integer", "minimum": EndTimeSelection.minimumDurationSeconds, "description": "Duration in seconds from now"],
@@ -65,19 +75,18 @@ enum AutomationMCP {
         Tool(.restoreSleep, "Ask Wakecup to recover normal sleep after an interrupted session.")
     ]
 
-    private static func currentSession() throws -> UUID? {
-        let probe = AutomationEnvelope(request: .init(action: .status), viaMCP: true)
-        return try AutomationSocket.send(probe).mcpSession
-    }
-
-    static func run(access: @escaping () throws -> UUID? = { try currentSession() }) -> Int32 {
+    static func run(path: String = AutomationSocket.systemPath) -> Int32 {
+        func access() throws -> UUID? {
+            let probe = AutomationEnvelope(request: .init(action: .status), viaMCP: true)
+            return try AutomationSocket.send(probe, path: path).mcpSession
+        }
         guard let session = try? access() else {
             FileHandle.standardError.write(Data("Open Wakecup and enable MCP in its settings menu.\n".utf8))
             return 1
         }
 
-        // The MCP client owns this process. Close stdio even when the client
-        // is idle, and invalidate old clients if the switch is turned back on.
+        // Keep stdio open during a short app restart. A successful probe
+        // without the original grant still disconnects the client immediately.
         let watcher = DispatchSource.makeTimerSource(queue: DispatchQueue(label: "local.wakecup.mcp"))
         watcher.schedule(deadline: .now() + 1, repeating: .seconds(1), leeway: .milliseconds(100))
         var unreachableSince: TimeInterval?
@@ -89,7 +98,7 @@ enum AutomationMCP {
                 let now = ProcessInfo.processInfo.systemUptime
                 let firstFailure = unreachableSince ?? now
                 unreachableSince = firstFailure
-                if now - firstFailure >= 4 { exit(0) }
+                if now - firstFailure >= 15 { exit(0) }
             }
         }
         watcher.resume()
@@ -104,7 +113,7 @@ enum AutomationMCP {
             }
             let response = handle(line, initialized: &initialized) { request in
                 let envelope = AutomationEnvelope(request: request, viaMCP: true, mcpSession: session)
-                do { return try AutomationSocket.send(envelope) }
+                do { return try AutomationSocket.send(envelope, path: path) }
                 catch { return AutomationReply(outcome: .rejected, message: error.localizedDescription) }
             }
             if let response, let data = try? JSONSerialization.data(withJSONObject: response, options: [.sortedKeys]) {
@@ -157,16 +166,22 @@ enum AutomationMCP {
                   params["arguments"] == nil || params["arguments"] is [String: Any] else {
                 return error(id, -32602, "Invalid tool or arguments")
             }
+            let command: AutomationRequest
             do {
-                let arguments = params["arguments"] as? [String: Any] ?? [:]
-                let command = try command(for: tool, arguments: arguments)
-                let reply = send(command)
-                let encoded = try AutomationJSON.encode(reply)
-                let text = String(decoding: encoded, as: UTF8.self)
-                result = ["content": [["type": "text", "text": text]], "isError": reply.outcome == .rejected]
+                command = try self.command(for: tool, arguments: params["arguments"] as? [String: Any] ?? [:])
             } catch {
-                return self.error(id, -32602, error.localizedDescription)
+                let message = error is DecodingError
+                    ? "Check argument types and values against the tool schema. Pass dates as ISO-8601 with a time zone."
+                    : error.localizedDescription
+                result = ["content": [["type": "text", "text": message]], "isError": true]
+                return ["jsonrpc": "2.0", "id": id, "result": result]
             }
+            let reply = send(command)
+            guard let encoded = try? AutomationJSON.encode(reply) else {
+                return error(id, -32603, "Could not encode the Wakecup response.")
+            }
+            let text = String(decoding: encoded, as: UTF8.self)
+            result = ["content": [["type": "text", "text": text]], "isError": reply.outcome == .rejected]
         default:
             return error(id, -32601, "Method unavailable")
         }
@@ -188,7 +203,14 @@ enum AutomationMCP {
             return AutomationRequest(action: .setShortcut, shortcut: try DisplayShortcut.automationShortcut(function: function, modifiers: modifiers))
         }
         fields["action"] = tool.action.rawValue
-        return try AutomationJSON.decode(AutomationRequest.self, from: JSONSerialization.data(withJSONObject: fields))
+        let request = try AutomationJSON.decode(AutomationRequest.self, from: JSONSerialization.data(withJSONObject: fields))
+        if tool.action == .start {
+            let choices = startEndTimeFields.filter { arguments[$0] != nil }
+            guard choices.count == 1, request.indefinite != false else {
+                throw WakecupError(message: "Supply exactly one of seconds, until, or indefinite=true.")
+            }
+        }
+        return request
     }
 
     private static func error(_ id: Any, _ code: Int, _ message: String) -> [String: Any] {

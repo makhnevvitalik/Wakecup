@@ -40,7 +40,7 @@ struct StopTimeCard: View {
             MenuSectionHeading(title: localized("When to stop"), symbol: "clock")
             DurationPresetPicker(model: model)
                 .frame(height: MenuLayout.compactControlHeight)
-                .padding(.horizontal, MenuLayout.inset).padding(.bottom, 12)
+                .padding(.horizontal, AppStyle.Layout.cardInset).padding(.bottom, 12)
             HStack(spacing: 8) {
                 Text(localized("Stop at")).font(Font(AppStyle.Font.body))
                 Spacer(minLength: 4)
@@ -60,7 +60,7 @@ struct StopTimeCard: View {
                 StopTimeField(date: model.selectedEndDate, day: model.selectedEndDay, now: model.currentDate, calendar: calendar,
                     invalid: model.endTimeInputInvalid, select: model.selectEndDate, validation: model.setEndTimeInputInvalid, editingChanged: { editingTime = $0 })
                     .frame(width: 94, height: 26)
-            }.padding(.horizontal, MenuLayout.inset)
+            }.padding(.horizontal, AppStyle.Layout.cardInset)
             HStack(spacing: 6) {
                 Text(caption)
                     .foregroundStyle(visibleIssue == nil ? Color.secondary : Color.red)
@@ -72,7 +72,7 @@ struct StopTimeCard: View {
                 }
             }.font(Font(AppStyle.Font.supportingText))
                 .frame(maxWidth: .infinity, minHeight: 20, maxHeight: 20, alignment: .leading)
-                .padding(.horizontal, MenuLayout.inset)
+                .padding(.horizontal, AppStyle.Layout.cardInset)
                 .padding(.top, MenuLayout.detailSpacing).padding(.bottom, 10)
                 .accessibilityIdentifier("WakecupStopTimeCaption")
         }.disabled(!model.canEditSettingsDraft)
@@ -81,7 +81,7 @@ struct StopTimeCard: View {
         commitInput()
         model.selectEndDay(day, calendar: calendar)
     }
-    private func commitInput() { NSApp.keyWindow?.makeFirstResponder(nil) }
+    private func commitInput() { AppStyle.commitActiveFieldEditor(in: NSApp.keyWindow) }
 }
 
 private struct EndDayPicker: NSViewRepresentable {

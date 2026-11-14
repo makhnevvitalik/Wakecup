@@ -37,7 +37,7 @@ import SwiftUI
             try expect(localized(presentation.descriptionKey) != presentation.descriptionKey || language == "en",
                        "Helper explanation is not translated: " + name)
             let statusSize = (localized(presentation.statusKey) as NSString).size(withAttributes: [.font: AppStyle.Font.supportingText])
-            let availableWidth = MenuLayout.width - 2 * (MenuLayout.panelInset + MenuLayout.inset)
+            let availableWidth = MenuLayout.width - 2 * (AppStyle.Layout.panelInset + AppStyle.Layout.cardInset)
             try expect(ceil(statusSize.width) <= availableWidth,
                        "Helper status must fit one line without clipping: " + name)
             let view = MenuCard {
@@ -46,7 +46,7 @@ import SwiftUI
                 HelperStatusRow(presentation: presentation, actionEnabled: !working && !checking, action: {})
                 Divider()
                 MenuToggleRow(title: localized("Keep awake on battery"), isOn: .constant(true))
-            }.padding(MenuLayout.panelInset).frame(width: MenuLayout.width)
+            }.padding(AppStyle.Layout.panelInset).frame(width: MenuLayout.width)
                 .background(Color(nsColor: NSColor(calibratedWhite: 0.91, alpha: 1)))
             let hosting = NSHostingController(rootView: view)
             let window = NSWindow(contentRect: NSRect(x:0,y:0,width:MenuLayout.width,height:250),styleMask:[.titled],backing:.buffered,defer:false)

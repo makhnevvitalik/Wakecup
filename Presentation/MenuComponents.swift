@@ -7,7 +7,7 @@ struct MenuCard<Content: View>: View {
         VStack(alignment: .leading, spacing: 0) { content }
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(Color(nsColor: AppStyle.Color.cardBackground).opacity(AppStyle.Color.cardBackgroundOpacity),
-                in: RoundedRectangle(cornerRadius: MenuLayout.cornerRadius))
+                in: RoundedRectangle(cornerRadius: AppStyle.Layout.cardCornerRadius))
     }
 }
 
@@ -35,7 +35,7 @@ struct MenuSectionHeading: NSViewRepresentable {
         stack.alignment = .centerY
         stack.distribution = .fill
         stack.spacing = MenuLayout.headingSpacing
-        stack.edgeInsets = NSEdgeInsets(top: 0, left: MenuLayout.inset, bottom: 0, right: MenuLayout.inset)
+        stack.edgeInsets = NSEdgeInsets(top: 0, left: AppStyle.Layout.cardInset, bottom: 0, right: AppStyle.Layout.cardInset)
         updateNSView(stack, context: context)
         return stack
     }
@@ -50,7 +50,7 @@ struct MenuSectionHeading: NSViewRepresentable {
 
     func sizeThatFits(_ proposal: ProposedViewSize, nsView: NSStackView, context: Context) -> CGSize? {
         let width = proposal.width.flatMap { $0.isFinite ? $0 : nil } ?? nsView.fittingSize.width
-        return CGSize(width: width, height: MenuLayout.sectionHeight)
+        return CGSize(width: width, height: AppStyle.Layout.sectionHeaderHeight)
     }
 }
 
@@ -60,7 +60,7 @@ struct MenuDetailRow<Heading: View, Detail: View, Action: View>: View {
     @ViewBuilder var action: Action
 
     var body: some View {
-        HStack(spacing: MenuLayout.rowSpacing) {
+        HStack(spacing: AppStyle.Layout.rowItemSpacing) {
             VStack(alignment: .leading, spacing: MenuLayout.detailSpacing) {
                 heading.font(Font(AppStyle.Font.body))
                 detail.font(Font(AppStyle.Font.supportingText)).foregroundStyle(.secondary)
@@ -69,7 +69,7 @@ struct MenuDetailRow<Heading: View, Detail: View, Action: View>: View {
                 .font(Font(AppStyle.Font.controlLabel))
                 .controlSize(.small)
                 .buttonStyle(.link)
-        }.frame(minHeight: MenuLayout.rowHeight)
+        }.frame(minHeight: AppStyle.Layout.rowHeight)
     }
 }
 
@@ -79,8 +79,8 @@ struct MenuToggleRow: View {
     var hint: String? = nil
     @State private var showingHint = false
     var body: some View {
-        HStack(spacing: MenuLayout.rowSpacing) {
-            HStack(spacing: MenuLayout.rowSpacing) {
+        HStack(spacing: AppStyle.Layout.rowItemSpacing) {
+            HStack(spacing: AppStyle.Layout.rowItemSpacing) {
                 Text(title).font(Font(AppStyle.Font.body))
                 if let hint {
                     Button { showingHint.toggle() } label: {
@@ -96,7 +96,7 @@ struct MenuToggleRow: View {
             Spacer(minLength: 10)
             Toggle(title, isOn: $isOn).labelsHidden().toggleStyle(.switch).controlSize(.small).fixedSize()
                 .accessibilityHint(hint ?? "")
-        }.padding(.horizontal, MenuLayout.inset).frame(height: MenuLayout.rowHeight)
+        }.padding(.horizontal, AppStyle.Layout.cardInset).frame(height: AppStyle.Layout.rowHeight)
     }
 }
 

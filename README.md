@@ -48,7 +48,7 @@ Wakecup requires **macOS 14 or later**.
 
 1. Download the DMG for your Mac from the [latest release](https://github.com/makhnevvitalik/Wakecup/releases/latest). Choose `arm64` for Apple Silicon or `x86_64` for Intel.
 2. Open the DMG and drag **Wakecup.app** to **Applications**.
-3. Open Wakecup from Applications or Spotlight. After launch, click the cup icon in the menu bar.
+3. Open Wakecup from Applications or Spotlight to show its window. The cup icon in the menu bar opens the same controls in a panel. With **Open at Login** enabled, Wakecup starts in the background.
 4. Leave the lid open, turn off **Keep awake with lid closed**, choose **1 hour**, and click **Start**. Click **Stop** to end the timer early.
 
 #### First-launch notes
@@ -93,7 +93,7 @@ Keep ventilation clear when using closed-lid mode. Wakecup requests that macOS s
 
 ### Settings and updates
 
-Open the gear menu to change **Language**, enable **Open at Login**, or show the remaining time in the menu bar. Wakecup checks GitHub when it starts and shows a macOS notification when a new version is available. You can also check manually in **About… → Check for Updates**.
+Open the gear menu to change **Language**, enable **Open at Login**, or manage the icon and remaining time in the menu bar. **Show in Menu Bar** is on by default. If you hide the icon, open Wakecup from Applications or Spotlight to show the window and turn the icon back on. Wakecup checks GitHub in the background at launch. When Wakecup is idle, the **Update available** link below the app name opens the new release. While Wakecup is active, that line shows the session status. You can also check manually in **About… → Check for Updates**.
 
 ### CLI and MCP
 
@@ -127,7 +127,7 @@ command = "/Applications/Wakecup.app/Contents/MacOS/Wakecup"
 args = ["--cli", "mcp"]
 ```
 
-Wakecup must be running with **Enable MCP** selected for the server to start. Turning it off disconnects MCP clients. After turning it back on, reconnect the client. The timer and CLI stay available.
+Wakecup must be running with **Enable MCP** selected for the server to start. An existing client can reconnect after a brief Wakecup restart. If a command loses its reply, check status before retrying. Turning MCP off disconnects clients. After turning it back on, reconnect the client. The timer and CLI stay available.
 
 ### If your Mac does not sleep after Wakecup is off
 
@@ -170,7 +170,7 @@ Wakecup требует **macOS 14 или новее**.
 
 1. Скачайте DMG для своего Mac из [последнего релиза](https://github.com/makhnevvitalik/Wakecup/releases/latest). Для Apple Silicon выберите файл с `arm64`, для Intel — с `x86_64`.
 2. Откройте DMG и перетащите **Wakecup.app** в папку **Программы**.
-3. Откройте Wakecup из папки «Программы» или через Spotlight. После запуска нажмите значок кружки в строке меню.
+3. Откройте Wakecup из папки «Программы» или через Spotlight, чтобы показать его окно. Значок кружки в строке меню открывает панель с теми же настройками. При включённом автозапуске Wakecup запускается в фоне.
 4. Оставьте крышку открытой, отключите **Не засыпать с закрытой крышкой**, выберите **1 час** и нажмите **Включить**. Чтобы закончить раньше, нажмите **Остановить**.
 
 #### Первый запуск
@@ -215,7 +215,7 @@ Wakecup требует **macOS 14 или новее**.
 
 ### Настройки и обновления
 
-В меню шестерёнки можно выбрать **Язык**, включить **Запускать при входе** или показать **Остаток времени в строке меню**. При запуске Wakecup проверяет GitHub и показывает уведомление macOS, если вышла новая версия. Проверить обновления вручную можно через **О приложении… → Проверить обновления**.
+В меню шестерёнки можно выбрать **Язык**, включить **Запускать при входе**, настроить значок и остаток времени в строке меню. Пункт **Показывать в строке меню** включён по умолчанию. Если скрыли значок, откройте Wakecup из папки «Программы» или через Spotlight, чтобы вернуть его. При запуске Wakecup проверяет GitHub в фоне. Если вышла новая версия, под названием появится ссылка **Доступно обновление**. Пока Wakecup активен, на этой строке виден статус работы. Проверить обновления вручную можно через **О приложении… → Проверить обновления**.
 
 ### CLI и MCP
 
@@ -243,7 +243,7 @@ CLI и MCP управляют тем же таймером, что и панел
 
 Если удобнее настроить подключение вручную, добавьте [блок конфигурации](#connect-wakecup-to-codex) в файл `~/.codex/config.toml`.
 
-Сервер запускается, когда Wakecup открыт и MCP включён. Если выключить MCP в меню, подключение закроется. После повторного включения подключите клиент снова. Таймер и CLI останутся доступны.
+Сервер запускается, когда Wakecup открыт и MCP включён. После короткого перезапуска Wakecup существующее подключение восстанавливается. Если ответ на команду потерялся, проверьте статус перед повтором. Если выключить MCP в меню, подключение закроется. После повторного включения подключите клиент снова. Таймер и CLI останутся доступны.
 
 ### Если Wakecup выключен, а Mac не засыпает
 

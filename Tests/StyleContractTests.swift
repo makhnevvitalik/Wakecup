@@ -4,7 +4,7 @@ import SwiftUI
 // Enforces the shared typographic contract and checks the native controls after
 // SwiftUI has hosted them. No sleep session or global preferences are changed.
 @main struct StyleContractTests {
-    static func main() throws {
+    @MainActor static func main() throws {
         let app = NSApplication.shared
         app.setActivationPolicy(.accessory)
         app.finishLaunching()
@@ -47,6 +47,9 @@ import SwiftUI
               let presets = controls.compactMap({ $0 as? NSSegmentedControl }).first else {
             throw WakecupError(message: "Native menu controls are missing")
         }
+        try expect(menu.items.dropFirst().first?.title == localized("Language")
+                   && menu.items.suffix(2).map(\.title) == [localized("About Wakecup…"), localized("Quit Wakecup")],
+                   "Language must be first and About and Quit must be last")
         try expect(settings.font?.isEqual(AppStyle.Font.body) == true, "Settings popup must use the body text role")
         try expect(menu.font.isEqual(AppStyle.Font.body), "Menu text must use the same role as setting labels")
         try expect(languages.font.isEqual(AppStyle.Font.body), "Language submenu must use the same menu text role")
@@ -91,14 +94,50 @@ import SwiftUI
                        "Heading icon and text must share the same vertical center: \(iconFrame), \(textFrame)")
             try expect(abs(textFrame.minX - iconFrame.maxX - MenuLayout.headingSpacing) < 0.1,
                        "Heading icon-to-text spacing must match the shared layout")
-            try expect(abs(heading.frame.height - MenuLayout.sectionHeight) < 0.1,
+            try expect(abs(heading.frame.height - AppStyle.Layout.sectionHeaderHeight) < 0.1,
                        "Native heading must preserve the approved section height")
             try expect(label.font?.isEqual(AppStyle.Font.sectionTitle) == true,
                        "Native heading must use the section text role")
             textOffsets.append(textFrame.minX)
         }
         try expect(abs(textOffsets[0] - textOffsets[1]) < 0.1, "Card heading titles must share the same leading edge")
-        print("PASS: shared text scale, native menu/control roles and aligned card heading icons/text")
+        let surfaces = MenuPanelController(model: model, statusButton: { nil }, configureDisplayShortcut: { _ in false })
+        surfaces.showWindow()
+        guard let settingsWindow = app.windows.first(where: { $0.title == localized("Wakecup Settings") }),
+              let settingsContent = settingsWindow.contentView else {
+            throw WakecupError(message: "Standalone window is unavailable with no status button")
+        }
+        try expect(settingsWindow.isVisible && settingsWindow.styleMask.contains(.titled),
+                   "Manual opening must show the standalone window")
+        try checkBackgroundFocusReset(in: settingsWindow)
+        surfaces.showWindow()
+        try expect(settingsWindow.isVisible && settingsWindow.contentView === settingsContent,
+                   "Reopening must reuse the same window")
+        surfaces.show()
+        try expect(surfaces.isVisible && !settingsWindow.isVisible && settingsContent.window !== settingsWindow,
+                   "The menu bar panel must take over the same content")
+        try checkBackgroundFocusReset(in: settingsContent.window!)
+        surfaces.showWindow()
+        try expect(!surfaces.isVisible && settingsContent.window === settingsWindow,
+                   "Opening the window must close the panel and return the shared content")
+        settingsWindow.performClose(nil)
+        try expect(!settingsWindow.isVisible, "The settings window must support normal closing")
+        print("PASS: shared text scale, menu order, aligned headings and both opening paths")
+    }
+
+    private static func checkBackgroundFocusReset(in window: NSWindow) throws {
+        RunLoop.main.run(until: Date().addingTimeInterval(0.15))
+        guard let content = window.contentView,
+              let gear = descendants(content).compactMap({ $0 as? AppStyle.SettingsMenuButton }).first else {
+            throw WakecupError(message: "Settings button is unavailable")
+        }
+        try expect(window.makeFirstResponder(gear), "The settings button must accept focus")
+        let point = content.convert(NSPoint(x: content.bounds.midX, y: content.bounds.maxY - 13), to: nil)
+        let click = NSEvent.mouseEvent(with: .leftMouseDown, location: point, modifierFlags: [],
+            timestamp: ProcessInfo.processInfo.systemUptime, windowNumber: window.windowNumber,
+            context: nil, eventNumber: 0, clickCount: 1, pressure: 1)!
+        window.sendEvent(click)
+        try expect(window.firstResponder === window, "Clicking the background must clear control focus")
     }
 
     private static func expect(_ condition: Bool, _ message: String) throws {

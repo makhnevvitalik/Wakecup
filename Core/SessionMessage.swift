@@ -29,6 +29,20 @@ struct SessionMessage: ExpressibleByStringLiteral {
     }
 
     private static func reasonText(_ reason: String, using localize: (String) -> String) -> String {
+        let rollbackPrefix = "Helper installation failed and its previous installation could not be restored: "
+        if reason.hasPrefix(rollbackPrefix), reason.count > rollbackPrefix.count {
+            let detail = String(reason.dropFirst(rollbackPrefix.count))
+            return String(format: localize("Helper installation failed and its previous installation could not be restored: %@"),
+                          plainReasonText(detail, using: localize))
+        }
+        return plainReasonText(reason, using: localize)
+    }
+
+    private static func plainReasonText(_ reason: String, using localize: (String) -> String) -> String {
+        if let value = number(in: reason, prefix: "Could not launch the helper guard (", suffix: ")."),
+           Int32(value) != nil {
+            return String(format: localize("Could not launch the helper guard (%@)."), value)
+        }
         if let key = reasonKeys[reason] { return localize(key) }
         if reasonKeys.values.contains(reason) || guardianReasonKeys.contains(reason) { return localize(reason) }
         if let value = number(in: reason, prefix: "заряд достиг порога ", suffix: "%"),

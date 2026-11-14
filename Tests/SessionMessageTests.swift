@@ -11,6 +11,8 @@ import Foundation
              "The system command timed out. Try recovery again.": "macOS не отвечает на команду настройки сна.",
              "battery reached the %@%% threshold": "заряд достиг порога %@%%",
              "macOS could not prevent sleep (%@).": "macOS не разрешила удержание сна (%@).",
+             "Could not launch the helper guard (%@).": "Не удалось запустить защитный процесс помощника (код %@).",
+             "Helper installation failed and its previous installation could not be restored: %@": "Не удалось установить помощника и восстановить предыдущую установку: %@",
              "Could not change login at startup: %@": "Не удалось изменить автозапуск: %@"] [key] ?? key
         }
         let simple: SessionMessage = "The Wakecup timer ended. “Keep awake with lid closed” was not changed."
@@ -33,7 +35,19 @@ import Foundation
         let raw = "Disk error: /Volumes/время истекло, 100%"
         expect(SessionMessage(reason: raw).text(using: { _ in "incorrect replacement" }) == raw, "Unknown OS error stays verbatim")
         expect(SessionMessage("Could not change login at startup: %@", arguments: [raw]).text(using: english) == "Could not change login at startup: " + raw, "OS error argument is not partially translated or interpreted as format")
-        for unknown in ["заряд достиг порога 20% extra", "prefix macOS не разрешила удержание сна (-1).", "заряд достиг порога 999%"] {
+        let launchError = "Could not launch the helper guard (13)."
+        let launchMessage = SessionMessage(reason: launchError)
+        expect(launchMessage.text(using: english) == launchError, "English launch error preserves the code")
+        expect(launchMessage.text(using: russian) == "Не удалось запустить защитный процесс помощника (код 13).",
+               "Helper launch error translates with its error code")
+        let rollbackPrefix = "Helper installation failed and its previous installation could not be restored: "
+        let rollback = SessionMessage(reason: rollbackPrefix + "Could not connect to the Wakecup helper.")
+        let russianRollbackPrefix = "Не удалось установить помощника и восстановить предыдущую установку: "
+        expect(rollback.text(using: russian) == russianRollbackPrefix + "Не удалось подключиться к помощнику Wakecup.",
+               "Rollback error translates a known nested reason")
+        expect(SessionMessage(reason: rollbackPrefix + raw).text(using: russian) == russianRollbackPrefix + raw,
+               "Rollback error preserves an unknown nested reason")
+        for unknown in ["Could not launch the helper guard (unknown).", "заряд достиг порога 20% extra", "prefix macOS не разрешила удержание сна (-1).", "заряд достиг порога 999%"] {
             expect(SessionMessage(reason: unknown).text(using: { _ in "incorrect replacement" }) == unknown, "Template matching is exact")
         }
         print("PASS: session messages re-render with language, stop reasons, dynamic values, and verbatim OS errors")

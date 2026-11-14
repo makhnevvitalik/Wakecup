@@ -68,6 +68,7 @@ import Foundation
         }
         print("PASS: helper timeout followed by late restoration clears recovery without authorization")
         try helperReadinessGate()
+        try helperStatusDoesNotRestartCheck()
         try lifecycleTests()
         try automationUsesAppliedSettings()
         try automationReportsActualOutcomes()
@@ -368,6 +369,13 @@ private extension SessionModelTests {
         control.mcpEnabled = true
         let session = mcp(.init(action: .status)).mcpSession
         try expect(session != nil, "Enabling MCP must permit a connection")
+        let restarted = AutomationController(model: model, defaults: environment.defaults)
+        let probe = AutomationEnvelope(request: .init(action: .status), viaMCP: true)
+        try expect(restarted.receive(probe).mcpSession == session,
+                   "Restarting Wakecup with MCP enabled must preserve the current connection")
+        let activeStatus = restarted.receive(.init(request: .init(action: .status), viaMCP: true, mcpSession: session))
+        try expect(activeStatus.outcome == .completed && activeStatus.status?.remainingSeconds == 5400,
+                   "The reconnected client must read the active timer without changing it")
         let shortenedWithDraft = mcp(.init(action: .adjust, seconds: -1800), session: session)
         try expect(shortenedWithDraft.outcome == .completed && model.remaining == 3600
                    && model.endTimeInputInvalid && model.selectedThreshold == 40,
@@ -394,12 +402,26 @@ private extension SessionModelTests {
         try expect(mcp(.init(action: .stop), session: session).outcome == .rejected && model.phase == .active,
                    "Disabling MCP must keep the active timer and reject existing clients")
         try expect(cli(.init(action: .status)).outcome == .completed, "CLI must work when MCP is disabled")
+        let restartedDisabled = AutomationController(model: model, defaults: environment.defaults)
+        try expect(restartedDisabled.receive(probe).mcpSession == nil, "Restarting must preserve explicit MCP revocation")
         control.mcpEnabled = true
         let newSession = mcp(.init(action: .status)).mcpSession
         try expect(newSession != nil && newSession != session, "Re-enabling MCP must require a new connection")
+        let restartedReenabled = AutomationController(model: model, defaults: environment.defaults)
+        try expect(restartedReenabled.receive(probe).mcpSession == newSession &&
+                   restartedReenabled.receive(.init(request: .init(action: .stop), viaMCP: true, mcpSession: session)).outcome == .rejected,
+                   "An explicitly revoked client must remain revoked after restarting Wakecup")
         try expect(mcp(.init(action: .stop), session: session).outcome == .rejected, "An old connection must remain revoked")
         let stopped = mcp(.init(action: .stop), session: newSession)
         try expect(stopped.outcome == .completed && model.phase == .idle, "MCP must stop the existing timer")
+        let legacy = try SessionTestEnvironment()
+        legacy.defaults.set(true, forKey: "mcpEnabled")
+        let migrated = AutomationController(model: model, defaults: legacy.defaults)
+        let migratedSession = migrated.receive(probe).mcpSession
+        let migratedRestart = AutomationController(model: model, defaults: legacy.defaults)
+        try expect(legacy.defaults.bool(forKey: "mcpEnabled") && migratedSession != nil
+                   && migratedRestart.receive(probe).mcpSession == migratedSession,
+                   "A previously enabled installation must preserve its setting and acquire a persistent grant")
         print("PASS: CLI and MCP share the running model and keep UI drafts isolated")
     }
 
@@ -583,6 +605,8 @@ private extension SessionModelTests {
     static func closedLidAuthorizationAndStop() throws {
         let environment = try SessionTestEnvironment()
         let model = environment.model()
+        var presentationRequests = 0
+        model.showRequested = { presentationRequests += 1 }
         model.start()
         try expect(model.phase == .authorizing && model.waitingForPassword, "Password mode must wait for authorization")
         try expect(environment.authorizationRequests == [false] && !environment.assertionsActive, "Assertions must wait until the guardian confirms activation")
@@ -592,6 +616,7 @@ private extension SessionModelTests {
         model.tick()
         model.tick()
         try expect(model.phase == .active && model.deadline == 4_600 && environment.assertionDisplays == [false], "Fresh guardian status must activate assertions exactly once")
+        try expect(presentationRequests == 0, "Successful closed-lid activation must not request another window")
         model.stop()
         let control = try environment.sessions.last!.read("control.json", as: SessionControl.self)
         try expect(model.phase == .stopping && control.stop && environment.assertionsActive, "Closed-lid stop must request restoration before finishing")
@@ -999,6 +1024,42 @@ private extension SessionModelTests {
         try expect(helper.selected && !helper.usesHelper && model.waitingForPassword && environment.authorizationRequests == [false],
                    "An unavailable selected helper must permit explicit password fallback without forgetting intent")
         print("PASS: pending helper readiness blocks Start; failed check allows explicit password fallback")
+    }
+}
+
+private extension SessionModelTests {
+    static func helperStatusDoesNotRestartCheck() throws {
+        let environment = try SessionTestEnvironment()
+        environment.defaults.set(true, forKey: "useInstalledHelper")
+        environment.installedHelper = true
+        let manifest = HelperManifest(protocolVersion: HelperConstants.protocolVersion, ownerUID: getuid(),
+            clientHash: String(repeating: "a", count: 40), helperHash: HelperBuildIdentity.cdHash,
+            helperSHA256: HelperBuildIdentity.sha256)
+        var replies: [(Result<HelperInformation, Error>) -> Void] = []
+        let helper = PrivilegedHelperController(defaults: environment.defaults,
+            inspectInstallation: { .init(state: .ready, manifest: manifest) },
+            requestInformation: { replies.append($0) })
+        let model = SessionModel(defaults: environment.defaults, operations: environment.operations, helper: helper)
+        let automation = AutomationController(model: model, defaults: environment.defaults)
+        automation.mcpEnabled = true
+        let handshake = automation.receive(.init(request: .init(action: .status), viaMCP: true))
+        func command(_ request: AutomationRequest) -> AutomationReply {
+            automation.receive(.init(request: request, viaMCP: true, mcpSession: handshake.mcpSession))
+        }
+
+        let checking = command(.init(action: .helperStatus))
+        try expect(checking.outcome == .completed && checking.status?.helperChecking == true && replies.count == 1,
+                   "Reading status must report the check already in progress")
+        replies[0](.success(HelperInformation(manifest: manifest, clientConfirmed: true)))
+        let ready = command(.init(action: .helperStatus))
+        try expect(ready.outcome == .completed && ready.status?.helperState == "ready"
+                   && ready.status?.helperChecking == false && replies.count == 1,
+                   "Reading status must report ready without restarting the helper check")
+
+        let start = command(.init(action: .start, seconds: 90, closedLid: true))
+        try expect(start.outcome == .pending && environment.helperRequests.count == 1,
+                   "A closed-lid start must reach the helper immediately after reading status")
+        print("PASS: reading MCP helper status reports the current check and never delays a subsequent start")
     }
 }
 

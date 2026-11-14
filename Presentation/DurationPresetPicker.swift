@@ -38,7 +38,7 @@ struct DurationPresetPicker: NSViewRepresentable {
         @objc func selectPreset(_ sender: NSSegmentedControl) {
             guard sender.selectedSegment >= 0 else { return }
             let preset = sender.tag(forSegment: sender.selectedSegment)
-            sender.window?.makeFirstResponder(nil)
+            AppStyle.commitActiveFieldEditor(in: sender.window)
             model.selectEndTimePreset(preset)
         }
     }

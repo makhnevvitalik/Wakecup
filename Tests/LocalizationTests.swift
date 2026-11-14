@@ -27,6 +27,7 @@ import Foundation
             tables[language] = try PropertyListSerialization.propertyList(from: data, format: nil) as? [String: String]
         }
         try expect(Set(tables[.english]!.keys) == Set(tables[.russian]!.keys), "Both languages cover the same keys")
+        try expect(tables[.russian]!["Settings"] == "Настройки", "Russian settings accessibility label")
         for language in AppLanguage.allCases {
             for key in ["Cancel", "OK", "helper.explanation", "Update helper", "Remove"] {
                 try expect(tables[language]![key]?.isEmpty == false, "Helper dialogs require complete translations: " + key)
@@ -43,6 +44,7 @@ import Foundation
                 let packaged = AppLocalizer(language: language, bundle: bundle)
                 try expect(packaged.text("unknown-test-key") == "unknown-test-key",
                            "A missing translation must return the original key")
+                try expect(packaged.text("Settings") == tables[language]!["Settings"], "Packaged settings accessibility label")
                 try expect(packaged.text("Keep awake on battery") == tables[language]!["Keep awake on battery"], "Packaged battery translation")
                 try expect(packaged.text("battery.power.help") == tables[language]!["battery.power.help"], "Packaged battery explanation")
                 try expect(packaged.text("closed.lid.help") == tables[language]!["closed.lid.help"], "Packaged closed-lid explanation")

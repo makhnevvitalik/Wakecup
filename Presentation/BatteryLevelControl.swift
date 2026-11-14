@@ -41,7 +41,6 @@ final class BatteryLevelScaleView: NSView {
             label.setContentCompressionResistancePriority(.required, for: .horizontal)
             addSubview(label)
         }
-        chargeLabel.textColor = AppStyle.Color.accent
         chargeLabel.alignment = .center
         lowerLabel.setAccessibilityElement(false)
         upperLabel.setAccessibilityElement(false)
@@ -53,6 +52,7 @@ final class BatteryLevelScaleView: NSView {
         self.charge = charge.flatMap { (0...100).contains($0) ? $0 : nil }
         slider.doubleValue = threshold
         slider.isEnabled = enabled
+        slider.isHidden = !enabled
         slider.setAccessibilityLabel(localized("Minimum battery level"))
         slider.setAccessibilityValueDescription(localizedFormat("%d percent", Int(threshold)))
         slider.toolTip = localized("battery.threshold.scale.help")
@@ -62,7 +62,7 @@ final class BatteryLevelScaleView: NSView {
         chargeLabel.stringValue = self.charge.map { "\($0)%" } ?? "—"
         chargeLabel.setAccessibilityLabel(description)
         chargeLabel.toolTip = description
-        chargeLabel.textColor = self.charge == nil ? .secondaryLabelColor : AppStyle.Color.accent
+        chargeLabel.textColor = chargeColor
         needsLayout = true; needsDisplay = true
     }
 
@@ -97,7 +97,7 @@ final class BatteryLevelScaleView: NSView {
         NSColor.quaternaryLabelColor.setFill()
         NSBezierPath(roundedRect: trackRect, xRadius: 2, yRadius: 2).fill()
         if let charge {
-            AppStyle.Color.accent.setFill()
+            chargeColor.setFill()
             let fill = NSRect(x: trackRect.minX, y: trackRect.minY,
                               width: position(for: Double(charge)) - trackRect.minX, height: trackRect.height)
             NSBezierPath(roundedRect: fill, xRadius: 2, yRadius: 2).fill()
@@ -112,6 +112,10 @@ final class BatteryLevelScaleView: NSView {
             limits.line(to: NSPoint(x: x, y: trackRect.minY - 1))
         }
         limits.lineWidth = 1; limits.stroke()
+    }
+
+    private var chargeColor: NSColor {
+        slider.isEnabled && charge != nil ? AppStyle.Color.accent : .secondaryLabelColor
     }
 
     private func position(for percent: Double) -> CGFloat {

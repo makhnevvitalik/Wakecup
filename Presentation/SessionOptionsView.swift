@@ -62,7 +62,7 @@ struct SessionOptionsView: View {
                 .accessibilityValue(model.displayShortcut?.displayName ?? localized("Not configured"))
                 .accessibilityIdentifier("WakecupConfigureDisplayShortcut")
             }.disabled(!model.canChangeDisplayShortcut)
-        }.padding(.horizontal, MenuLayout.inset).padding(.vertical, 10)
+        }.padding(.horizontal, AppStyle.Layout.cardInset).padding(.vertical, 10)
     }
 
     private func selectDisplayMode(_ mode: DisplayMode) {
@@ -97,7 +97,7 @@ struct SessionOptionsView: View {
             BatteryLevelControl(threshold: Binding(get: { model.selectedThreshold }, set: model.editThreshold),
                 charge: model.power?.percent, thresholdEnabled: model.selectedAllowBattery)
                 .frame(height: 44)
-        }.padding(.horizontal, MenuLayout.inset).padding(.vertical, 10)
+        }.padding(.horizontal, AppStyle.Layout.cardInset).padding(.vertical, 10)
     }
 }
 

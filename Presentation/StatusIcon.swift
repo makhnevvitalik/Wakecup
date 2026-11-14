@@ -15,10 +15,12 @@ func makeStatusIcon(active: Bool) -> NSImage? {
 }
 
 func makeStatusIcon(state: StatusIconState) -> NSImage? {
-    let glyph = WakecupBrand.mark(size: AppStyle.Icon.menuBarSize,
-                                 filled: state != .inactive, color: AppStyle.Color.menuBarForeground, emphasizeBoltTips: true)
+    let glyphSize = AppStyle.Icon.menuBarCupSize
+    let glyph = WakecupBrand.mark(size: glyphSize, filled: state != .inactive,
+                                 color: state == .attention ? .white : .black, emphasizeBoltTips: true)
     let image = NSImage(size: AppStyle.Icon.menuBarSize, flipped: false) { rect in
-        glyph.draw(in: rect)
+        glyph.draw(in: NSRect(x: rect.midX - glyphSize.width / 2, y: rect.midY - glyphSize.height / 2,
+                              width: glyphSize.width, height: glyphSize.height))
         if state == .attention {
             let side = AppStyle.Icon.recoveryBadgeDiameter
             let badge = NSRect(x: rect.maxX - side, y: rect.maxY - side, width: side, height: side)
@@ -32,7 +34,7 @@ func makeStatusIcon(state: StatusIconState) -> NSImage? {
         }
         return true
     }
-    image.isTemplate = false
+    image.isTemplate = state != .attention
     image.accessibilityDescription = "Wakecup"
     return image
 }

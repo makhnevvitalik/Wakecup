@@ -29,7 +29,7 @@ final class HelperSettingsDialog: NSObject, NSWindowDelegate {
             icon.heightAnchor.constraint(equalToConstant: AppStyle.HelperDialogLayout.iconSize)
         ])
         let title = NSTextField(labelWithString: alert.messageText)
-        title.font = AppStyle.Font.appName
+        title.font = AppStyle.Font.windowTitle
         let header = NSStackView(views: [icon, title])
         header.orientation = .horizontal
         header.alignment = .centerY

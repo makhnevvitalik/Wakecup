@@ -32,6 +32,16 @@ struct PanelPlacementTests {
             visibleFrame: visible, statusItemFrame: nil, previousFrame: opened)
         expect(visible.contains(oversized) && oversized.maxY == opened.maxY && oversized.minX == opened.minX,
             "a footer that would overflow the screen must keep the top fixed and limit the scroll viewport")
+        let lowerIcon = CGRect(x: 1300, y: 850, width: 24, height: 24)
+        let tallOpen = detachedPanelFrame(contentSize: CGSize(width: 380, height: 1_000), screenFrame: screen,
+            visibleFrame: visible, statusItemFrame: lowerIcon)
+        expect(tallOpen.maxY == lowerIcon.minY - 8 && visible.contains(tallOpen),
+            "a tall panel must stay below its anchor on the first opening")
+        let shallowerVisible = CGRect(x: 0, y: 150, width: 1440, height: 726)
+        let resized = detachedPanelFrame(contentSize: CGSize(width: 380, height: 1_000), screenFrame: screen,
+            visibleFrame: shallowerVisible, statusItemFrame: nil, previousFrame: tallOpen)
+        expect(resized.maxY == tallOpen.maxY && shallowerVisible.contains(resized),
+            "losing space below a panel must shorten the viewport before moving the header")
         let leftScreen = CGRect(x: -1920, y: 0, width: 1920, height: 1080)
         let leftVisible = CGRect(x: -1920, y: 30, width: 1920, height: 1026)
         let leftIcon = CGRect(x: -1850, y: 1056, width: 24, height: 24)

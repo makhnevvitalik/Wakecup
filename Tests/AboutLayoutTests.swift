@@ -15,7 +15,8 @@ import AppKit
               let content = window.contentView else { throw WakecupError(message: "About did not open") }
         defer { app.windows.forEach { $0.orderOut(nil) } }
         let frame = window.frame
-        try expect(content.bounds.size == NSSize(width: 400, height: 200), "About must preserve its compact dimensions")
+        try expect(content.bounds.width == AppStyle.AboutLayout.width && (170...230).contains(content.bounds.height),
+                   "About must fit its content at the shared width")
         let controls = descendants(content)
         guard let status = controls.compactMap({ $0 as? NSTextField }).first(where: { $0.identifier?.rawValue == "WakecupUpdateStatus" }),
               let license = controls.compactMap({ $0 as? NSButton }).first(where: { $0.title == localized("License…") }) else {
@@ -23,9 +24,16 @@ import AppKit
         }
         try expect(controls.compactMap { $0 as? NSTextField }.allSatisfy { !$0.isSelectable && !$0.acceptsFirstResponder },
                    "Static About labels must not accept focus when the update button is disabled")
-        try expect(status.maximumNumberOfLines == 1 && status.frame.height == 16, "Update status must reserve only one compact line")
+        try expect(status.frame.height >= AppStyle.AboutLayout.statusHeight, "Update status must reserve a compact line")
         let name = controls.compactMap { $0 as? NSTextField }.first { $0.stringValue == "Wakecup" }!
-        try expect(name.font?.isEqual(AppStyle.Font.appName) == true, "About and main screen must use the same application-name role")
+        try expect(name.font?.isEqual(AppStyle.Font.windowTitle) == true, "About name must use the window title role")
+        if let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String,
+           let label = controls.compactMap({ $0 as? NSTextField }).first(where: { $0.stringValue == version }) {
+            try expect(label.font?.isEqual(AppStyle.Font.metadata) == true, "About version must use the header metadata role")
+            try expect(label.superview === name.superview && (label.superview as? NSStackView)?.orientation == .vertical
+                       && content.convert(label.bounds, from: label).maxY <= content.convert(name.bounds, from: name).minY,
+                       "The version must sit below the name")
+        }
         let links = controls.compactMap { $0 as? NSButton }.filter { $0.title == "GitHub ↗" || $0.title == localized("License…") }
         try expect(links.count == 2 && links.allSatisfy { $0.font?.isEqual(AppStyle.Font.secondaryAction) == true }, "All About links must share one role")
         for text in ["", localized("Checking GitHub for updates…"), localized("You’re up to date."),
@@ -38,9 +46,15 @@ import AppKit
                      localizedFormat("GitHub returned HTTP %d.", 403)] {
             status.stringValue = text
             content.layoutSubtreeIfNeeded()
+            guard let stack = status.superview as? NSStackView else { throw WakecupError(message: "Missing About layout") }
+            AppStyle.sizeAboutWindow(window, to: stack)
+            content.layoutSubtreeIfNeeded()
             let textWidth = (text as NSString).size(withAttributes: [.font: status.font!]).width
-            try expect(textWidth <= status.frame.width, "Known update result must fit one line: " + text)
-            try expect(window.frame == frame, "Update status must not resize About")
+            if textWidth <= status.frame.width {
+                try expect(window.frame == frame, "One-line update status must keep About stable")
+            } else {
+                try expect(window.frame.height > frame.height, "Long update status must grow About")
+            }
             for control in controls where control is NSButton || control is NSTextField || control is NSImageView {
                 let rect = content.convert(control.bounds, from: control)
                 try expect(rect.minX >= -2 && rect.maxX <= content.bounds.maxX + 2

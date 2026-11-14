@@ -107,7 +107,7 @@ jobs:
           SIGNING_CERTIFICATE_NAME: ${{ vars.SIGNING_CERTIFICATE_NAME || 'Wakecup Release Signing' }}
           SIGNING_CERTIFICATE_SHA1: ${{ vars.SIGNING_CERTIFICATE_SHA1 || '83DEFBD5CC931816072976562C3FDF2D2CE64085' }}
         run: .github/scripts/build-signed-release.sh
-      - name: Create release draft or replace release assets
+      - name: Publish release or replace release assets
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
@@ -118,7 +118,8 @@ jobs:
           assets=("$PACKAGE_DIRECTORY"/*.zip "$PACKAGE_DIRECTORY"/*.dmg "$PACKAGE_DIRECTORY/SHA256SUMS.txt")
           if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
             gh release upload "$RELEASE_TAG" "${assets[@]}" --clobber
+            gh release edit "$RELEASE_TAG" --verify-tag --title "Wakecup ${RELEASE_TAG#v}"
           else
-            gh release create "$RELEASE_TAG" "${assets[@]}" --verify-tag --draft \
+            gh release create "$RELEASE_TAG" "${assets[@]}" --verify-tag \
               --title "Wakecup ${RELEASE_TAG#v}" --notes-file .github/release-notes.md
           fi

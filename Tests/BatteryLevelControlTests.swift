@@ -53,8 +53,17 @@ import AppKit
         }
         let count = changes.count
         configure(30, 72, enabled: false)
+        try expect(!slider.isEnabled && slider.isHidden && slider.doubleValue == 30,
+                   "Disabled scale must hide the thumb and keep the saved threshold")
+        let chargeLabel = view.subviews.compactMap { $0 as? NSTextField }.first { $0.stringValue == "72%" }!
+        try expect(chargeLabel.textColor == .secondaryLabelColor,
+                   "Disabled scale must show current charge without the accent color")
         slider.sendAction(slider.action, to: slider.target)
         try expect(changes.count == count, "Disabled threshold cannot update settings")
+        configure(30, 72)
+        try expect(slider.isEnabled && !slider.isHidden && slider.doubleValue == 30 &&
+                   chargeLabel.textColor == AppStyle.Color.accent,
+                   "Re-enabling the scale must restore the thumb and accent at the saved threshold")
         let baseline = view.frame.size
         for charge in [0, 1, 5, 10, 11, 30, 50, 90, 99, 100, nil] as [Int?] {
             configure(30, charge)

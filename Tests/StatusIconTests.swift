@@ -48,18 +48,23 @@ struct StatusIconTests {
                             && color.greenComponent < 0.8 && color.blueComponent < 0.2
                         if orange { warningPixels += 1 }
                         let warmBadgeColor = color.redComponent > 0.98 && color.greenComponent > color.blueComponent + 0.005
-                        if values.min()! < 0.98 && !(state == .attention && warmBadgeColor) { wrongColor += 1 }
+                        if state == .attention ? (values.min()! < 0.98 && !warmBadgeColor) : values.max()! > 0.02 {
+                            wrongColor += 1
+                        }
                     }
                 }
             }
-            if maxX - minX + 1 < 72 || maxY - minY + 1 < 64 {
-                failures.append("visible cup must fill its canvas without excess internal padding")
+            if image.size != NSSize(width: 18, height: 18) || maxX - minX + 1 < 72
+                || !(51...72).contains(maxY - minY + 1) {
+                failures.append("the icon must fill the shared canvas within its allowed glyph height")
             }
             if state == .inactive { inactivePixels = opaque }
             if state == .active { activePixels = opaque }
-            if image.isTemplate { failures.append("system must not override requested icon color") }
+            if image.isTemplate != (state != .attention) {
+                failures.append("only the colored recovery badge should require a non-template image")
+            }
             if opaque == 0 || clear == 0 { failures.append("icon must contain glyph and transparent background") }
-            if wrongColor > 0 { failures.append("cup must remain white outside the attention badge") }
+            if wrongColor > 0 { failures.append("unexpected glyph color for \(state)") }
             if state == .attention && warningPixels == 0 { failures.append("attention icon needs a visible orange badge") }
             if state != .attention && warningPixels != 0 { failures.append("ordinary icons must not show a warning badge") }
         }

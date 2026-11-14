@@ -1,18 +1,6 @@
 import AppKit
 import SwiftUI
 
-private final class SettingsIconButton: NSPopUpButton {
-    override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
-    override func mouseDown(with event: NSEvent) {
-        let previousRing = focusRingType
-        focusRingType = .none
-        window?.makeFirstResponder(self)
-        super.mouseDown(with: event)
-        window?.makeFirstResponder(nil)
-        focusRingType = previousRing
-    }
-}
-
 struct SettingsMenu: NSViewRepresentable {
     let model: SessionModel
     let showAbout: () -> Void
@@ -26,7 +14,7 @@ struct SettingsMenu: NSViewRepresentable {
         Coordinator(settings: self)
     }
     func makeNSView(context: Context) -> NSPopUpButton {
-        let button = SettingsIconButton(frame: .zero, pullsDown: true)
+        let button = AppStyle.SettingsMenuButton(frame: .zero, pullsDown: true)
         button.menu = context.coordinator.makeMenu()
         (button.cell as? NSPopUpButtonCell)?.arrowPosition = .noArrow
         button.controlSize = .small
@@ -39,8 +27,8 @@ struct SettingsMenu: NSViewRepresentable {
         return button
     }
     func updateNSView(_ button: NSPopUpButton, context: Context) {
-        button.toolTip = localized("Wakecup Settings")
-        button.setAccessibilityLabel(localized("Wakecup Settings"))
+        button.toolTip = localized("Settings")
+        button.setAccessibilityLabel(localized("Settings"))
         context.coordinator.settings = self
         context.coordinator.refresh()
     }
@@ -51,6 +39,7 @@ struct SettingsMenu: NSViewRepresentable {
         private var helperInteraction: HelperInteraction { settings.helperInteraction }
         private let remainingItem = NSMenuItem()
         private let loginItem = NSMenuItem()
+        private let menuBarItem = NSMenuItem()
         private let mcpItem = NSMenuItem(title: "MCP", action: nil, keyEquivalent: "")
         private let mcpEnabledItem = NSMenuItem()
         private let mcpSetupItem = NSMenuItem()
@@ -89,6 +78,7 @@ struct SettingsMenu: NSViewRepresentable {
             menu.addItem(title)
             remainingItem.action = #selector(toggleRemaining)
             loginItem.action = #selector(toggleLogin)
+            menuBarItem.action = #selector(toggleMenuBar)
             mcpMenu.font = menu.font
             mcpEnabledItem.action = #selector(toggleMCP)
             mcpSetupItem.action = #selector(openMCPSetup)
@@ -99,7 +89,7 @@ struct SettingsMenu: NSViewRepresentable {
             mcpItem.submenu = mcpMenu
             aboutItem.action = #selector(openAbout)
             quitItem.action = #selector(quit)
-            for item in [remainingItem, loginItem, aboutItem, quitItem] { item.target = self }
+            for item in [remainingItem, loginItem, menuBarItem, aboutItem, quitItem] { item.target = self }
             for language in AppLanguage.allCases {
                 let item = NSMenuItem(title: language.displayName, action: #selector(selectLanguage(_:)), keyEquivalent: "")
                 item.target = self
@@ -107,7 +97,7 @@ struct SettingsMenu: NSViewRepresentable {
                 languageMenu.addItem(item)
             }
             languageItem.submenu = languageMenu
-            for item in [remainingItem, loginItem, languageItem, helperItem, mcpItem, .separator(), aboutItem, .separator(), quitItem] {
+            for item in [languageItem, loginItem, menuBarItem, remainingItem, helperItem, mcpItem, .separator(), aboutItem, quitItem] {
                 menu.addItem(item)
             }
             refresh()
@@ -118,6 +108,8 @@ struct SettingsMenu: NSViewRepresentable {
             remainingItem.state = model.showRemaining ? .on : .off
             loginItem.title = localized(model.loginNeedsApproval ? "Allow login item in macOS…" : "Open at Login")
             loginItem.state = model.loginEnabled ? .on : .off
+            menuBarItem.title = localized("Show in Menu Bar")
+            menuBarItem.state = model.showInMenuBar ? .on : .off
             mcpEnabledItem.title = localized("Enable MCP")
             mcpSetupItem.title = localized("How to connect MCP…")
             mcpEnabledItem.state = settings.isMCPEnabled() ? .on : .off
@@ -150,6 +142,7 @@ struct SettingsMenu: NSViewRepresentable {
         @objc private func toggleMCP() { settings.setMCPEnabled(!settings.isMCPEnabled()); refresh() }
         @objc private func openMCPSetup() { settings.showMCPSetup() }
         @objc private func toggleLogin() { model.toggleLogin() }
+        @objc private func toggleMenuBar() { model.showInMenuBar.toggle(); refresh() }
         @objc private func openAbout() { settings.showAbout() }
         @objc private func selectLanguage(_ sender: NSMenuItem) {
             guard let raw = sender.representedObject as? String, let language = AppLanguage(rawValue: raw) else { return }

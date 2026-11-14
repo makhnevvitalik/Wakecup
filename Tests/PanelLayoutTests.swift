@@ -86,7 +86,49 @@ import Foundation
         let visible = scroll.documentVisibleRect
         let distanceFromTop = document.isFlipped ? visible.minY - document.bounds.minY : document.bounds.maxY - visible.maxY
         guard abs(distanceFromTop) < 1 else { throw WakecupError(message: "Reopened panel did not scroll to top") }
-        print("PASS: panel dimensions, scroll position during relayout, top position on reopen, and icon hiding")
+        bottom.constant = 0
+        try checkCalendarSelection(in: window, model: model)
+        print("PASS: panel dimensions, scroll position, reopening, icon hiding and calendar selection")
+    }
+
+    private static func checkCalendarSelection(in window: NSWindow, model: SessionModel) throws {
+        model.phase = .active
+        defer { model.phase = .idle }
+        settle()
+        let before = window.frame
+        guard let content = window.contentView,
+              let day = descendants(content).compactMap({ $0 as? NSPopUpButton }).first(where: {
+                  $0.identifier?.rawValue == "WakecupEndDay"
+              }) else { throw WakecupError(message: "End-day control is missing") }
+        day.selectItem(at: day.numberOfItems - 1)
+        day.sendAction(day.action, to: day.target)
+        settle()
+        let popoverViews = NSApp.windows.filter(\.isVisible).compactMap(\.contentView).flatMap(descendants)
+        guard let picker = popoverViews.compactMap({ $0 as? NSDatePicker }).first(where: {
+            $0.identifier?.rawValue == "WakecupCalendar"
+        }), let future = Calendar.current.date(byAdding: .day, value: 16, to: model.currentDate) else {
+            throw WakecupError(message: "The calendar did not open")
+        }
+
+        // Simulate a window adjustment during popover tracking.
+        window.setFrame(window.frame.offsetBy(dx: 0, dy: -40), display: false)
+        picker.dateValue = future
+        picker.sendAction(picker.action, to: picker.target)
+        settle()
+
+        guard model.showsSettingsActions, let selected = model.selectedEndDate,
+              Calendar.current.isDate(selected, inSameDayAs: future) else {
+            throw WakecupError(message: "A future date must produce an unapplied edit")
+        }
+        guard let screen = window.screen, screen.visibleFrame.contains(window.frame),
+              abs(window.frame.maxY - before.maxY) < 1,
+              abs(window.frame.minX - before.minX) < 1 else {
+            throw WakecupError(message: "Picking a date moved the panel away from its anchor")
+        }
+    }
+
+    private static func descendants(_ view: NSView) -> [NSView] {
+        [view] + view.subviews.flatMap(descendants)
     }
 
     private static func settle() { RunLoop.main.run(until: Date().addingTimeInterval(0.2)) }

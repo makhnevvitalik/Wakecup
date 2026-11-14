@@ -81,7 +81,7 @@
 	<key>Could not save session state.</key>
 	<string>Не удалось сохранить состояние режима.</string>
 	<key>Could not confirm that the guardian stopped.</key>
-	<string>Не удалось подтвердить остановку помощника.</string>
+	<string>Не удалось подтвердить остановку защитного процесса.</string>
 	<key>Could not send the stop request to the guardian.</key>
 	<string>Не удалось передать остановку защитному процессу.</string>
 	<key>Could not set the session file owner.</key>
@@ -138,6 +138,8 @@
 	<string>Wakecup выключен: %@.</string>
 	<key>Session state is too large.</key>
 	<string>Слишком большой объём данных о состоянии режима.</string>
+	<key>Show in Menu Bar</key>
+	<string>Показывать в строке меню</string>
 	<key>Show remaining time in menu bar</key>
 	<string>Остаток времени в строке меню</string>
 	<key>Sleep is already disabled by a system setting. Wakecup will not change an existing setting.</key>
@@ -172,10 +174,6 @@
 	<string>Неизвестное значение SleepDisabled.</string>
 	<key>Unknown session file.</key>
 	<string>Неизвестный рабочий файл Wakecup.</string>
-	<key>Unknown version</key>
-	<string>Неизвестная версия</string>
-	<key>Version %@</key>
-	<string>Версия %@</string>
 	<key>View Release</key>
 	<string>Открыть релиз</string>
 	<key>Wakecup License</key>
@@ -300,7 +298,7 @@ Wakecup не меняет таймеры сна, выключения экран
 	<key>Could not verify guardian subprocesses.</key>
 	<string>Не удалось безопасно проверить команды защитного процесса Wakecup.</string>
 	<key>Could not stop the unresponsive guardian.</key>
-	<string>Не удалось остановить зависший защитный процесс Wakecup. Открой инструкцию по восстановлению сна.</string>
+	<string>Не удалось остановить зависший защитный процесс Wakecup. Откройте инструкцию по восстановлению сна.</string>
 	<key>Duration must be between 1 second and 999 hours.</key>
 	<string>Длительность должна быть от 1 секунды до 999 часов.</string>
 	<key>License…</key>
@@ -381,6 +379,10 @@ Wakecup не меняет таймеры сна, выключения экран
 	<string>Недопустимая подпись помощника.</string>
 	<key>Invalid helper response.</key>
 	<string>Помощник вернул некорректный ответ.</string>
+	<key>Could not launch the helper guard (%@).</key>
+	<string>Не удалось запустить защитный процесс помощника (код %@).</string>
+	<key>Helper installation failed and its previous installation could not be restored: %@</key>
+	<string>Не удалось установить помощника и восстановить предыдущую установку: %@</string>
 	<key>Invalid helper guard response.</key>
 	<string>Защитный процесс помощника вернул некорректный ответ.</string>
 	<key>The helper connection ended. Check the session status before trying again.</key>
@@ -719,8 +721,8 @@ Wakecup не меняет таймеры сна, выключения экран
 	<string>Затем нажмите F1–F20.</string>
 	<key>Cancel edits</key>
 	<string>Отменить</string>
-	<key>Wakecup update available</key>
-	<string>Доступно обновление Wakecup</string>
+	<key>Update available</key>
+	<string>Доступно обновление</string>
 	<key>Enable MCP</key>
 	<string>Включить MCP</string>
 	<key>How to connect MCP…</key>
@@ -747,5 +749,7 @@ Wakecup не меняет таймеры сна, выключения экран
 	<string>Завершите Claude Desktop через ⌘Q и откройте его снова.</string>
 	<key>Run this command in Terminal to add Wakecup for your macOS user account. Then open Claude Code and use /mcp to check the connection.</key>
 	<string>Выполните команду в Терминале, чтобы добавить Wakecup для вашей учётной записи. Затем откройте Claude Code и проверьте подключение через /mcp.</string>
+	<key>Settings</key>
+	<string>Настройки</string>
 </dict>
 </plist>

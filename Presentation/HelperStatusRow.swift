@@ -75,7 +75,7 @@ struct HelperStatusRow: View {
 
     var body: some View {
         MenuDetailRow {
-            HStack(spacing: MenuLayout.rowSpacing) {
+            HStack(spacing: AppStyle.Layout.rowItemSpacing) {
                 Text(localized("Helper"))
                 Button { showingHint.toggle() } label: {
                     Image(systemName: "info.circle").font(Font(AppStyle.Font.supportingText)).foregroundStyle(.secondary)
@@ -95,7 +95,7 @@ struct HelperStatusRow: View {
         } action: {
             actionButton
         }
-            .padding(.horizontal, MenuLayout.inset)
+            .padding(.horizontal, AppStyle.Layout.cardInset)
             .frame(height: MenuLayout.helperRowHeight)
             .help(localized(presentation.descriptionKey))
             .accessibilityElement(children: .contain)

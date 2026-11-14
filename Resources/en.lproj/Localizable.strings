@@ -138,6 +138,8 @@ When this is off, Wakecup only works while external power is connected. Unpluggi
 	<string>Session ended: %@.</string>
 	<key>Session state is too large.</key>
 	<string>Session state is too large.</string>
+	<key>Show in Menu Bar</key>
+	<string>Show in Menu Bar</string>
 	<key>Show remaining time in menu bar</key>
 	<string>Show remaining time in menu bar</string>
 	<key>Sleep is already disabled by a system setting. Wakecup will not change an existing setting.</key>
@@ -172,10 +174,6 @@ When this is off, Wakecup only works while external power is connected. Unpluggi
 	<string>Unknown SleepDisabled value.</string>
 	<key>Unknown session file.</key>
 	<string>Unknown session file.</string>
-	<key>Unknown version</key>
-	<string>Unknown version</string>
-	<key>Version %@</key>
-	<string>Version %@</string>
 	<key>View Release</key>
 	<string>View Release</string>
 	<key>Wakecup License</key>
@@ -300,7 +298,7 @@ The command below does not change anything. It lists apps currently requesting t
 	<key>Could not verify guardian subprocesses.</key>
 	<string>Could not verify guardian subprocesses.</string>
 	<key>Could not stop the unresponsive guardian.</key>
-	<string>Could not stop the unresponsive guardian.</string>
+	<string>Could not stop the unresponsive guardian. Open the sleep recovery guide.</string>
 	<key>Duration must be between 1 second and 999 hours.</key>
 	<string>Duration must be between 1 second and 999 hours.</string>
 	<key>License…</key>
@@ -381,6 +379,10 @@ You can switch back to password requests or remove the helper in Wakecup Setting
 	<string>Invalid helper signing identity.</string>
 	<key>Invalid helper response.</key>
 	<string>Invalid helper response.</string>
+	<key>Could not launch the helper guard (%@).</key>
+	<string>Could not launch the helper guard (%@).</string>
+	<key>Helper installation failed and its previous installation could not be restored: %@</key>
+	<string>Helper installation failed and its previous installation could not be restored: %@</string>
 	<key>Invalid helper guard response.</key>
 	<string>Invalid helper guard response.</string>
 	<key>The helper connection ended. Check the session status before trying again.</key>
@@ -586,7 +588,7 @@ You can switch back to password requests or remove the helper in Wakecup Setting
 	<key>Hold a modifier, then press F1–F20.</key>
 	<string>Hold a modifier, then press F1–F20.</string>
 	<key>display.shortcut.explanation</key>
-	<string>Use F1–F20 with Shift, Control, Option or Command to restore brightness and return to the previous display mode. Active only while the backlight is off.</string>
+	<string>Use F1–F20 with Shift, Control, Option or Command to restore brightness and return to the previous display mode. Only in “Backlight off” mode.</string>
 	<key>display.shortcut.invalid</key>
 	<string>Use F1–F20 with Shift, Control, Option or Command. Letters and modifier-only gestures are unavailable.</string>
 	<key>display.shortcut.locked</key>
@@ -719,8 +721,8 @@ During installation, macOS asks for administrator permission. Your password is n
 	<string>Then press F1–F20.</string>
 	<key>Cancel edits</key>
 	<string>Cancel</string>
-	<key>Wakecup update available</key>
-	<string>Wakecup update available</string>
+	<key>Update available</key>
+	<string>Update available</string>
 	<key>Enable MCP</key>
 	<string>Enable MCP</string>
 	<key>How to connect MCP…</key>
@@ -747,5 +749,7 @@ During installation, macOS asks for administrator permission. Your password is n
 	<string>Quit Claude Desktop completely and reopen it.</string>
 	<key>Run this command in Terminal to add Wakecup for your macOS user account. Then open Claude Code and use /mcp to check the connection.</key>
 	<string>Run this command in Terminal to add Wakecup for your macOS user account. Then open Claude Code and use /mcp to check the connection.</string>
+	<key>Settings</key>
+	<string>Settings</string>
 </dict>
 </plist>

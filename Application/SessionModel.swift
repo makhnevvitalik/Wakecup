@@ -45,6 +45,7 @@ final class SessionModel: ObservableObject {
     @Published private(set) var allowBattery = true { didSet { saveOptions() } }
     @Published private(set) var threshold = 20.0 { didSet { saveOptions() } }
     @Published var showRemaining = true { didSet { saveOptions() } }
+    @Published var showInMenuBar = true { didSet { saveOptions() } }
     @Published private(set) var loginEnabled = false
     @Published private(set) var loginNeedsApproval = false
     @Published private(set) var needsRecovery = false
@@ -222,6 +223,7 @@ final class SessionModel: ObservableObject {
         threshold = min(Double(BatteryThreshold.range.upperBound),
             max(Double(BatteryThreshold.range.lowerBound), defaults.object(forKey: "threshold") as? Double ?? 20))
         showRemaining = defaults.object(forKey: "showRemaining") as? Bool ?? true
+        showInMenuBar = defaults.object(forKey: "showInMenuBar") as? Bool ?? true
         helperObservation = helper.objectWillChange.sink { [weak self] _ in self?.objectWillChange.send() }
         displayObservation = display.objectWillChange.sink { [weak self] _ in self?.objectWillChange.send() }
         refreshLoginState()
@@ -275,6 +277,7 @@ final class SessionModel: ObservableObject {
         defaults.set(allowBattery, forKey: "allowBattery")
         defaults.set(threshold, forKey: "threshold")
         defaults.set(showRemaining, forKey: "showRemaining")
+        defaults.set(showInMenuBar, forKey: "showInMenuBar")
         statusDidChange?()
     }
 
@@ -864,7 +867,6 @@ final class SessionModel: ObservableObject {
                         deadline = status.deadline
                         phase = .active
                         becameActive()
-                        showRequested?()
                     }
                     catch { pendingError = SessionMessage(reason: error.localizedDescription); requestStop(); return }
                 }

@@ -50,6 +50,9 @@ import SwiftUI
                   let slider = descendants(scale).compactMap({ $0 as? NSSlider }).first else {
                 throw WakecupError(message: "One shared battery scale must combine charge and the stop threshold")
             }
+            if slider.isEnabled != enabled || slider.isHidden == enabled {
+                throw WakecupError(message: "The threshold must be visible and interactive only when battery operation is enabled")
+            }
             if slider.minValue != 10 || slider.maxValue != 90 || slider.frame.width <= scale.bounds.width * 0.75 || slider.frame.width >= scale.bounds.width {
                 throw WakecupError(message: "The threshold must occupy only the 10–90 region of the 1–100 scale")
             }

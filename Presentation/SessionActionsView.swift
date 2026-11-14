@@ -5,13 +5,28 @@ struct SessionActionsView: View {
     @ObservedObject var model: SessionModel
     @ObservedObject private var localization = AppLocalization.shared
     var body: some View {
-        Button(action: performPrimaryAction) {
-            Text(actionTitle).frame(maxWidth: .infinity)
-        }
-        .font(Font(AppStyle.Font.primaryAction)).buttonStyle(SessionActionButtonStyle(secondary: model.phase == .active && model.hasSettingsDraft))
+        primaryButton
+        .controlSize(.large)
+        .frame(minHeight: MenuLayout.primaryActionHeight)
         .disabled(model.isRestarting || model.startPowerRestriction != nil || model.helper.working || model.phase.showsProgress || (model.needsRecovery && model.busy)
             || (!model.busy && !model.needsRecovery && (model.display.transitioning || !model.durationInputIsValid
                 || (model.closedLid && model.helper.selected && model.helper.checking))))
+    }
+
+    @ViewBuilder private var primaryButton: some View {
+        if model.phase == .active && model.hasSettingsDraft {
+            actionButton.buttonStyle(.bordered)
+        } else {
+            actionButton.buttonStyle(.borderedProminent)
+        }
+    }
+
+    private var actionButton: some View {
+        Button(action: performPrimaryAction) {
+            Text(actionTitle)
+                .font(Font(AppStyle.Font.primaryAction))
+                .frame(maxWidth: .infinity)
+        }
     }
 
     private var actionTitle: String {
@@ -21,7 +36,7 @@ struct SessionActionsView: View {
     }
 
     private func performPrimaryAction() {
-        NSApp.keyWindow?.makeFirstResponder(nil)
+        AppStyle.commitActiveFieldEditor(in: NSApp.keyWindow)
         if model.needsRecovery { model.recover() }
         else if model.busy { model.stop() }
         else { model.start() }
@@ -102,13 +117,13 @@ struct SessionSettingsFooter: View {
         let feedbackHeight = feedback == nil ? 0 : MenuLayout.feedbackRowHeight
         let actionsHeight = model.showsSettingsActions ? MenuLayout.settingsActionsHeight : 0
         let cardHeight = feedbackHeight + actionsHeight
-        let helpHeight = MenuLayout.helpLinkHeight + MenuLayout.panelInset
-        return cardHeight == 0 ? helpHeight : helpHeight + MenuLayout.spacing + cardHeight
+        let helpHeight = MenuLayout.helpLinkHeight + AppStyle.Layout.panelInset
+        return cardHeight == 0 ? helpHeight : helpHeight + AppStyle.Layout.cardSpacing + cardHeight
     }
 
     var body: some View {
         let notice = feedback
-        VStack(spacing: MenuLayout.spacing) {
+        VStack(spacing: AppStyle.Layout.cardSpacing) {
             if notice != nil || model.showsSettingsActions {
                 MenuCard {
                     if let notice { feedbackRow(notice) }
@@ -122,10 +137,10 @@ struct SessionSettingsFooter: View {
                     .contentShape(Rectangle())
             }
             .buttonStyle(.link)
-            .padding(.horizontal, MenuLayout.inset)
+            .padding(.horizontal, AppStyle.Layout.cardInset)
         }
         .tint(Color(AppStyle.Color.accent))
-        .padding([.horizontal, .bottom], MenuLayout.panelInset)
+        .padding([.horizontal, .bottom], AppStyle.Layout.panelInset)
     }
 
     private func feedbackRow(_ feedback: Feedback) -> some View {
@@ -141,7 +156,7 @@ struct SessionSettingsFooter: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .frame(height: MenuLayout.feedbackRowHeight)
-        .padding(.horizontal, MenuLayout.inset)
+        .padding(.horizontal, AppStyle.Layout.cardInset)
     }
 
     private func feedbackLabel(_ feedback: Feedback) -> some View {
@@ -164,9 +179,9 @@ struct SessionSettingsFooter: View {
     }
 
     private var actions: some View {
-        HStack(spacing: MenuLayout.spacing) {
+        HStack(spacing: AppStyle.Layout.cardSpacing) {
             Button(localized("Cancel edits")) {
-                NSApp.keyWindow?.makeFirstResponder(nil)
+                AppStyle.commitActiveFieldEditor(in: NSApp.keyWindow)
                 model.discardSettingsDraft()
             }
             .buttonStyle(.bordered)
@@ -175,7 +190,7 @@ struct SessionSettingsFooter: View {
             .accessibilityIdentifier("WakecupCancelSettings")
 
             Button(localized("Apply")) {
-                NSApp.keyWindow?.makeFirstResponder(nil)
+                AppStyle.commitActiveFieldEditor(in: NSApp.keyWindow)
                 model.applySettingsDraft()
             }
             .buttonStyle(.borderedProminent)
@@ -184,7 +199,7 @@ struct SessionSettingsFooter: View {
         }
         .font(Font(AppStyle.Font.controlLabel))
         .controlSize(.regular)
-        .padding(.horizontal, MenuLayout.inset)
+        .padding(.horizontal, AppStyle.Layout.cardInset)
         .frame(maxWidth: .infinity)
         .frame(height: MenuLayout.settingsActionsHeight)
     }
@@ -200,20 +215,5 @@ private struct SettingsActionsFade: ViewModifier {
                 $0.opacity(reduceMotion || isVisible ? 1 : 0)
             }
             .onAppear { isVisible = true }
-    }
-}
-
-private struct SessionActionButtonStyle: ButtonStyle {
-    let secondary: Bool
-    @Environment(\.isEnabled) private var isEnabled
-
-    func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .frame(maxWidth: .infinity, minHeight: MenuLayout.primaryActionHeight)
-            .foregroundStyle(isEnabled ? (secondary ? Color.primary : Color.white) : Color.secondary)
-            .background(isEnabled ? (secondary ? Color(nsColor: .controlBackgroundColor) : Color.accentColor) : Color(nsColor: .controlColor),
-                        in: RoundedRectangle(cornerRadius: MenuLayout.primaryActionCornerRadius))
-            .opacity(configuration.isPressed ? 0.8 : 1)
-            .contentShape(RoundedRectangle(cornerRadius: MenuLayout.primaryActionCornerRadius))
     }
 }

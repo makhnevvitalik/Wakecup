@@ -1,24 +1,35 @@
 import SwiftUI
 
-// A fixed-height status line keeps the brand header stable across states.
-// Idle needs no caption; the primary action already says that Wakecup can start.
+// The status line reserves room for ordinary state changes and wraps longer text.
+// The current session takes priority over the update link.
 struct SessionStatusView: View {
     @ObservedObject var model: SessionModel
+    let releaseURL: URL?
     @ObservedObject private var localization = AppLocalization.shared
 
+    private var showsSessionStatus: Bool { model.phase == .active || model.isRestarting }
+
     private var title: String {
-        guard model.phase == .active || model.isRestarting else { return "" }
         return model.endDate.map { localizedFormat("Active until %@", endTime($0)) }
             ?? localized("Until stopped manually")
     }
 
     var body: some View {
-        Text(title).font(Font(AppStyle.Font.statusText)).monospacedDigit()
-            .foregroundStyle(Color(AppStyle.Color.success))
-            .lineLimit(1)
-            .accessibilityIdentifier("WakecupSessionStatus")
-            .accessibilityHidden(title.isEmpty)
-            .frame(height: MenuLayout.statusLineHeight)
+        Group {
+            if showsSessionStatus {
+                Text(title).monospacedDigit()
+                    .foregroundStyle(Color(AppStyle.Color.success))
+                    .accessibilityIdentifier("WakecupSessionStatus")
+            } else if model.phase == .idle, let releaseURL {
+                Link(localization.text("Update available"), destination: releaseURL)
+                    .foregroundStyle(Color(nsColor: .linkColor))
+            } else {
+                Color.clear.frame(width: 0).accessibilityHidden(true)
+            }
+        }
+        .font(Font(AppStyle.Font.statusText))
+        .fixedSize(horizontal: false, vertical: true)
+        .frame(minHeight: AppStyle.Layout.headerStatusHeight)
     }
 
     private func endTime(_ date: Date) -> String {

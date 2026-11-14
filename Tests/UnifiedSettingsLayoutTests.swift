@@ -142,7 +142,7 @@ import SwiftUI
         let toggleWidth = switches.map { $0.fittingSize.width }.max() ?? 40
         for key in ["Keep awake with lid closed", "Keep awake on battery"] {
             let hintWidth: CGFloat = 24
-            let available = MenuLayout.width - 2 * (MenuLayout.panelInset + MenuLayout.inset) - toggleWidth - MenuLayout.rowSpacing - hintWidth
+            let available = MenuLayout.width - 2 * (AppStyle.Layout.panelInset + AppStyle.Layout.cardInset) - toggleWidth - AppStyle.Layout.rowItemSpacing - hintWidth
             try expect((localized(key) as NSString).size(withAttributes: [.font: AppStyle.Font.body]).width < available,
                        "Translated option label must fit beside its switch: \(key)")
         }
@@ -194,9 +194,9 @@ import SwiftUI
                    "A combined lid transition must show the internal restart")
         let restartingSize = try layout("restart")
         let footer = SessionSettingsFooter(model: model, showHelp: {})
-        let helpFooterHeight = MenuLayout.helpLinkHeight + MenuLayout.panelInset
-        let actionsFooterHeight = MenuLayout.settingsActionsHeight + MenuLayout.spacing
-        let errorFooterHeight = MenuLayout.feedbackRowHeight + MenuLayout.spacing
+        let helpFooterHeight = MenuLayout.helpLinkHeight + AppStyle.Layout.panelInset
+        let actionsFooterHeight = MenuLayout.settingsActionsHeight + AppStyle.Layout.cardSpacing
+        let errorFooterHeight = MenuLayout.feedbackRowHeight + AppStyle.Layout.cardSpacing
         let footerHeightWithActionsAndFeedback = helpFooterHeight + actionsFooterHeight + MenuLayout.feedbackRowHeight
         try expect(footer.preferredHeight == footerHeightWithActionsAndFeedback,
                    "The system confirmation during Apply must have one row in the footer")
