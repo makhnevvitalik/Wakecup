@@ -3,7 +3,7 @@ import SwiftUI
 
 struct SessionOptionsView: View {
     @ObservedObject var model: SessionModel
-    let configureDisplayShortcut: (Bool) -> Bool
+    let configureDisplayShortcut: (Bool, @escaping (Bool) -> Void) -> Void
     let helperInteraction: HelperInteraction
     @ObservedObject private var localization = AppLocalization.shared
     @State private var showingDisplayHint = false
@@ -55,7 +55,7 @@ struct SessionOptionsView: View {
                 Text(localized("Only in Backlight off mode"))
             } action: {
                 Button(model.displayShortcut?.displayName ?? localized("Configure…")) {
-                    _ = configureDisplayShortcut(false)
+                    configureDisplayShortcut(false) { _ in }
                 }
                 .help(localized("display.shortcut.explanation"))
                 .accessibilityLabel(localized("Restore brightness shortcut"))
@@ -66,8 +66,8 @@ struct SessionOptionsView: View {
     }
 
     private func selectDisplayMode(_ mode: DisplayMode) {
-        DisplayShortcutEditor.selectMode(mode, model: model) {
-            configureDisplayShortcut(true)
+        DisplayShortcutEditor.selectMode(mode, model: model) { complete in
+            configureDisplayShortcut(true, complete)
         }
     }
 

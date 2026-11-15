@@ -127,7 +127,7 @@ private struct StatusFixture: View {
     @ObservedObject var model: SessionModel
     let updates: UpdateChecker
     var body: some View {
-        WakecupView(model: model, updates: updates, showAbout: {}, configureDisplayShortcut: { _ in false })
+        WakecupView(model: model, updates: updates, showAbout: {})
             .background(Color(nsColor: NSColor(calibratedWhite: 0.91, alpha: 1)))
     }
 }

@@ -44,7 +44,7 @@ import SwiftUI
             scheduleTicks: { _ in {} }, readLidClosed: { fixture.lidState }, guardianIsRunning: { _ in false })
         operations.wallNow = { Date(timeIntervalSince1970: 1_794_309_600 + fixture.now - 1000) }
         let model = SessionModel(defaults: defaults, operations: operations, helper: helper)
-        let host = NSHostingController(rootView: WakecupView(model: model, showAbout: {}, configureDisplayShortcut: { _ in false })
+        let host = NSHostingController(rootView: WakecupView(model: model, showAbout: {})
             .background(Color(nsColor: NSColor(calibratedWhite: 0.91, alpha: 1))))
         let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: MenuLayout.width, height: 900),
             styleMask: [.borderless], backing: .buffered, defer: false)
@@ -101,31 +101,30 @@ import SwiftUI
                        "The native end-time editor must follow transition availability")
         }
         var setupRequests = 0
-        model.selectDisplayMode(.keepOn)
-        DisplayShortcutEditor.selectMode(.backlightOff, model: model) {
+        var completeSetup: ((Bool) -> Void)?
+        func requestSetup(_ completion: @escaping (Bool) -> Void) {
             setupRequests += 1
-            return false
+            completeSetup = completion
         }
+        model.selectDisplayMode(.keepOn)
+        DisplayShortcutEditor.selectMode(.backlightOff, model: model, configure: requestSetup)
         try expect(setupRequests == 1 && model.displayMode == .keepOn && model.displayShortcut == nil,
+                   "The editor must leave the previous mode selected while setup is open")
+        completeSetup?(false)
+        try expect(model.displayMode == .keepOn && model.displayShortcut == nil,
                    "First-use Cancel must keep the previous display mode")
-        DisplayShortcutEditor.selectMode(.backlightOff, model: model) { setupRequests += 1; return true }
+        DisplayShortcutEditor.selectMode(.backlightOff, model: model, configure: requestSetup)
+        completeSetup?(true)
         try expect(model.displayMode == .keepOn, "Closing setup without a shortcut cannot select Backlight off")
         let chosen = DisplayShortcut(keyCode: 120, modifiers: DisplayShortcut.control | DisplayShortcut.option)
-        var setupError: Error?
-        var modeDuringSetup: DisplayMode?
-        DisplayShortcutEditor.selectMode(.backlightOff, model: model) {
-            setupRequests += 1
-            do { try model.setDisplayShortcut(chosen) }
-            catch { setupError = error; return false }
-            modeDuringSetup = model.displayMode
-            return true
-        }
-        if let setupError { throw setupError }
-        try expect(modeDuringSetup == .keepOn, "Do not darken while setup is still open")
+        DisplayShortcutEditor.selectMode(.backlightOff, model: model, configure: requestSetup)
+        try model.setDisplayShortcut(chosen)
+        try expect(model.displayMode == .keepOn, "Do not change the mode while setup is still open")
+        completeSetup?(true)
         try expect(setupRequests == 3 && model.displayMode == .backlightOff && !model.isBacklightOff,
                    "Successful first-use setup must select the requested idle mode without darkening")
         model.selectDisplayMode(.mayTurnOff)
-        DisplayShortcutEditor.selectMode(.backlightOff, model: model) { setupRequests += 1; return false }
+        DisplayShortcutEditor.selectMode(.backlightOff, model: model, configure: requestSetup)
         try expect(setupRequests == 3 && model.displayMode == .backlightOff,
                    "An existing shortcut must avoid repeated setup prompts")
         model.selectDisplayMode(.mayTurnOff)
@@ -258,7 +257,7 @@ import SwiftUI
         try expect(!fixture.unexpectedHelperCall, "The offscreen fixture must never use a helper")
         // A short screen still needs scrolling; its scrollbar must not steal
         // width from the fixed-width document and clip the right controls.
-        let panelController = MenuPanelController(model: model, statusButton: { nil }, configureDisplayShortcut: { _ in false })
+        let panelController = MenuPanelController(model: model, statusButton: { nil })
         guard let panel = NSApp.windows.first(where: { $0.title == "Wakecup" }),
               let scroll = panel.contentView.flatMap({ descendants($0).compactMap { $0 as? NSScrollView }.first }) else {
             throw WakecupError(message: "Missing hidden menu panel")
@@ -328,30 +327,6 @@ import SwiftUI
                    "A failure after the countdown must show an error without draft actions")
         model.selectDisplayMode(.mayTurnOff)
         model.applySettingsDraft()
-        var panelHidden = false
-        var reopenBlocked = false
-        var nestedEditorOpened = false
-        let accepted = panelController.presentShortcutEditor { owner in
-            panelHidden = !owner.isVisible
-            panelController.show() // A reopen/activation event can arrive before runModal.
-            reopenBlocked = !owner.isVisible
-            _ = panelController.presentShortcutEditor { _ in nestedEditorOpened = true; return false }
-            owner.orderOut(nil)
-            return true
-        }
-        try expect(accepted && panelHidden && reopenBlocked && !nestedEditorOpened,
-                   "The menu must remain hidden for the editor's entire presentation, including activation and nested requests")
-        let cancelled = panelController.presentShortcutEditor { _ in
-            panelController.show()
-            reopenBlocked = !panelController.isVisible
-            panelController.close()
-            return false
-        }
-        try expect(!cancelled && reopenBlocked && !panelController.isVisible,
-                   "Cancel must preserve its result and release the presentation guard for the next editor")
-
-
-
         for (text, isLong) in [("Short details", false), (String(repeating: "A long system error with details. ", count: 500), true)] {
             let details = NSHostingController(rootView: MenuFeedbackPopover(text: text))
             details.view.layoutSubtreeIfNeeded()

@@ -40,17 +40,7 @@ import AppKit
                    editor.hintLabel.font?.isEqual(AppStyle.Font.supportingText) == true &&
                    editor.saveButton.font?.isEqual(AppStyle.Font.controlLabel) == true, "Editor uses shared text roles")
         try expect(validations == 0, "Constructing an offscreen editor must not validate a native registration")
-        editor.prepareForPresentation(relativeTo: nil)
-        try expect(window.level == .modalPanel,
-                   "An editor uses the standard modal level when no owner exists")
-        let menuOwner = NSPanel(contentRect: NSRect(x: 30, y: 30, width: 380, height: 500),
-            styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: false)
-        menuOwner.level = .popUpMenu
-        editor.prepareForPresentation(relativeTo: menuOwner)
-        try expect(window.level == .modalPanel,
-                   "The hidden owner must not dictate the modal editor level")
-        try expect(!window.isVisible && !menuOwner.isVisible,
-                   "Window-order regression tests must remain offscreen")
+        try expect(window.level == .normal, "The editor leaves its window level to its settings sheet")
 
         try snapshot(editor, language: language, state: "current")
         window.makeFirstResponder(editor.cancelButton)

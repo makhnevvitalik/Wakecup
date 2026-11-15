@@ -11,6 +11,9 @@ import AppKit
         let language = CommandLine.arguments[1]
         UserDefaults.standard.setVolatileDomain([AppLocalization.languageKey: language], forName: UserDefaults.argumentDomain)
         NSApplication.shared.setActivationPolicy(.prohibited)
+        let owner = NSWindow(contentRect: NSRect(x: 100, y: 150, width: 380, height: 460),
+            styleMask: [.titled, .closable], backing: .buffered, defer: false)
+        owner.isReleasedWhenClosed = false
         let suite = "WakecupHelperDialogLayout-" + UUID().uuidString
         let defaults = UserDefaults(suiteName: suite)!
         defer { defaults.removePersistentDomain(forName: suite) }
@@ -29,12 +32,10 @@ import AppKit
                     throw WakecupError(message: "Unexpected installation in layout test")
                 }, inspectInstallation: { .init(state: state, detail: name == "long-error" ? String(repeating: "Long diagnostic message. ", count: 300) : "", manifest: state == .ready ? manifest : nil) },
                    requestInformation: { $0(.success(HelperInformation(manifest: manifest, clientConfirmed: true))) })
-                let interaction = HelperPresentation(activate: {}, presentAlert: { _ in .abort }, presentSettings: { alert in
-                    var response: NSApplication.ModalResponse?
-                    let dialog = HelperSettingsDialog(alert: alert) { response = $0 }
+                let interaction = HelperPresentation(activate: {}, settingsOwner: { owner }, presentSettings: { alert, _, completion in
+                    let dialog = HelperSettingsDialog(alert: alert, completion: completion)
                     captured = dialog
                     (acceptChange ? dialog.buttons.first : dialog.buttons.last)?.performClick(nil)
-                    return response ?? .abort
                 }).interaction
                 interaction.showSettings(for: helper)
                 guard let dialog = captured, let content = dialog.window.contentView else {
@@ -85,8 +86,85 @@ import AppKit
                 try expect(installationRequests == 0, "Layout and mode selection must not install the helper")
             }
         }
-        print("PASS: ten offscreen helper dialogs, including long diagnostics, are 560 pt wide with one unclipped button row; Close and mode selection work (\(language))")
+        try checkPresentation(owner: owner, defaults: defaults)
+        print("PASS: attached helper management and removal, independent modeless alerts, and ten offscreen helper dialogs, including long diagnostics, are 560 pt wide with one unclipped button row; Close and mode selection work (\(language))")
     }
+    @MainActor private static func checkPresentation(owner: NSWindow, defaults: UserDefaults) throws {
+        let other = NSWindow(contentRect: NSRect(x: 500, y: 150, width: 220, height: 440),
+            styleMask: [.titled, .closable], backing: .buffered, defer: false)
+        other.isReleasedWhenClosed = false
+        defer { owner.orderOut(nil); other.orderOut(nil) }
+        owner.orderFront(nil)
+        other.orderFront(nil)
+
+        let presenter = HelperPresentation(activate: {}, settingsOwner: { owner.attachedSheet == nil ? owner : nil })
+        let manifest = HelperManifest(protocolVersion: HelperConstants.protocolVersion, ownerUID: getuid(),
+            clientHash: String(repeating: "a", count: 40), helperHash: HelperBuildIdentity.cdHash,
+            helperSHA256: HelperBuildIdentity.sha256)
+        var available = false
+        var installationRequests = 0
+        let helper = PrivilegedHelperController(defaults: defaults, makeInstallationTask: { _ in
+            installationRequests += 1
+            throw WakecupError(message: "Fixture installation failure")
+        }, inspectInstallation: { available ? .init(state: .ready, manifest: manifest) : .init(state: .updateRequired) },
+           requestInformation: { $0(.success(HelperInformation(manifest: manifest, clientConfirmed: true))) })
+        presenter.observeRecovery(of: helper)
+        let interaction = presenter.interaction
+        let windowsBeforeExplanation = NSApp.windows.filter(\.isVisible)
+        interaction.showExplanation()
+        guard let explanation = NSApp.windows.first(where: { window in
+            window.isVisible && !windowsBeforeExplanation.contains(where: { $0 === window })
+        }) else { throw WakecupError(message: "Explanation must open an independent window") }
+        defer { explanation.close() }
+        try expect(explanation.level == .normal && explanation.sheetParent == nil && NSApp.modalWindow == nil,
+                   "Explanation must allow continued settings work")
+
+        interaction.showSettings(for: helper)
+        guard let settings = owner.attachedSheet, let body = settings.contentView,
+              let remove = findButton(in: body, titled: localized("Remove")) else {
+            throw WakecupError(message: "Manage helper must present an attached sheet with a Remove action")
+        }
+        let windowsBeforeFailure = NSApp.windows.filter(\.isVisible)
+        interaction.changeInstallation(for: helper, remove: false)
+        guard let failure = NSApp.windows.first(where: { window in
+            window.isVisible && !windowsBeforeFailure.contains(where: { $0 === window })
+        }) else { throw WakecupError(message: "Operation failure must open an independent window") }
+        defer {
+            failure.close()
+            if let sheet = owner.attachedSheet { owner.endSheet(sheet, returnCode: .cancel) }
+        }
+        try expect(failure.level == .normal && failure.sheetParent == nil && NSApp.modalWindow == nil
+                   && owner.attachedSheet === settings && other.isVisible,
+                   "An automatic failure must leave the sheet attached and other windows available")
+        other.makeKeyAndOrderFront(nil)
+        let windowsBeforeRepeat = NSApp.windows.filter(\.isVisible).count
+        interaction.showExplanation()
+        try expect(explanation.isVisible && NSApp.windows.filter(\.isVisible).count == windowsBeforeRepeat
+                   && owner.attachedSheet === settings, "Repeating the explanation must raise the same window")
+        remove.performClick(nil)
+        RunLoop.main.run(until: Date().addingTimeInterval(0.2))
+        guard let confirmation = owner.attachedSheet, confirmation !== settings else {
+            throw WakecupError(message: "Remove from settings must replace the first sheet with an attached confirmation")
+        }
+        try expect(NSApp.modalWindow == nil && confirmation.sheetParent === owner,
+                   "Removal confirmation must be scoped to the settings window")
+        owner.endSheet(confirmation, returnCode: .cancel)
+        RunLoop.main.run(until: Date().addingTimeInterval(0.1))
+        try expect(owner.attachedSheet == nil && failure.isVisible && explanation.isVisible
+                   && !helper.working && installationRequests == 1,
+                   "Cancelling removal must release settings and preserve independent alerts")
+        available = true
+        helper.refresh()
+        RunLoop.main.run(until: Date().addingTimeInterval(0.1))
+        try expect(helper.state == .ready && !failure.isVisible && explanation.isVisible,
+                   "Actual helper recovery must close the stale failure and preserve the explanation")
+    }
+
+    private static func findButton(in view: NSView, titled title: String) -> NSButton? {
+        if let button = view as? NSButton, button.title == title { return button }
+        return view.subviews.lazy.compactMap { findButton(in: $0, titled: title) }.first
+    }
+
     private static func expect(_ condition: Bool, _ message: String) throws {
         if !condition { throw WakecupError(message: message) }
     }

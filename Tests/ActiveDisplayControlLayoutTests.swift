@@ -39,7 +39,7 @@ import SwiftUI
         let model = SessionModel(defaults: defaults, operations: operations, helper: helper)
         model.editClosedLid(false)
         try model.setDisplayShortcut(DisplayShortcut(keyCode: 120, modifiers: DisplayShortcut.control))
-        let content = WakecupView(model: model, showAbout: {}, configureDisplayShortcut: { _ in false })
+        let content = WakecupView(model: model, showAbout: {})
             .background(Color(nsColor: .windowBackgroundColor)).tint(Color(AppStyle.Color.accent))
         let host = NSHostingController(rootView: content)
         let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: MenuLayout.width, height: 400),
@@ -101,7 +101,27 @@ import SwiftUI
                    "Cancelling shortcut setup must retain the applied mode")
         try expect(display.itemArray.map(\.state) == [.on, .off, .off],
                    "A rejected choice must leave exactly one checkmark")
-        print("PASS: native live display modes match state with a configured exit shortcut, RU/EN layout fits, finite/infinite timers and menu dimensions stay unchanged (\(language))")
+        model.stop()
+        let panelController = MenuPanelController(model: model, statusButton: { nil })
+        panelController.show()
+        guard let owner = panelController.settingsSheetOwner() else {
+            throw WakecupError(message: "The regular settings window is required for the shortcut editor")
+        }
+        try expect(!panelController.isVisible && owner.isVisible && owner.level == .normal,
+                   "A sheet from the menu bar must move settings to the ordinary window")
+        var editorAccepted: Bool?
+        DisplayShortcutEditor.present(model: model, owner: owner, requiresShortcut: false) { editorAccepted = $0 }
+        guard let sheet = owner.attachedSheet else { throw WakecupError(message: "The shortcut editor must attach to settings") }
+        try expect(NSApp.modalWindow == nil && sheet.sheetParent === owner, "The shortcut editor may only block settings")
+        panelController.show()
+        try expect(!panelController.isVisible && panelController.settingsSheetOwner() == nil && owner.attachedSheet === sheet,
+                   "Reopening while a sheet is attached must retain its settings window and reject nesting")
+        owner.endSheet(sheet, returnCode: .cancel)
+        RunLoop.main.run(until: Date().addingTimeInterval(0.1))
+        try expect(editorAccepted == false && panelController.settingsSheetOwner() === owner,
+                   "Cancel must end editing and release the settings owner without replacing it")
+        owner.close()
+        print("PASS: shortcut sheet attaches to the settings window, native live display modes match state with a configured exit shortcut, RU/EN layout fits, finite/infinite timers and menu dimensions stay unchanged (\(language))")
     }
     private static func descendants(_ view: NSView) -> [NSView] { [view] + view.subviews.flatMap(descendants) }
     private static func expect(_ value: Bool, _ message: String) throws {

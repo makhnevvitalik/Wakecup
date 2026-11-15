@@ -7,6 +7,7 @@ struct AutomationTransportTests {
         if CommandLine.arguments.dropFirst().first == "--mcp-child" {
             exit(AutomationMCP.run(path: CommandLine.arguments[2]))
         }
+        try missingReply()
         try mcpLifecycle()
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent("wc-" + String(UUID().uuidString.prefix(8)))
         let path = directory.appendingPathComponent("control").path
@@ -64,7 +65,7 @@ struct AutomationTransportTests {
         precondition(properties?["indefinite"]?["const"] as? Bool == true)
 
         for arguments in ["{}", #"{"indefinite":false}"#, #"{"seconds":60,"indefinite":true}"#,
-                          #"{"seconds":60,"indefinite":false}"#, #"{"until":"tomorrow"}"#] {
+                          #"{"seconds":60,"indefinite":false}"#, #"{"until":"tomorrow"}"#, #"{"until":"2030-11-31T08:00:00Z"}"#] {
             let response = call(#"{"jsonrpc":"2.0","id":8,"method":"tools/call","params":{"name":"wakecup_start","arguments":\#(arguments)}}"#)
             precondition((response?["result"] as? [String: Any])?["isError"] as? Bool == true)
         }
@@ -74,6 +75,31 @@ struct AutomationTransportTests {
             precondition((response?["result"] as? [String: Any])?["isError"] as? Bool == false)
         }
         precondition(commands == [.setShortcut, .start, .start, .start])
+        let fractional = try AutomationCLI.parse(["start", "2032-02-29T08:00:00.125+0400"])
+        let roundTrip = try AutomationJSON.decode(AutomationRequest.self, from: AutomationJSON.encode(fractional))
+        precondition(roundTrip.until == fractional.until)
+        var mcpDate: Date?
+        let mcpFractional = AutomationMCP.handle(
+            Data(#"{"jsonrpc":"2.0","id":10,"method":"tools/call","params":{"name":"wakecup_start","arguments":{"until":"2032-02-29T04:00:00.125Z"}}}"#.utf8),
+            initialized: &initialized
+        ) {
+            mcpDate = $0.until
+            return AutomationReply(outcome: .unknown)
+        }
+        precondition(mcpDate == fractional.until)
+        let unknownResult = mcpFractional?["result"] as? [String: Any]
+        precondition(unknownResult?["isError"] as? Bool == true && mcpFractional?["error"] == nil)
+        let unknownContents = unknownResult?["content"] as? [[String: String]]
+        precondition(unknownContents?.first?["text"]?.contains(#""outcome":"unknown""#) == true)
+        for (arguments, expected) in [
+            (["bogus"], "Wakecup --cli --help"),
+            (["configure", "--lid"], "Missing value for --lid."),
+            (["configure", "--unknown"], "Unknown option: --unknown"),
+            (["configure", "--display", "bright"], "--display expects system, on, or off.")
+        ] {
+            do { _ = try AutomationCLI.parse(arguments); preconditionFailure("Expected invalid arguments") }
+            catch { precondition(error.localizedDescription.contains(expected)) }
+        }
         precondition((try? AutomationCLI.parse(["start", "9s"])) == nil)
         let minimum = try AutomationCLI.parse(["start", "10s"])
         precondition(minimum.seconds == 10)
@@ -81,7 +107,45 @@ struct AutomationTransportTests {
         precondition((try? AutomationCLI.parse(["shorten", "9s"])) == nil)
         let adjustment = try AutomationCLI.parse(["shorten", "10s"])
         precondition(adjustment.seconds == -10)
+        precondition((try? AutomationCLI.parse(["start", "2030-11-31T08:00:00Z"])) == nil)
+        precondition((try? AutomationCLI.parse(["start", "2030-02-29T08:00:00+04:00"])) == nil)
+        precondition((try? AutomationCLI.parse(["start", "2032-02-29T08:00:00.125+0400"]))?.until != nil)
         print("PASS: MCP handshake, tool discovery, validation and CLI duration parsing")
+    }
+
+    private static func missingReply() throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent("wc-" + String(UUID().uuidString.prefix(8)))
+        let path = directory.appendingPathComponent("control").path
+        defer { try? FileManager.default.removeItem(at: directory) }
+        var executed = 0
+        let request = AutomationEnvelope(request: .init(action: .adjust, seconds: 30), viaMCP: false)
+        do { _ = try AutomationSocket.send(request, path: path); preconditionFailure("A missing socket cannot accept a request") }
+        catch { precondition(AutomationSocket.failureReply(for: error).outcome == .rejected) }
+
+        let server = try AutomationSocket(path: path) { _ in
+            executed += 1
+            return AutomationReply(outcome: .completed)
+        }
+        withExtendedLifetime(server) {
+            do {
+                _ = try AutomationSocket(path: path) { _ in preconditionFailure("A second listener cannot receive commands") }
+                preconditionFailure("A second listener cannot start")
+            } catch {
+                precondition(error is AutomationSocket.AlreadyRunning)
+            }
+            // Block the main queue until the client deadline, then let the accepted command run.
+            do {
+                _ = try AutomationSocket.send(request, path: path, replyTimeout: 0.1)
+                preconditionFailure("The handler cannot reply while the main queue is blocked")
+            } catch {
+                let failed = AutomationSocket.failureReply(for: error)
+                precondition(failed.outcome == .unknown && failed.message?.contains("Check status") == true)
+            }
+            let deadline = Date().addingTimeInterval(3)
+            while executed == 0 && Date() < deadline { RunLoop.main.run(until: Date().addingTimeInterval(0.02)) }
+            precondition(executed == 1)
+        }
+        print("PASS: losing a reply reports an unknown result without replaying the request")
     }
 
     private static func mcpLifecycle() throws {

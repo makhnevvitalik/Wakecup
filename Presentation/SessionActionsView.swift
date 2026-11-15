@@ -8,8 +8,8 @@ struct SessionActionsView: View {
         primaryButton
         .controlSize(.large)
         .frame(minHeight: MenuLayout.primaryActionHeight)
-        .disabled(model.isRestarting || model.startPowerRestriction != nil || model.helper.working || model.phase.showsProgress || (model.needsRecovery && model.busy)
-            || (!model.busy && !model.needsRecovery && (model.display.transitioning || !model.durationInputIsValid
+        .disabled(model.isRestarting || model.helper.working || model.phase.showsProgress || (model.needsRecovery && model.busy)
+            || (!model.busy && !model.needsRecovery && (model.startPowerRestriction != nil || model.display.transitioning || !model.durationInputIsValid
                 || (model.closedLid && model.helper.selected && model.helper.checking))))
     }
 
@@ -72,6 +72,9 @@ struct SessionSettingsFooter: View {
         if model.isRestarting || (model.settingsApplying && model.phase == .active) {
             return Feedback(localized("Applying settings…"), .progress)
         }
+        if model.recoveryInProgress {
+            return Feedback(localized("Restoring normal sleep…"), .progress)
+        }
         if model.needsRecovery, !model.busy, let message = model.message {
             return Feedback(message.text(using: localized), .error)
         }
@@ -85,7 +88,7 @@ struct SessionSettingsFooter: View {
             return Feedback(localizedFormat("Backlight turns off in %ld s", seconds), .backlightCountdown)
         }
         if model.phase == .authorizing {
-            return Feedback(localized(model.needsRecovery ? "Restoring normal sleep…" : "Starting session"), .progress)
+            return Feedback(localized("Starting session"), .progress)
         }
         if model.phase == .stopping {
             return Feedback(localized("Stopping…"), .progress)
@@ -114,7 +117,7 @@ struct SessionSettingsFooter: View {
     }
 
     var preferredHeight: CGFloat {
-        let feedbackHeight = feedback == nil ? 0 : MenuLayout.feedbackRowHeight
+        let feedbackHeight = feedback.map(feedbackHeight(for:)) ?? 0
         let actionsHeight = model.showsSettingsActions ? MenuLayout.settingsActionsHeight : 0
         let cardHeight = feedbackHeight + actionsHeight
         let helpHeight = MenuLayout.helpLinkHeight + AppStyle.Layout.panelInset
@@ -143,9 +146,33 @@ struct SessionSettingsFooter: View {
         .padding([.horizontal, .bottom], AppStyle.Layout.panelInset)
     }
 
+    private func feedbackHeight(for feedback: Feedback) -> CGFloat {
+        min(naturalFeedbackHeight(for: feedback), MenuLayout.maximumFeedbackHeight)
+    }
+
+    private func naturalFeedbackHeight(for feedback: Feedback) -> CGFloat {
+        guard feedback.style == .error || feedback.style == .notice else { return MenuLayout.feedbackRowHeight }
+        let iconWidth = feedback.style == .error ? MenuLayout.iconSize + MenuLayout.headingSpacing : 0
+        let width = MenuLayout.width - 2 * (AppStyle.Layout.panelInset + AppStyle.Layout.cardInset) - iconWidth
+        let bounds = (feedback.text as NSString).boundingRect(
+            with: NSSize(width: width, height: .greatestFiniteMagnitude),
+            options: [.usesLineFragmentOrigin, .usesFontLeading],
+            attributes: [.font: AppStyle.Font.supportingText]
+        )
+        return max(MenuLayout.feedbackRowHeight, ceil(bounds.height) + 8)
+    }
+
     private func feedbackRow(_ feedback: Feedback) -> some View {
         HStack(spacing: MenuLayout.headingSpacing) {
-            feedbackLabel(feedback)
+            if naturalFeedbackHeight(for: feedback) > MenuLayout.maximumFeedbackHeight {
+                ScrollView {
+                    feedbackLabel(feedback)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
+                .padding(.vertical, 4)
+            } else {
+                feedbackLabel(feedback)
+            }
             if feedback.style == .backlightCountdown {
                 Spacer(minLength: 0)
                 Button(localized("Cancel backlight countdown"), action: model.cancelBacklightCountdown)
@@ -155,7 +182,7 @@ struct SessionSettingsFooter: View {
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .frame(height: MenuLayout.feedbackRowHeight)
+        .frame(height: feedbackHeight(for: feedback))
         .padding(.horizontal, AppStyle.Layout.cardInset)
     }
 
@@ -165,11 +192,17 @@ struct SessionSettingsFooter: View {
             case .progress:
                 ProgressView().controlSize(.small).accessibilityHidden(true)
             case .error:
-                Image(systemName: "exclamationmark.circle").accessibilityHidden(true)
+                Image(systemName: "exclamationmark.circle")
+                    .frame(width: MenuLayout.iconSize)
+                    .accessibilityHidden(true)
             case .notice, .backlightCountdown:
                 EmptyView()
             }
-            Text(feedback.text).lineLimit(2)
+            if feedback.style == .error || feedback.style == .notice {
+                Text(feedback.text).fixedSize(horizontal: false, vertical: true)
+            } else {
+                Text(feedback.text).lineLimit(2)
+            }
         }
         .font(Font(AppStyle.Font.supportingText))
         .foregroundStyle(feedback.style == .error ? Color.red : Color.secondary)

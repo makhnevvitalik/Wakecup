@@ -114,7 +114,7 @@ enum AutomationMCP {
             let response = handle(line, initialized: &initialized) { request in
                 let envelope = AutomationEnvelope(request: request, viaMCP: true, mcpSession: session)
                 do { return try AutomationSocket.send(envelope, path: path) }
-                catch { return AutomationReply(outcome: .rejected, message: error.localizedDescription) }
+                catch { return AutomationSocket.failureReply(for: error) }
             }
             if let response, let data = try? JSONSerialization.data(withJSONObject: response, options: [.sortedKeys]) {
                 FileHandle.standardOutput.write(data + Data([10]))
@@ -171,7 +171,7 @@ enum AutomationMCP {
                 command = try self.command(for: tool, arguments: params["arguments"] as? [String: Any] ?? [:])
             } catch {
                 let message = error is DecodingError
-                    ? "Check argument types and values against the tool schema. Pass dates as ISO-8601 with a time zone."
+                    ? "Check argument types and values against the tool schema. Pass valid dates as ISO-8601 with a time zone."
                     : error.localizedDescription
                 result = ["content": [["type": "text", "text": message]], "isError": true]
                 return ["jsonrpc": "2.0", "id": id, "result": result]
@@ -181,7 +181,7 @@ enum AutomationMCP {
                 return error(id, -32603, "Could not encode the Wakecup response.")
             }
             let text = String(decoding: encoded, as: UTF8.self)
-            result = ["content": [["type": "text", "text": text]], "isError": reply.outcome == .rejected]
+            result = ["content": [["type": "text", "text": text]], "isError": reply.outcome == .rejected || reply.outcome == .unknown]
         default:
             return error(id, -32601, "Method unavailable")
         }

@@ -1,8 +1,9 @@
 import Foundation
 
 enum AutomationCLI {
+    private static let invocation = "/Applications/Wakecup.app/Contents/MacOS/Wakecup --cli"
     static let usage = """
-        Usage: wakecup <command>
+        Usage: \(invocation) <command>
           status | stop | restore-sleep
           start <duration|ISO-8601|indefinite> [options]
           extend <duration> | shorten <duration>
@@ -14,7 +15,10 @@ enum AutomationCLI {
 
         Options: --lid on|off, --battery on|off, --threshold 10–90,
                  --display system|on|off
-        Durations: 10s, 30m, 3h, 1d (minimum \(EndTimeSelection.minimumDurationSeconds)s). Commands return JSON.
+        Durations: 10s, 30m, 3h, 1d (minimum \(EndTimeSelection.minimumDurationSeconds)s).
+        End time example: 2030-01-01T12:00:00+05:00. Choose a time within the next 30 days.
+        Commands return JSON. Exit codes: 0 accepted, 1 rejected, 2 result unknown.
+        Check status for pending or unknown results before retrying.
         """
 
     static func run(_ arguments: [String]) -> Int32 {
@@ -26,7 +30,11 @@ enum AutomationCLI {
         do { reply = send(try parse(arguments)) }
         catch { reply = AutomationReply(outcome: .rejected, message: error.localizedDescription) }
         if let data = try? AutomationJSON.encode(reply) { print(String(decoding: data, as: UTF8.self)) }
-        return reply.outcome == .rejected ? 1 : 0
+        switch reply.outcome {
+        case .rejected: return 1
+        case .unknown: return 2
+        case .completed, .pending, .partiallyApplied: return 0
+        }
     }
 
     static func send(_ request: AutomationRequest) -> AutomationReply {
@@ -52,17 +60,17 @@ enum AutomationCLI {
                     catch is AutomationSocket.Unavailable { Thread.sleep(forTimeInterval: 0.1) }
                 }
                 throw AutomationSocket.Unavailable()
-            } catch { return AutomationReply(outcome: .rejected, message: error.localizedDescription) }
+            } catch { return AutomationSocket.failureReply(for: error) }
         } catch {
-            return AutomationReply(outcome: .rejected, message: error.localizedDescription)
+            return AutomationSocket.failureReply(for: error)
         }
     }
 
     static func parse(_ arguments: [String]) throws -> AutomationRequest {
         guard let command = arguments.first else { throw invalid() }
         var values = ArraySlice(arguments.dropFirst())
-        func next() throws -> String {
-            guard let value = values.popFirst() else { throw invalid() }
+        func next(_ label: String) throws -> String {
+            guard let value = values.popFirst(), !value.hasPrefix("--") else { throw invalid("Missing " + label + ".") }
             return value
         }
         var request: AutomationRequest
@@ -74,16 +82,16 @@ enum AutomationCLI {
         case "cancel-blackout": request = .init(action: .cancelBlackout)
         case "clear-shortcut": request = .init(action: .clearShortcut)
         case "set-shortcut":
-            let key = try next().uppercased()
+            let key = try next("function key").uppercased()
             guard key.first == "F", let number = Int(key.dropFirst()) else { throw invalid() }
-            let modifiers = try next().lowercased().split(separator: "+", omittingEmptySubsequences: false).map(String.init)
+            let modifiers = try next("shortcut modifiers").lowercased().split(separator: "+", omittingEmptySubsequences: false).map(String.init)
             request = .init(action: .setShortcut, shortcut: try DisplayShortcut.automationShortcut(function: number, modifiers: modifiers))
         case "extend", "shorten":
-            guard let seconds = duration(try next()) else { throw invalid("Use a duration such as 30m or 1h.") }
+            guard let seconds = duration(try next("duration")) else { throw invalid("Use a duration such as 30m or 1h.") }
             try EndTimeSelection.validateDuration(seconds)
             request = .init(action: .adjust, seconds: command == "extend" ? seconds : -seconds)
         case "helper":
-            switch try next() {
+            switch try next("helper command") {
             case "status": request = .init(action: .helperStatus)
             case "install": request = .init(action: .helperInstall)
             case "update": request = .init(action: .helperUpdate)
@@ -94,26 +102,25 @@ enum AutomationCLI {
             }
         case "start", "configure":
             request = .init(action: command == "start" ? .start : .configure)
-            if command == "start" { try setEnd(try next(), on: &request) }
+            if command == "start" { try setEnd(try next("end time"), on: &request) }
             var seen = Set<String>()
             while let flag = values.popFirst() {
                 guard seen.insert(flag).inserted else { throw invalid("Repeated option: " + flag) }
-                let value = try next()
                 switch flag {
-                case "--end" where command == "configure": try setEnd(value, on: &request)
-                case "--battery": request.allowBattery = try boolean(value)
-                case "--lid": request.closedLid = try boolean(value)
+                case "--end" where command == "configure": try setEnd(try next("value for " + flag), on: &request)
+                case "--battery": request.allowBattery = try boolean(next("value for " + flag), flag: flag)
+                case "--lid": request.closedLid = try boolean(next("value for " + flag), flag: flag)
                 case "--threshold":
-                    guard let threshold = Int(value), BatteryThreshold.range.contains(threshold) else {
+                    guard let threshold = Int(try next("value for " + flag)), BatteryThreshold.range.contains(threshold) else {
                         throw invalid("Battery threshold must be 10–90%.")
                     }
                     request.threshold = threshold
                 case "--display":
-                    switch value {
+                    switch try next("value for " + flag) {
                     case "system": request.display = .mayTurnOff
                     case "on": request.display = .keepOn
                     case "off": request.display = .backlightOff
-                    default: throw invalid()
+                    default: throw invalid("--display expects system, on, or off.")
                     }
                 default: throw invalid("Unknown option: " + flag)
                 }
@@ -131,8 +138,8 @@ enum AutomationCLI {
             try EndTimeSelection.validateDuration(seconds)
             request.seconds = seconds
         }
-        else if let date = ISO8601DateFormatter().date(from: value) { request.until = date }
-        else { throw invalid("Choose a duration, an ISO-8601 end time with time zone, or indefinite.") }
+        else if let date = AutomationDate.parse(value) { request.until = date }
+        else { throw invalid("Choose a duration, a valid ISO-8601 end time with time zone, or indefinite.") }
     }
 
     private static func duration(_ value: String) -> Int? {
@@ -143,15 +150,15 @@ enum AutomationCLI {
         return overflow ? nil : seconds
     }
 
-    private static func boolean(_ value: String) throws -> Bool {
+    private static func boolean(_ value: String, flag: String) throws -> Bool {
         switch value {
         case "on": return true
         case "off": return false
-        default: throw invalid("Choose on or off.")
+        default: throw invalid("\(flag) expects on or off.")
         }
     }
 
-    private static func invalid(_ message: String = "Invalid command. See wakecup --help.") -> WakecupError {
+    private static func invalid(_ message: String = "Invalid command. See \(invocation) --help.") -> WakecupError {
         WakecupError(message: message)
     }
 }

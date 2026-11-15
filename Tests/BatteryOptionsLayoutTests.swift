@@ -26,7 +26,7 @@ import SwiftUI
             loginItem: .init(readStatus: { .notRegistered }, register: {}, unregister: {}, openSettings: {}),
             scheduleTicks: { _ in {} })
         let model = SessionModel(defaults: defaults, operations: operations, helper: helper)
-        let host = NSHostingController(rootView: WakecupView(model: model, showAbout: {}, configureDisplayShortcut: { _ in false }))
+        let host = NSHostingController(rootView: WakecupView(model: model, showAbout: {}))
         let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: MenuLayout.width, height: 900),
             styleMask: [.borderless], backing: .buffered, defer: false)
         window.contentViewController = host

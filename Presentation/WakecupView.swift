@@ -4,13 +4,13 @@ struct WakecupView: View {
     @ObservedObject var model: SessionModel
     @ObservedObject private var updates: UpdateChecker
     let showAbout: () -> Void
-    let configureDisplayShortcut: (Bool) -> Bool
+    let configureDisplayShortcut: (Bool, @escaping (Bool) -> Void) -> Void
     let showMCPSetup: () -> Void
     let helperInteraction: HelperInteraction
     let isMCPEnabled: () -> Bool
     let setMCPEnabled: (Bool) -> Void
 
-    init(model: SessionModel, updates: UpdateChecker? = nil, showAbout: @escaping () -> Void, configureDisplayShortcut: @escaping (Bool) -> Bool,
+    init(model: SessionModel, updates: UpdateChecker? = nil, showAbout: @escaping () -> Void, configureDisplayShortcut: @escaping (Bool, @escaping (Bool) -> Void) -> Void = { _, complete in complete(false) },
          showMCPSetup: @escaping () -> Void = {}, helperInteraction: HelperInteraction = .init(),
          isMCPEnabled: @escaping () -> Bool = { false }, setMCPEnabled: @escaping (Bool) -> Void = { _ in }) {
         self.model = model

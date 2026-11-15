@@ -1,6 +1,6 @@
 # Подготовка релиза Wakecup
 
-Публикация — в [makhnevvitalik/Wakecup](https://github.com/makhnevvitalik/Wakecup). Версия берётся из `Info.plist`: сейчас **1.0.1**, сборка **12**.
+Публикация — в [makhnevvitalik/Wakecup](https://github.com/makhnevvitalik/Wakecup). Версия берётся из `Info.plist`: сейчас **1.0.1**, сборка **13**.
 
 ## Локальная сборка
 

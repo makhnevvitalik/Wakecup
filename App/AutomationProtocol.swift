@@ -53,7 +53,7 @@ struct AutomationStatus: Codable {
 }
 
 struct AutomationReply: Codable {
-    enum Outcome: String, Codable { case completed, pending, rejected, partiallyApplied }
+    enum Outcome: String, Codable { case completed, pending, rejected, partiallyApplied, unknown }
     let outcome: Outcome
     var message: String? = nil
     var status: AutomationStatus? = nil
@@ -63,15 +63,47 @@ struct AutomationReply: Codable {
 enum AutomationJSON {
     static func encode<T: Encodable>(_ value: T) throws -> Data {
         let encoder = JSONEncoder()
-        encoder.dateEncodingStrategy = .iso8601
+        encoder.dateEncodingStrategy = .custom { date, encoder in
+            let formatter = ISO8601DateFormatter()
+            // Preserve requested precision without changing the date format of status replies.
+            if encoder.codingPath.last?.stringValue == "until",
+               date.timeIntervalSinceReferenceDate.rounded() != date.timeIntervalSinceReferenceDate {
+                formatter.formatOptions.insert(.withFractionalSeconds)
+            }
+            var container = encoder.singleValueContainer()
+            try container.encode(formatter.string(from: date))
+        }
         encoder.outputFormatting = [.sortedKeys]
         return try encoder.encode(value)
     }
 
     static func decode<T: Decodable>(_ type: T.Type, from data: Data) throws -> T {
         let decoder = JSONDecoder()
-        decoder.dateDecodingStrategy = .iso8601
+        decoder.dateDecodingStrategy = .custom { decoder in
+            let container = try decoder.singleValueContainer()
+            let value = try container.decode(String.self)
+            guard let date = AutomationDate.parse(value) else {
+                throw DecodingError.dataCorruptedError(in: container, debugDescription: "Invalid ISO-8601 date.")
+            }
+            return date
+        }
         return try decoder.decode(type, from: data)
+    }
+}
+
+enum AutomationDate {
+    static func parse(_ value: String) -> Date? {
+        // Foundation normalizes some impossible days. Check the date before converting its time zone.
+        let pattern = #/([0-9]{4})-([0-9]{2})-([0-9]{2})T(?:[01][0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9](?:[.][0-9]+)?(?:Z|[+-](?:[01][0-9]|2[0-3]):?[0-5][0-9])/#
+        guard let match = value.wholeMatch(of: pattern),
+              let year = Int(match.1), year > 0, let month = Int(match.2), let day = Int(match.3),
+              (1...12).contains(month), day > 0 else { return nil }
+        let leapYear = year.isMultiple(of: 4) && (!year.isMultiple(of: 100) || year.isMultiple(of: 400))
+        let daysInMonth = [31, leapYear ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31]
+        guard day <= daysInMonth[month - 1] else { return nil }
+        let formatter = ISO8601DateFormatter()
+        if value.contains(".") { formatter.formatOptions.insert(.withFractionalSeconds) }
+        return formatter.date(from: value)
     }
 }
 

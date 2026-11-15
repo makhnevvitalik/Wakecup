@@ -77,6 +77,7 @@ final class SessionModel: ObservableObject {
     private static let displayChangeInterrupted: SessionMessage = "Wakecup stopped before the display setting could change."
     private static let restartExpired: SessionMessage = "The Wakecup timer ended. “Keep awake with lid closed” was not changed."
     private var recovering = false
+    var recoveryInProgress: Bool { recovering && busy }
     private var canPersist = false
     private var lastStatus: SessionStatus?
     private struct PowerDraft: Equatable {
@@ -373,6 +374,7 @@ final class SessionModel: ObservableObject {
     @discardableResult
     func applySettings(endTime: EndTimeSelection.Choice?, closedLid: Bool?, allowBattery: Bool?,
                                  threshold: Int?, displayMode: DisplayMode?, starting: Bool) throws -> SessionOperationResult {
+        if needsRecovery { return .rejected(Self.recoveryRequired) }
         guard canEditSessionSettings, !settingsApplying, !display.transitioning, !starting || !busy else {
             throw WakecupError(message: "Wakecup is busy. Check its status and try again.")
         }
@@ -776,7 +778,7 @@ final class SessionModel: ObservableObject {
                     if result.status == 0, let files = self.files,
                        let status = try? files.read("status.json", as: SessionStatus.self), status.sleepRestored {
                         self.finish(status)
-                    } else { self.fail("Could not restore sleep. Try recovery again; if it still fails, use the manual recovery guide.") }
+                    } else { self.fail(Self.recoveryFailure) }
                 } else if result.status != 0 {
                     // AppleScript appends its error number to the final line.
                     let cancelled = result.text.trimmingCharacters(in: .whitespacesAndNewlines).hasSuffix("(-128)")
@@ -820,13 +822,14 @@ final class SessionModel: ObservableObject {
             requestStop()
         }
         if needsRecovery, !busy { _ = refreshRecoveryStatus() }
-        if busy, recovering, usingInstalledHelper, let files {
+        if recoveryInProgress, let files, usingInstalledHelper || phase == .stopping {
             if let status = try? files.read("status.json", as: SessionStatus.self),
-               ["stopped", "failed"].contains(status.phase), status.sleepRestored {
-                recovering = false; finish(status)
-            } else if now - recoveryStartedAt > 30 {
+               ["stopped", "failed"].contains(status.phase), status.sleepRestored || phase == .stopping {
                 recovering = false
-                fail("Could not restore sleep. Try recovery again; if it still fails, use the manual recovery guide.")
+                finish(status)
+            } else if now - recoveryStartedAt >= 30 {
+                recovering = false
+                fail(Self.recoveryFailure)
             }
             return
         }
@@ -938,6 +941,8 @@ final class SessionModel: ObservableObject {
 
     @discardableResult
     func stop() -> SessionOperationResult {
+        if recoveryInProgress { return .pending(Self.recoveryProgress) }
+        if needsRecovery { return .rejected(Self.recoveryRequired) }
         if partialSettingsIssue == nil && !display.transitioning { settingsResult = nil }
         pendingStart = nil
         if let restart = restartRequest { closedLid = restart.previousClosedLid }
@@ -1012,11 +1017,15 @@ final class SessionModel: ObservableObject {
         lastStatus = status
         deadline = nil
         monitor = nil
+        let recovered = needsRecovery && status.sleepRestored && status.phase == "stopped"
         needsRecovery = status.ownsSleepChange && !status.sleepRestored
         phase = status.phase == "failed" || needsRecovery ? .failed : .idle
         let notice: SessionMessage?
         if needsRecovery {
             notice = SessionMessage("%@ Restore normal sleep to continue.", arguments: [status.reason])
+        } else if recovered {
+            pendingError = nil
+            notice = nil
         } else if let pendingError {
             notice = pendingError
         } else if wasRestarting && status.reason == "время истекло" {
@@ -1056,7 +1065,7 @@ final class SessionModel: ObservableObject {
         display.finish(completion: operations.stopAssertions)
         helperRequestID = nil
         if busy, let files { try? sendGuardianStop(files) }
-        needsRecovery = requiresSleepConfirmation || (lastStatus?.ownsSleepChange == true && lastStatus?.sleepRestored != true)
+        needsRecovery = needsRecovery || requiresSleepConfirmation || (lastStatus?.ownsSleepChange == true && lastStatus?.sleepRestored != true)
         phase = .failed
         if wasApplying { rejectSettings(text) }
         message = wasApplying ? nil : text
@@ -1131,12 +1140,19 @@ final class SessionModel: ObservableObject {
         return false
     }
 
+    private static let recoveryRequired: SessionMessage = "Restore normal sleep first. Use restore-sleep in the CLI or wakecup_restore_sleep in MCP."
+    private static let recoveryFailure: SessionMessage = "Could not restore sleep. Try recovery again; if it still fails, use the manual recovery guide."
+    private static let recoveryProgress: SessionMessage = "Restoring normal sleep…"
+
     @discardableResult
     func recover() -> SessionOperationResult {
+        if recoveryInProgress { return .pending(Self.recoveryProgress) }
         guard !busy, !helper.working else { return .rejected("Wait until Wakecup has stopped.") }
         guard needsRecovery else { return .completed }
-        let recoveryFailure: SessionMessage = "Could not restore sleep. Try recovery again; if it still fails, use the manual recovery guide."
-        guard let files else { return .rejected(recoveryFailure) }
+        guard let files else {
+            message = Self.recoveryFailure
+            return .rejected(Self.recoveryFailure)
+        }
         settingsMessage = nil
         if refreshRecoveryStatus() { return .completed }
         let status = try? files.read("status.json", as: SessionStatus.self)
@@ -1147,8 +1163,8 @@ final class SessionModel: ObservableObject {
                     finishCancelledStartup()
                     return .completed
                 }
-                message = recoveryFailure
-                return .rejected(recoveryFailure)
+                message = Self.recoveryFailure
+                return .rejected(Self.recoveryFailure)
             } catch {
                 message = stopFailure
                 return .rejected(stopFailure)
@@ -1158,13 +1174,17 @@ final class SessionModel: ObservableObject {
            operations.guardianResponding(status, operations.now()) {
             do {
                 try sendGuardianStop(files)
-                message = "Stopping…"
-                return .pending()
+                recoveryStartedAt = operations.now()
+                recovering = true
+                message = Self.recoveryProgress
+                phase = .stopping
+                return .pending(Self.recoveryProgress)
             } catch {
                 message = stopFailure
                 return .rejected(stopFailure)
             }
         }
+        message = Self.recoveryProgress
         phase = .authorizing
         recovering = true
         recoveryStartedAt = operations.now()
@@ -1176,8 +1196,8 @@ final class SessionModel: ObservableObject {
             authorization = task
             runAuthorization(task)
         }
-        if phase == .failed { return .rejected(message ?? recoveryFailure) }
-        return needsRecovery ? .pending(waitingForPassword ? "Confirm the macOS authorization prompt." : nil) : .completed
+        if phase == .failed { return .rejected(message ?? Self.recoveryFailure) }
+        return needsRecovery ? .pending(waitingForPassword ? "Confirm the macOS authorization prompt." : Self.recoveryProgress) : .completed
     }
 
     func refreshLoginState() {

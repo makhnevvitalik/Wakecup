@@ -133,7 +133,8 @@ final class AutomationController {
     }
 
     private func status() -> AutomationStatus {
-        AutomationStatus(phase: model.isRestarting ? "restarting" : model.phase.rawValue,
+        let phase = model.recoveryInProgress ? "recovering" : model.isRestarting ? "restarting" : model.phase.rawValue
+        return AutomationStatus(phase: phase,
             endTime: model.endDate, remainingSeconds: model.remaining, closedLid: model.closedLid,
             allowBattery: model.allowBattery, threshold: Int(model.threshold), batteryPercent: model.power?.percent,
             onAC: model.power?.onAC, display: model.displayMode, shortcut: model.displayShortcut,

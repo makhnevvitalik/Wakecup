@@ -52,9 +52,27 @@ if arguments.dropFirst().first == "--cli" {
     do { try guardSmokeTest(); exit(0) } catch { print(error.localizedDescription); exit(1) }
 } else {
     MainActor.assumeIsolated {
+        var delegate: AppDelegate?
+        // Own the command socket before constructing the model, which inspects
+        // and may request cleanup of the previous sleep session on initialization.
+        let socket: AutomationSocket
+        do {
+            socket = try AutomationSocket { envelope in
+                guard let delegate else {
+                    return AutomationReply(outcome: .rejected, message: "Wakecup is starting.")
+                }
+                return delegate.receiveAutomation(envelope)
+            }
+        } catch let error as AutomationSocket.AlreadyRunning {
+            fputs("\(error.localizedDescription) Use --cli status to query it.\n", stderr)
+            exit(1)
+        } catch {
+            fputs("Wakecup could not start: \(error.localizedDescription)\n", stderr)
+            exit(1)
+        }
         let application = NSApplication.shared
-        let delegate = AppDelegate()
+        delegate = AppDelegate()
         application.delegate = delegate
-        withExtendedLifetime(delegate) { application.run() }
+        withExtendedLifetime(socket) { application.run() }
     }
 }

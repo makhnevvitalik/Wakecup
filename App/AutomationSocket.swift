@@ -23,8 +23,10 @@ final class AutomationSocket {
         let lock = open(path + ".lock", O_CREAT | O_RDWR | O_NOFOLLOW | O_CLOEXEC, 0o600)
         guard lock >= 0 else { throw Self.failure("Cannot open the Wakecup command lock.") }
         guard flock(lock, LOCK_EX | LOCK_NB) == 0 else {
+            let alreadyRunning = errno == EWOULDBLOCK
             close(lock)
-            throw Self.failure("Another Wakecup instance already handles commands.")
+            if alreadyRunning { throw AlreadyRunning() }
+            throw Self.failure("Cannot lock the Wakecup command socket.")
         }
         let fd = socket(AF_UNIX, SOCK_STREAM, 0)
         guard fd >= 0 else { close(lock); throw Self.failure("Cannot create the Wakecup command socket.") }
@@ -60,26 +62,40 @@ final class AutomationSocket {
             guard client >= 0 else { return }
             defer { close(client) }
             guard Self.configure(client), Self.sameUser(client) else { return }
+            let envelope: AutomationEnvelope
             do {
-                let data = try Self.readLine(client)
-                let envelope = try AutomationJSON.decode(AutomationEnvelope.self, from: data)
-                let reply = DispatchQueue.main.sync { receive(envelope) }
-                try Self.writeLine(AutomationJSON.encode(reply), to: client)
+                envelope = try AutomationJSON.decode(AutomationEnvelope.self, from: Self.readLine(client))
             } catch {
-                let reply = AutomationReply(outcome: .rejected, message: "Invalid Wakecup command or connection closed.")
-                if let data = try? AutomationJSON.encode(reply) { try? Self.writeLine(data, to: client) }
+                let reply = AutomationReply(outcome: .rejected, message: "Invalid Wakecup command.")
+                try? Self.writeLine(AutomationJSON.encode(reply), to: client)
+                return
             }
+            let reply = DispatchQueue.main.sync { receive(envelope) }
+            try? Self.writeLine(AutomationJSON.encode(reply), to: client)
         }
         listener.resume()
     }
 
     deinit { listener.cancel() }
 
+    struct AlreadyRunning: LocalizedError {
+        var errorDescription: String? { "Wakecup is already running." }
+    }
+
     struct Unavailable: LocalizedError {
         var errorDescription: String? { "Wakecup is not running or its command socket is unavailable." }
     }
 
-    static func send(_ envelope: AutomationEnvelope, path: String = systemPath) throws -> AutomationReply {
+    private struct ReplyUnavailable: LocalizedError {
+        var errorDescription: String? { "Wakecup did not return a usable reply. The command may have run. Check status before retrying." }
+    }
+
+    static func failureReply(for error: Error) -> AutomationReply {
+        AutomationReply(outcome: error is ReplyUnavailable ? .unknown : .rejected, message: error.localizedDescription)
+    }
+
+    static func send(_ envelope: AutomationEnvelope, path: String = systemPath,
+                     replyTimeout: TimeInterval = 15) throws -> AutomationReply {
         let fd = socket(AF_UNIX, SOCK_STREAM, 0)
         guard fd >= 0 else { throw failure("Cannot open a Wakecup command connection.") }
         defer { close(fd) }
@@ -90,7 +106,12 @@ final class AutomationSocket {
         }
         guard sameUser(fd) else { throw failure("The Wakecup command socket belongs to another user.") }
         try writeLine(AutomationJSON.encode(envelope), to: fd)
-        return try AutomationJSON.decode(AutomationReply.self, from: readLine(fd, timeout: 15))
+        do {
+            return try AutomationJSON.decode(AutomationReply.self, from: readLine(fd, timeout: replyTimeout))
+        } catch {
+            // The whole command reached the socket. The app may execute it even after disconnect.
+            throw ReplyUnavailable()
+        }
     }
 
     private static func sameUser(_ fd: Int32) -> Bool {
@@ -128,7 +149,7 @@ final class AutomationSocket {
             }
             data.append(contentsOf: bytes)
         }
-        throw failure("Wakecup command timed out, closed, or exceeded its message limit. Check status before retrying.")
+        throw failure("Wakecup message timed out, closed, or exceeded its size limit.")
     }
 
     private static func writeLine(_ data: Data, to fd: Int32) throws {
@@ -141,7 +162,7 @@ final class AutomationSocket {
             while offset < buffer.count {
                 let length = Darwin.send(fd, start.advanced(by: offset), buffer.count - offset, 0)
                 if length < 0 && errno == EINTR { continue }
-                guard length > 0 else { throw failure("Wakecup command connection closed. Check status before retrying.") }
+                guard length > 0 else { throw failure("Wakecup command connection closed before sending the request.") }
                 offset += length
             }
         }

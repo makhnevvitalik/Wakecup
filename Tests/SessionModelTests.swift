@@ -222,8 +222,22 @@ private extension SessionModelTests {
         let recovery = interrupted.model()
         try interrupted.publish("active")
         let recoveryControl = AutomationController(model: recovery, defaults: interrupted.defaults)
+        let cannotStop = recoveryControl.receive(.init(request: .init(action: .stop), viaMCP: false))
+        let cannotStart = recoveryControl.receive(.init(request: .init(action: .start, seconds: 90), viaMCP: false))
+        try expect(cannotStop.outcome == .rejected && cannotStart.outcome == .rejected
+                   && cannotStop.message?.contains("restore-sleep") == true && cannotStart.message == cannotStop.message,
+                   "Stop and start must both report required sleep recovery")
         let sent = recoveryControl.receive(.init(request: .init(action: .restoreSleep), viaMCP: false))
         try expect(sent.outcome == .pending && recovery.needsRecovery, "A guardian stop request is not confirmed recovery")
+        let status = recoveryControl.receive(.init(request: .init(action: .status), viaMCP: false)).status
+        try expect(status?.phase == "recovering" && status?.message == "Restoring normal sleep…" && recovery.busy,
+                   "Status must report that recovery is in progress")
+        let repeated = recoveryControl.receive(.init(request: .init(action: .restoreSleep), viaMCP: false))
+        try expect(repeated.outcome == .pending, "A repeated recovery request must report the existing operation")
+        interrupted.time += 31
+        recovery.tick()
+        try expect(recovery.phase == .failed && recovery.needsRecovery && !recovery.busy,
+                   "Recovery waiting for the guardian must time out and allow a manual retry")
         try interrupted.publish("stopped", restored: true)
         let restored = recoveryControl.receive(.init(request: .init(action: .restoreSleep), viaMCP: false))
         try expect(restored.outcome == .completed && !recovery.needsRecovery, "Recovery is completed when sleep is confirmed")
@@ -866,6 +880,18 @@ private extension SessionModelTests {
         try timeout.publish("stopped", restored: true)
         waiting.tick()
         try expect(waiting.phase == .idle && !waiting.needsRecovery && timeout.helperRequests.count == 1, "Late restoration must clear recovery without another root request")
+        let failed = try SessionTestEnvironment()
+        failed.installedHelper = true
+        try failed.interruptedSession()
+        let recovering = failed.model()
+        recovering.recover()
+        failed.helperReplies[0](.failure(WakecupError(message: "Confirming sleep restoration timed out")))
+        try expect(recovering.needsRecovery && recovering.message?.key == "Helper request failed: %@",
+                   "Show the helper failure while normal sleep is unconfirmed")
+        try failed.publish("stopped", restored: true)
+        recovering.tick()
+        try expect(recovering.phase == .idle && !recovering.needsRecovery && recovering.message == nil,
+                   "Confirmed sleep restoration must clear the old recovery error")
         print("PASS: restore-only recovery, recovery timeout and late restoration")
     }
 

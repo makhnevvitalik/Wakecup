@@ -1,5 +1,14 @@
 ## English
 
+### Changes in build 13
+
+- Wakecup leaves its settings usable when a helper warning or a help error appears. Helper settings, removal confirmation and the brightness shortcut editor open on the settings window.
+- Wakecup reports when normal sleep still needs to be restored and when recovery is in progress. Long messages can be scrolled in the panel.
+- CLI and MCP reject invalid calendar dates. If a reply is lost after a command may have reached Wakecup, both report `unknown`. Check `status` before retrying. CLI help shows the full invocation and exit codes.
+- A second instance exits without interrupting the running Wakecup session.
+
+### Release overview
+
 Wakecup keeps your Mac awake while your AI agent works. Turn off the built-in display’s backlight to save battery and set a cutoff for when your Mac is running on battery.
 
 - Choose 1, 3 or 5 hours, set an end date and time up to 30 calendar days ahead, or run until stopped manually.
@@ -16,6 +25,15 @@ Requires macOS 14 or later. Download the universal package for Apple Silicon and
 Before updating Wakecup, stop the active session. If it asks to update the helper, use **Helper → Update** before starting closed-lid mode again.
 
 ## Русский
+
+### Изменения в сборке 13
+
+- Настройки Wakecup остаются доступны при предупреждении помощника или ошибке открытия справки. Настройки помощника, подтверждение удаления и редактор сочетания для возврата яркости открываются в окне настроек.
+- Wakecup сообщает, если обычный сон ещё нужно восстановить, и показывает ход восстановления. Длинный текст можно прокрутить прямо в панели.
+- CLI и MCP отклоняют невозможные даты. Если команда могла дойти до Wakecup, а ответ потерялся, оба возвращают `unknown`. Перед повтором проверьте `status`. В справке CLI указаны полный вызов и коды выхода.
+- Второй экземпляр завершается, сохраняя текущий сеанс Wakecup.
+
+### Возможности версии
 
 ИИ работает — Mac не дремлет. Погасите подсветку встроенного экрана, чтобы экономить заряд, и задайте порог остановки при работе от аккумулятора.
 

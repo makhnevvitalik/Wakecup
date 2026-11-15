@@ -4,6 +4,7 @@ import SwiftUI
 
 final class SleepHelpWindowController {
     private var window: NSWindow?
+    private let guideError = ModelessAlert()
     private var languageObserver: AnyCancellable?
 
     init() {
@@ -18,7 +19,7 @@ final class SleepHelpWindowController {
                 styleMask: [.titled, .closable, .miniaturizable, .resizable], backing: .buffered, defer: false)
             helpWindow.title = SleepRecoveryGuide.title
             helpWindow.isReleasedWhenClosed = false
-            helpWindow.contentViewController = NSHostingController(rootView: SleepHelpView())
+            helpWindow.contentViewController = NSHostingController(rootView: SleepHelpView(guideError: guideError))
             helpWindow.minSize = NSSize(width: 460, height: 380)
             helpWindow.setContentSize(NSSize(width: 540, height: 620))
             helpWindow.center()
@@ -31,6 +32,7 @@ final class SleepHelpWindowController {
 }
 
 private struct SleepHelpView: View {
+    let guideError: ModelessAlert
     @ObservedObject private var localization = AppLocalization.shared
     var body: some View {
         ScrollView {
@@ -74,6 +76,8 @@ private struct SleepHelpView: View {
             if !NSWorkspace.shared.open(copy) {
                 try? FileManager.default.removeItem(at: copy)
                 showGuideError()
+            } else {
+                guideError.close()
             }
         } catch { showGuideError() }
     }
@@ -82,6 +86,7 @@ private struct SleepHelpView: View {
         let alert = NSAlert()
         alert.messageText = localized("Could not open the guide separately.")
         alert.informativeText = localized("Select and copy the guide text before quitting Wakecup.")
-        alert.runModal()
+        alert.alertStyle = .warning
+        guideError.show(alert)
     }
 }

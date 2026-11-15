@@ -18,7 +18,6 @@ final class HelperSettingsDialog: NSObject, NSWindowDelegate {
         window.title = alert.messageText
         window.titleVisibility = .hidden
         window.isReleasedWhenClosed = false
-        window.level = .modalPanel
         window.collectionBehavior = [.moveToActiveSpace]
 
         let icon = NSImageView(image: alert.icon)
@@ -105,23 +104,30 @@ final class HelperSettingsDialog: NSObject, NSWindowDelegate {
         content.layoutSubtreeIfNeeded()
     }
 
-    static func present(_ alert: NSAlert) -> NSApplication.ModalResponse {
-        let dialog = HelperSettingsDialog(alert: alert) { NSApp.stopModal(withCode: $0) }
-        dialog.window.center()
-        dialog.window.makeKeyAndOrderFront(nil)
+    static func present(_ alert: NSAlert, on owner: NSWindow, completion: @escaping (NSApplication.ModalResponse) -> Void) {
+        let dialog = HelperSettingsDialog(alert: alert, completion: completion)
+        owner.beginSheet(dialog.window) { [dialog] response in
+            dialog.window.orderOut(nil)
+            dialog.completion(response)
+        }
         dialog.window.makeFirstResponder(nil)
-        let response = NSApp.runModal(for: dialog.window)
-        dialog.window.orderOut(nil)
-        return response
     }
 
     @objc private func selectAction(_ sender: NSButton) {
-        completion(NSApplication.ModalResponse(rawValue: NSApplication.ModalResponse.alertFirstButtonReturn.rawValue + sender.tag))
+        finish(NSApplication.ModalResponse(rawValue: NSApplication.ModalResponse.alertFirstButtonReturn.rawValue + sender.tag))
     }
 
     func windowShouldClose(_ sender: NSWindow) -> Bool {
-        completion(.cancel)
-        return true
+        finish(.cancel)
+        return false
+    }
+
+    private func finish(_ response: NSApplication.ModalResponse) {
+        if let owner = window.sheetParent {
+            owner.endSheet(window, returnCode: response)
+        } else {
+            completion(response)
+        }
     }
 
     private static func label(_ text: String, font: NSFont, width: CGFloat) -> NSTextField {

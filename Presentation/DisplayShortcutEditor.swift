@@ -171,45 +171,36 @@ final class DisplayShortcutEditor: NSObject, NSWindowDelegate {
         content.layoutSubtreeIfNeeded()
     }
 
-    static func selectMode(_ mode: DisplayMode, model: SessionModel, configure: () -> Bool) {
-        guard model.canEditSessionSettings else { return }
+    static func selectMode(_ mode: DisplayMode, model: SessionModel,
+                           configure: (@escaping (Bool) -> Void) -> Void) {
+        guard model.canChangeDisplayMode else { return }
         if mode == .backlightOff && model.displayShortcut == nil {
-            guard configure(), model.displayShortcut != nil else { return }
+            configure { saved in
+                guard saved, model.displayShortcut != nil else { return }
+                model.selectDisplayMode(mode)
+            }
+        } else {
+            model.selectDisplayMode(mode)
         }
-        model.selectDisplayMode(mode)
     }
 
-    @discardableResult static func present(model: SessionModel, owner: NSWindow?, requiresShortcut: Bool = false) -> Bool {
-        guard model.canChangeDisplayShortcut, NSApp.modalWindow == nil else { return false }
+    static func present(model: SessionModel, owner: NSWindow, requiresShortcut: Bool, completion: @escaping (Bool) -> Void) {
+        guard model.canChangeDisplayShortcut, owner.attachedSheet == nil else { completion(false); return }
         model.beginDisplayShortcutEditing()
-        defer { model.endDisplayShortcutEditing() }
         let editor = DisplayShortcutEditor(currentShortcut: model.displayShortcut,
             canEdit: { model.canChangeDisplayShortcut }, validate: model.validateDisplayShortcut,
-            save: { _ = try model.setDisplayShortcut($0) }, requiresShortcut: requiresShortcut, finish: { NSApp.stopModal() })
-        editor.prepareForPresentation(relativeTo: owner)
+            save: { _ = try model.setDisplayShortcut($0) }, requiresShortcut: requiresShortcut)
         editor.eventMonitor = NSEvent.addLocalMonitorForEvents(matching: [.keyDown]) { [weak editor] event in
             guard let editor else { return event }
             return editor.handleKeyDown(event)
         }
-        NSApp.activate()
-        editor.window.makeKeyAndOrderFront(nil)
+        owner.beginSheet(editor.window) { [editor] response in
+            editor.removeMonitor()
+            editor.window.orderOut(nil)
+            model.endDisplayShortcutEditing()
+            completion(response == .OK && editor.savedSuccessfully)
+        }
         editor.window.makeFirstResponder(editor.captureBox)
-        NSApp.runModal(for: editor.window)
-        editor.removeMonitor()
-        editor.window.orderOut(nil)
-        return editor.savedSuccessfully
-    }
-
-    func prepareForPresentation(relativeTo owner: NSWindow?) {
-        refreshCapture()
-        // The menu panel is hidden for the whole modal lifetime by its
-        // controller. Use a standard modal level, independent of popup levels.
-        window.level = .modalPanel
-        if let owner {
-            window.setFrameOrigin(NSPoint(x: owner.frame.midX - window.frame.width / 2,
-                y: owner.frame.midY - window.frame.height / 2))
-        } else { window.center() }
-        window.setFrame(window.constrainFrameRect(window.frame, to: owner?.screen), display: false)
     }
 
     // Kept separate from monitor installation so offscreen tests never capture
@@ -318,7 +309,11 @@ final class DisplayShortcutEditor: NSObject, NSWindowDelegate {
         guard !didFinish else { return }
         didFinish = true
         removeMonitor()
-        finish()
+        if let owner = window.sheetParent {
+            owner.endSheet(window, returnCode: savedSuccessfully ? .OK : .cancel)
+        } else {
+            finish()
+        }
     }
     private func removeMonitor() {
         if let eventMonitor { NSEvent.removeMonitor(eventMonitor); self.eventMonitor = nil }

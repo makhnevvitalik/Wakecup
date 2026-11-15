@@ -14,6 +14,7 @@ enum MenuLayout {
     static let settingsActionsHeight: CGFloat = 44
     static let settingsActionsFadeDuration: TimeInterval = 0.16
     static let feedbackRowHeight: CGFloat = 38
+    static let maximumFeedbackHeight: CGFloat = 114
     static let tooltipPadding: CGFloat = 12
     static let tooltipWidth: CGFloat = 280
     static let tooltipMaximumHeight: CGFloat = 300

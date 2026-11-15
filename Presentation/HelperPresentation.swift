@@ -1,33 +1,64 @@
 import AppKit
+import Combine
 
-/// Owns all helper dialog content, native controls and modal response mapping.
-struct HelperPresentation {
-    let activate: () -> Void
-    let presentAlert: (NSAlert) -> NSApplication.ModalResponse
-    let presentSettings: (NSAlert) -> NSApplication.ModalResponse
+/// Presents helper actions on the settings window and keeps informational windows independent.
+final class HelperPresentation {
+    private let activate: () -> Void
+    private let settingsOwner: () -> NSWindow?
+    private let presentSettings: (NSAlert, NSWindow, @escaping (NSApplication.ModalResponse) -> Void) -> Void
+    private let explanation = ModelessAlert()
+    private let failure = ModelessAlert()
+    private var helperObservation: AnyCancellable?
+    private var failureRecovery: (target: PrivilegedHelperController.State, initial: PrivilegedHelperController.State)?
 
-    static let system = HelperPresentation(
-        activate: { NSApp.activate(ignoringOtherApps: true) },
-        presentAlert: { $0.runModal() },
-        presentSettings: HelperSettingsDialog.present)
+    init(activate: @escaping () -> Void = { NSApp.activate(ignoringOtherApps: true) },
+         settingsOwner: @escaping () -> NSWindow?,
+         presentSettings: @escaping (NSAlert, NSWindow, @escaping (NSApplication.ModalResponse) -> Void) -> Void = HelperSettingsDialog.present) {
+        self.activate = activate
+        self.settingsOwner = settingsOwner
+        self.presentSettings = presentSettings
+    }
 
     var interaction: HelperInteraction {
         HelperInteraction(activate: activate, present: present)
     }
 
-    func present(_ request: HelperInteraction.Request) -> HelperInteraction.Response {
+    func observeRecovery(of helper: PrivilegedHelperController) {
+        helperObservation = helper.objectWillChange.sink { [weak self, weak helper] _ in
+            DispatchQueue.main.async {
+                guard let self, let helper, let recovery = self.failureRecovery,
+                      !helper.working, !helper.checking else { return }
+                let operationSucceeded = helper.installationError == nil && (helper.state == .ready || helper.state == .missing)
+                let stateRecovered = helper.state == recovery.target && helper.state != recovery.initial
+                guard operationSucceeded || stateRecovered else { return }
+                self.failure.close()
+                self.failureRecovery = nil
+            }
+        }
+    }
+
+    func present(_ request: HelperInteraction.Request, completion: @escaping (HelperInteraction.Response) -> Void) {
         let alert = Self.makeAlert(for: request)
         switch request {
         case .settings(let snapshot):
-            let response = presentSettings(alert)
-            if response == .alertFirstButtonReturn { return .primary }
-            if snapshot.state != .missing && response == .alertSecondButtonReturn { return .remove }
-            return .close
+            guard let owner = settingsOwner() else { completion(.close); return }
+            presentSettings(alert, owner) { response in
+                if response == .alertFirstButtonReturn { completion(.primary) }
+                else if snapshot.state != .missing && response == .alertSecondButtonReturn { completion(.remove) }
+                else { completion(.close) }
+            }
         case .confirmRemoval:
-            return presentAlert(alert) == .alertFirstButtonReturn ? .confirm : .cancel
-        case .explanation, .failure:
-            _ = presentAlert(alert)
-            return .close
+            guard let owner = settingsOwner() else { completion(.cancel); return }
+            alert.beginSheetModal(for: owner) { response in
+                completion(response == .alertFirstButtonReturn ? .confirm : .cancel)
+            }
+        case .explanation:
+            explanation.show(alert)
+            completion(.close)
+        case .failure(_, _, _, let remove, let state):
+            failureRecovery = (remove ? .missing : .ready, state)
+            failure.show(alert, makeKey: false)
+            completion(.close)
         }
     }
 
@@ -65,7 +96,7 @@ struct HelperPresentation {
             alert.informativeText = localized("helper.remove.explanation")
             alert.addButton(withTitle: localized("Remove helper"))
             alert.addButton(withTitle: localized("Cancel"))
-        case .failure(let message, let usesHelper, let checking):
+        case .failure(let message, let usesHelper, let checking, _, _):
             alert.alertStyle = .warning
             alert.messageText = localized("Could not change the Wakecup helper")
             alert.informativeText = localized(usesHelper && !checking ? "helper.failure.previous" : "helper.failure.explanation")

@@ -664,7 +664,7 @@ You can switch back to password requests or remove the helper in Wakecup Setting
 	<key>This macOS version does not support built-in brightness control.</key>
 	<string>This macOS version does not support built-in brightness control.</string>
 	<key>Unlock the active Mac session before turning the backlight off.</key>
-	<string>Unlock the active Mac session before turning the backlight off.</string>
+	<string>Unlock your Mac to turn off the backlight.</string>
 	<key>Cannot identify the built-in display.</key>
 	<string>Cannot identify the built-in display.</string>
 	<key>Backlight off requires an awake built-in Mac display.</key>

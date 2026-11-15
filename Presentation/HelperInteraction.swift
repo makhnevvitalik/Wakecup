@@ -13,42 +13,64 @@ struct HelperInteraction {
         case settings(Snapshot)
         case explanation
         case confirmRemoval
-        case failure(message: String, usesHelper: Bool, checking: Bool)
+        case failure(message: String, usesHelper: Bool, checking: Bool, remove: Bool,
+                     state: PrivilegedHelperController.State)
     }
     enum Response { case primary, remove, close, confirm, cancel }
 
     var dismissPanel: () -> Void = {}
+    var canChangeInstallation: () -> Bool = { true }
+    var canSelectMode: () -> Bool = { true }
     let activate: () -> Void
-    let present: (Request) -> Response
+    let present: (Request, @escaping (Response) -> Void) -> Void
 
-    init(activate: @escaping () -> Void = {}, present: @escaping (Request) -> Response = { _ in .cancel }) {
+    init(activate: @escaping () -> Void = {},
+         present: @escaping (Request, @escaping (Response) -> Void) -> Void = { _, complete in complete(.cancel) }) {
         self.activate = activate
         self.present = present
     }
 
     func showSettings(for helper: PrivilegedHelperController, allowInstallationChanges: Bool = true) {
-        guard !helper.working else { return }
+        guard !helper.working, canSelectMode() else { return }
         helper.refresh()
         let snapshot = Snapshot(state: helper.state, selected: helper.selected, usesHelper: helper.usesHelper,
-            detail: helper.detail, allowInstallationChanges: allowInstallationChanges)
-        switch show(.settings(snapshot)) {
-        case .primary:
-            if snapshot.state == .ready { helper.select(!snapshot.selected) }
-            else if allowInstallationChanges { install(helper, remove: false) }
-        case .remove:
-            if snapshot.state != .missing && allowInstallationChanges { changeInstallation(for: helper, remove: true) }
-        default: break
+            detail: helper.detail, allowInstallationChanges: allowInstallationChanges && canChangeInstallation())
+        present(.settings(snapshot)) { [weak helper] response in
+            guard let helper, !helper.working, self.canSelectMode() else { return }
+            switch response {
+            case .primary:
+                helper.refresh()
+                guard helper.state == snapshot.state else { return }
+                if helper.state == .ready {
+                    guard helper.selected == snapshot.selected else { return }
+                    helper.select(!snapshot.selected)
+                } else if snapshot.allowInstallationChanges {
+                    self.install(helper, remove: false)
+                }
+            case .remove where snapshot.state != .missing && snapshot.allowInstallationChanges:
+                self.changeInstallation(for: helper, remove: true)
+            default: break
+            }
         }
     }
 
-    func showExplanation() { _ = show(.explanation) }
+    func showExplanation() {
+        dismissPanel()
+        activate()
+        present(.explanation) { _ in }
+    }
 
     func changeInstallation(for helper: PrivilegedHelperController, remove: Bool) {
-        guard !helper.working else { return }
+        guard !helper.working, canChangeInstallation() else { return }
         helper.refresh()
         if remove {
-            guard show(.confirmRemoval) == .confirm else { return }
-            install(helper, remove: true)
+            guard helper.installed else { return }
+            present(.confirmRemoval) { [weak helper] response in
+                guard response == .confirm, let helper, !helper.working, self.canChangeInstallation() else { return }
+                helper.refresh()
+                guard helper.installed else { return }
+                self.install(helper, remove: true)
+            }
         } else if helper.installed {
             install(helper, remove: false)
         } else {
@@ -56,18 +78,14 @@ struct HelperInteraction {
         }
     }
 
-    private func show(_ request: Request) -> Response {
-        dismissPanel()
-        activate()
-        return present(request)
-    }
-
     private func install(_ helper: PrivilegedHelperController, remove: Bool) {
+        guard !helper.working, canChangeInstallation() else { return }
         dismissPanel()
         activate()
         _ = helper.requestInstallation(remove: remove) { [weak helper] message in
             guard let helper else { return }
-            _ = show(.failure(message: message, usesHelper: helper.usesHelper, checking: helper.checking))
+            present(.failure(message: message, usesHelper: helper.usesHelper, checking: helper.checking,
+                remove: remove, state: helper.state)) { _ in }
         }
     }
 }

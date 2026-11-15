@@ -75,14 +75,13 @@ final class MenuPanelController: NSObject, NSWindowDelegate {
     private var positionedPanelFrame: NSRect?
     private var globalMonitor: Any?
     private var localMonitor: Any?
-    private var presentingShortcutEditor = false
 
     var isVisible: Bool { panel.isVisible }
 
     @MainActor init(model: SessionModel, updates: UpdateChecker? = nil,
          statusButton: @escaping () -> NSStatusBarButton?, showHelp: @escaping () -> Void = {},
          showAbout: @escaping () -> Void = {}, showMCPSetup: @escaping () -> Void = {},
-         configureDisplayShortcut: @escaping (Bool) -> Bool, helperInteraction: HelperInteraction = .init(),
+         configureDisplayShortcut: @escaping (Bool, @escaping (Bool) -> Void) -> Void = { _, complete in complete(false) }, helperInteraction: HelperInteraction = .init(),
          isMCPEnabled: @escaping () -> Bool = { false }, setMCPEnabled: @escaping (Bool) -> Void = { _ in }) {
         self.model = model
         self.statusButton = statusButton
@@ -151,6 +150,7 @@ final class MenuPanelController: NSObject, NSWindowDelegate {
         }
         languageObservation = AppLocalization.shared.$language.sink { [weak self] _ in
             self?.settingsWindow?.title = localized("Wakecup Settings")
+            DispatchQueue.main.async { [weak self] in self?.updateFooter() }
         }
         NotificationCenter.default.addObserver(self, selector: #selector(resizeVisibleSurface),
             name: NSApplication.didChangeScreenParametersNotification, object: nil)
@@ -162,9 +162,10 @@ final class MenuPanelController: NSObject, NSWindowDelegate {
     }
 
     func show() {
-        // The panel is above ordinary modal windows. Do not let status clicks or
-        // session updates reopen it over an explanation/confirmation dialog.
-        guard !presentingShortcutEditor, NSApp.modalWindow == nil else { return }
+        if settingsWindow?.attachedSheet != nil {
+            showWindow()
+            return
+        }
         if let settingsWindow, settingsWindow.isVisible {
             settingsWindow.makeFirstResponder(nil)
             settingsWindow.orderOut(nil)
@@ -190,12 +191,17 @@ final class MenuPanelController: NSObject, NSWindowDelegate {
     }
 
     func showWindow() {
-        guard !presentingShortcutEditor, NSApp.modalWindow == nil else { return }
+        if let window = settingsWindow, let sheet = window.attachedSheet {
+            NSApp.activate(ignoringOtherApps: true)
+            window.orderFront(nil)
+            sheet.makeKeyAndOrderFront(nil)
+            return
+        }
         let firstPresentation = settingsWindow == nil
         let window = settingsWindow ?? makeSettingsWindow()
         settingsWindow = window
         window.title = localized("Wakecup Settings")
-        let scrollOffset = window.isVisible ? scrollDistanceFromTop : 0
+        let scrollOffset = window.isVisible || panel.isVisible ? scrollDistanceFromTop : 0
         hidePanel()
         moveContent(to: window)
         hosting.view.layoutSubtreeIfNeeded()
@@ -225,7 +231,7 @@ final class MenuPanelController: NSObject, NSWindowDelegate {
     }
 
     func close() {
-        guard settingsWindow?.isVisible != true, !presentingShortcutEditor, NSApp.modalWindow == nil else { return }
+        guard settingsWindow?.isVisible != true else { return }
         hidePanel()
         discardSettingsDraft()
     }
@@ -256,19 +262,10 @@ final class MenuPanelController: NSObject, NSWindowDelegate {
         if model.hasSettingsDraft || model.endTimeInputInvalid { model.discardSettingsDraft() }
     }
 
-    func presentShortcutEditor(_ present: (NSWindow) -> Bool) -> Bool {
-        guard !presentingShortcutEditor, NSApp.modalWindow == nil else { return false }
-        let restorePanel = panel.isVisible
-        let window = settingsWindow.flatMap { $0.isVisible ? $0 : nil }
-        let owner = window ?? panel
-        presentingShortcutEditor = true
-        hidePanel()
-        defer {
-            presentingShortcutEditor = false
-            if restorePanel { show() }
-            else { window?.makeKeyAndOrderFront(nil) }
-        }
-        return present(owner)
+    func settingsSheetOwner() -> NSWindow? {
+        showWindow()
+        guard settingsWindow?.attachedSheet == nil else { return nil }
+        return settingsWindow
     }
 
     private func updateSize(_ size: NSSize) {
@@ -362,7 +359,7 @@ final class MenuPanelController: NSObject, NSWindowDelegate {
         localMonitor = NSEvent.addLocalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown, .keyDown]) { [weak self] event in
             guard let self, NSApp.modalWindow == nil else { return event }
             if event.type == .keyDown {
-                if event.keyCode == 53 { self.close(); return nil }
+                if event.keyCode == 53, event.window === self.panel { self.close(); return nil }
                 return event
             }
             if event.window === self.panel || event.window === self.statusButton()?.window { return event }

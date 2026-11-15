@@ -5,7 +5,6 @@ import CoreServices
 final class AppDelegate: NSObject, NSApplicationDelegate {
     let model = SessionModel()
     private lazy var automation = AutomationController(model: model)
-    private var automationSocket: AutomationSocket?
     private var menuPanel: MenuPanelController!
     private let sleepHelp = SleepHelpWindowController()
     private let mcpSetup = MCPSetupWindowController()
@@ -15,6 +14,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private lazy var inactiveStatusImage = makeStatusIcon(active: false)
     private lazy var activeStatusImage = makeStatusIcon(active: true)
     private lazy var attentionStatusImage = makeStatusIcon(state: .attention)
+
+    func receiveAutomation(_ envelope: AutomationEnvelope) -> AutomationReply {
+        automation.receive(envelope)
+    }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         let launchEvent = NSAppleEventManager.shared().currentAppleEvent
@@ -37,8 +40,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         status.button?.target = self
         status.button?.action = #selector(toggle)
         status.button?.toolTip = "Wakecup"
-        var helperInteraction = HelperPresentation.system.interaction
+        let helperPresentation = HelperPresentation(settingsOwner: { [weak self] in self?.menuPanel.settingsSheetOwner() })
+        helperPresentation.observeRecovery(of: model.helper)
+        var helperInteraction = helperPresentation.interaction
         helperInteraction.dismissPanel = { [weak self] in self?.menuPanel.close() }
+        helperInteraction.canSelectMode = { [weak self] in self?.model.canSelectHelperMode ?? false }
+        helperInteraction.canChangeInstallation = { [weak self] in self?.model.canChangeHelper ?? false }
         menuPanel = MenuPanelController(model: model, updates: updates,
             statusButton: { [weak self] in self?.status?.button }, showHelp: { [weak self] in
                 self?.menuPanel.close()
@@ -49,11 +56,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             }, showMCPSetup: { [weak self] in
                 self?.menuPanel.close()
                 self?.mcpSetup.show()
-            }, configureDisplayShortcut: { [weak self] requiresShortcut in
-                guard let self else { return false }
-                return self.menuPanel.presentShortcutEditor { owner in
-                    DisplayShortcutEditor.present(model: self.model, owner: owner, requiresShortcut: requiresShortcut)
+            }, configureDisplayShortcut: { [weak self] requiresShortcut, completion in
+                guard let self, self.model.canChangeDisplayShortcut, let owner = self.menuPanel.settingsSheetOwner() else {
+                    completion(false)
+                    return
                 }
+                DisplayShortcutEditor.present(model: self.model, owner: owner,
+                    requiresShortcut: requiresShortcut, completion: completion)
             }, helperInteraction: helperInteraction,
             isMCPEnabled: { [weak self] in self?.automation.mcpEnabled ?? false },
             setMCPEnabled: { [weak self] enabled in self?.automation.mcpEnabled = enabled })
@@ -66,14 +75,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 print("Wakecup status: bundle=\(Bundle.main.bundleIdentifier ?? "unknown") visible=\(item.isVisible) frame=\(String(describing: item.button?.window?.frame)) image=\(String(describing: item.button?.image?.size))")
                 fflush(stdout)
             }
-        }
-        do {
-            automationSocket = try AutomationSocket { [weak self] envelope in
-                guard let self else { return AutomationReply(outcome: .rejected, message: "Wakecup is quitting.") }
-                return self.automation.receive(envelope)
-            }
-        } catch {
-            NSLog("Wakecup automation unavailable: %@", error.localizedDescription)
         }
         updates.check()
         if !launchedAtLogin, !CommandLine.arguments.contains("--automation-launch") { show() }

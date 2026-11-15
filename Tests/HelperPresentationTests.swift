@@ -12,24 +12,30 @@ import Foundation
         let defaults = UserDefaults(suiteName: suite)!
         defaults.set(true, forKey: "useInstalledHelper")
         defer { defaults.removePersistentDomain(forName: suite) }
+        var simulatedInstallation = PrivilegedHelperController.State.updateRequired
+        var pendingResponse: ((HelperInteraction.Response) -> Void)?
+        var deferResponse = false
+        var canChangeInstallation = true
         var response: HelperInteraction.Response = .primary
         var dialogs: [HelperInteraction.Request] = []
         var installations: [Bool] = []
         var events: [String] = []
-        var interaction = HelperInteraction(activate: { events.append("activate") }, present: { request in
+        var interaction = HelperInteraction(activate: { events.append("activate") }, present: { request, complete in
             events.append("present")
             dialogs.append(request)
-            return response
+            if deferResponse { pendingResponse = complete }
+            else { complete(response) }
         })
         let helper = PrivilegedHelperController(defaults: defaults, makeInstallationTask: { remove in
             installations.append(remove)
             let task = Process(); task.executableURL = URL(fileURLWithPath: "/bin/sh")
             task.arguments = ["-c", "printf '%s' '-128'; exit 1"]
             return task
-        }, inspectInstallation: { .init(state: .updateRequired) }, requestInformation: { reply in
+        }, inspectInstallation: { .init(state: simulatedInstallation) }, requestInformation: { reply in
             reply(.failure(WakecupError(message: "test cancellation")))
         })
         interaction.dismissPanel = { events.append("dismiss") }
+        interaction.canChangeInstallation = { canChangeInstallation }
         interaction.showSettings(for: helper)
         try settle(helper)
         try expect(dialogs.count == 1 && installations == [false], "Update needs one overview without a repeated explanation")
@@ -37,8 +43,8 @@ import Foundation
         try expect(snapshot.state == .updateRequired && snapshot.selected && !snapshot.usesHelper && snapshot.allowInstallationChanges,
                    "Settings must receive the complete permission-mode snapshot")
         try expect(helper.selected, "Cancelled authorization must preserve selected helper intent")
-        try expect(events == ["dismiss", "activate", "present", "dismiss", "activate"],
-                   "Each dialog and authorization must close the menu before activation")
+        try expect(events == ["present", "dismiss", "activate"],
+                   "Only authorization dismisses the menu when settings already own the sheet")
         dialogs.removeAll(); installations.removeAll(); events.removeAll()
         interaction.changeInstallation(for: helper, remove: false)
         try settle(helper)
@@ -59,6 +65,33 @@ import Foundation
         interaction.changeInstallation(for: helper, remove: true)
         guard case .confirmRemoval = dialogs.first else { throw WakecupError(message: "Removal needs a typed confirmation") }
         try expect(dialogs.count == 1 && installations.isEmpty && helper.selected, "Cancelled removal must preserve helper intent")
+        dialogs.removeAll()
+        deferResponse = true
+        interaction.changeInstallation(for: helper, remove: true)
+        simulatedInstallation = .missing
+        pendingResponse?(.confirm)
+        try expect(installations.isEmpty, "Removal must recheck whether the helper still exists after confirmation")
+
+        simulatedInstallation = .updateRequired
+        interaction.changeInstallation(for: helper, remove: true)
+        canChangeInstallation = false
+        pendingResponse?(.confirm)
+        try expect(installations.isEmpty, "Removal must be prevented if a session started while confirmation was open")
+
+        canChangeInstallation = true
+        interaction.showSettings(for: helper)
+        canChangeInstallation = false
+        pendingResponse?(.primary)
+        try expect(installations.isEmpty, "Update must be prevented if a session started while management was open")
+
+        canChangeInstallation = true
+        interaction.showSettings(for: helper)
+        simulatedInstallation = .missing
+        pendingResponse?(.primary)
+        try expect(installations.isEmpty, "An outdated Update button must not install a newly missing helper")
+        simulatedInstallation = .updateRequired
+        pendingResponse = nil
+        deferResponse = false
         dialogs.removeAll(); response = .close
         interaction.showExplanation()
         guard case .explanation = dialogs.first else { throw WakecupError(message: "Missing typed explanation request") }

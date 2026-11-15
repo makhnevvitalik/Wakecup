@@ -14,7 +14,7 @@ import Foundation
         model.selectEndTimePreset(60)
         let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
         item.button?.image = NSImage(systemSymbolName: "cup.and.saucer", accessibilityDescription: "Panel test")
-        let controller = MenuPanelController(model: model, statusButton: { item.button }, configureDisplayShortcut: { _ in false })
+        let controller = MenuPanelController(model: model, statusButton: { item.button })
         defer { controller.close(); NSStatusBar.system.removeStatusItem(item) }
         controller.show()
         settle()
@@ -88,6 +88,32 @@ import Foundation
         guard abs(distanceFromTop) < 1 else { throw WakecupError(message: "Reopened panel did not scroll to top") }
         bottom.constant = 0
         try checkCalendarSelection(in: window, model: model)
+        model.discardSettingsDraft()
+        model.phase = .failed
+        model.message = "Short error."
+        settle()
+        let shortViewport = scroll.frame.height
+        let shortFrame = window.frame
+        model.message = SessionMessage(reason: "Не удалось выполнить запрос к помощнику: Не удалось безопасно восстановить сон. Повторите попытку. Если обычный сон не восстановится, откройте инструкцию по восстановлению.")
+        settle()
+        guard let screen = window.screen, screen.visibleFrame.contains(window.frame),
+              abs(window.frame.maxY - shortFrame.maxY) < 1,
+              window.frame.height - scroll.frame.height > shortFrame.height - shortViewport + 8 else {
+            throw WakecupError(message: "Long recovery feedback must expand inside the panel")
+        }
+        model.message = SessionMessage(reason: String(repeating: "Sleep restoration was refused by the helper. ", count: 160))
+        settle()
+        guard screen.visibleFrame.contains(window.frame), scroll.frame.height > 0,
+              window.frame.height - scroll.frame.height <= shortFrame.height - shortViewport
+                + MenuLayout.maximumFeedbackHeight - MenuLayout.feedbackRowHeight + 1 else {
+            throw WakecupError(message: "Long diagnostics must leave room for the main panel")
+        }
+        model.phase = .idle
+        model.message = nil
+        settle()
+        guard window.frame.height - scroll.frame.height < shortFrame.height - shortViewport - 8 else {
+            throw WakecupError(message: "Clearing recovery feedback must shrink the footer")
+        }
         print("PASS: panel dimensions, scroll position, reopening, icon hiding and calendar selection")
     }
 

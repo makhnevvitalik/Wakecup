@@ -106,7 +106,11 @@ The command line and MCP both control the Wakecup timer shown in the menu bar. O
 /Applications/Wakecup.app/Contents/MacOS/Wakecup --cli --help
 ```
 
-Set a new end time at least 10 seconds ahead. To extend or shorten a timer, specify at least 10 seconds. The CLI returns JSON. When a command returns `pending`, check `status` for the result. If a command returns `partiallyApplied`, its timer or power changes may already be active. Retry only the display change. macOS can request administrator approval for closed-lid mode or helper changes.
+Set a new end time at least 10 seconds ahead and within the next 30 days. For an exact time, use ISO-8601 with a time zone, for example `2030-01-01T12:00:00+05:00`. To extend or shorten the timer, specify at least 10 seconds.
+
+The CLI returns JSON. Exit code `0` covers `completed`, `pending`, and `partiallyApplied`. A rejected command exits with `1`. If Wakecup may have received the command but the reply was lost, the outcome is `unknown` and the CLI exits with `2`. Both CLI and MCP report `unknown` in the reply. Check `status` before repeating a `pending` or `unknown` command. A `partiallyApplied` reply means timer or power changes may already be active. Retry only the display change.
+
+If status reports `needsRecovery: true`, use `restore-sleep` in the CLI or `wakecup_restore_sleep` in MCP. While recovery is in progress, the phase is `recovering`. macOS can request administrator approval for closed-lid mode or helper changes.
 
 #### Connect Wakecup to Codex
 
@@ -228,7 +232,11 @@ CLI и MCP управляют тем же таймером, что и панел
 /Applications/Wakecup.app/Contents/MacOS/Wakecup --cli --help
 ```
 
-До нового времени остановки должно оставаться не меньше 10 секунд. Продлить или сократить таймер можно минимум на 10 секунд. CLI возвращает результат в JSON. Если команда вернула `pending`, проверьте результат через `status`. При ответе `partiallyApplied` изменения таймера или питания могли уже вступить в силу. Повторите только изменение подсветки. Для работы с закрытой крышкой и управления помощником macOS может запросить разрешение администратора.
+Выберите время остановки в пределах ближайших 30 дней. До него должно оставаться не меньше 10 секунд. Точное время укажите в формате ISO-8601 с часовым поясом, например `2030-01-01T12:00:00+05:00`. Продлить или сократить таймер можно минимум на 10 секунд.
+
+CLI возвращает результат в JSON. Код выхода `0` соответствует результатам `completed`, `pending` и `partiallyApplied`. Отклонённая команда возвращает код `1`. Если Wakecup мог получить команду, но ответ потерялся, результат будет `unknown`, а код выхода CLI — `2`. Результат `unknown` возвращают и CLI, и MCP. Перед повтором команды с результатом `pending` или `unknown` проверьте `status`. При ответе `partiallyApplied` изменения таймера или питания могли уже вступить в силу. Повторите только изменение подсветки.
+
+Если в статусе указано `needsRecovery: true`, выполните `restore-sleep` в CLI или `wakecup_restore_sleep` в MCP. Во время восстановления статус показывает фазу `recovering`. Для работы с закрытой крышкой и управления помощником macOS может запросить разрешение администратора.
 
 #### Подключение к Codex
 

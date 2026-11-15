@@ -36,7 +36,7 @@ import SwiftUI
         let model = SessionModel(defaults: defaults)
         let window = NSWindow(contentRect: NSRect(x: 20, y: 20, width: MenuLayout.width, height: 600),
                               styleMask: [.titled], backing: .buffered, defer: false)
-        window.contentViewController = NSHostingController(rootView: WakecupView(model: model, showAbout: {}, configureDisplayShortcut: { _ in false }))
+        window.contentViewController = NSHostingController(rootView: WakecupView(model: model, showAbout: {}))
         defer { window.orderOut(nil) }
         window.makeKeyAndOrderFront(nil)
         RunLoop.main.run(until: Date().addingTimeInterval(0.2))
@@ -101,7 +101,7 @@ import SwiftUI
             textOffsets.append(textFrame.minX)
         }
         try expect(abs(textOffsets[0] - textOffsets[1]) < 0.1, "Card heading titles must share the same leading edge")
-        let surfaces = MenuPanelController(model: model, statusButton: { nil }, configureDisplayShortcut: { _ in false })
+        let surfaces = MenuPanelController(model: model, statusButton: { nil })
         surfaces.showWindow()
         guard let settingsWindow = app.windows.first(where: { $0.title == localized("Wakecup Settings") }),
               let settingsContent = settingsWindow.contentView else {
