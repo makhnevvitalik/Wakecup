@@ -32,7 +32,7 @@ import SwiftUI
             loginItem: .init(readStatus: { .notRegistered }, register: {}, unregister: {}, openSettings: {}),
             scheduleTicks: { _ in {} })
         operations.enterBacklight = { _, _, complete in complete(.success(()), true) }
-        operations.restoreBacklight = { $0(.success(())) }
+        operations.restoreBacklight = { _, complete in complete(.success(true)) }
         operations.validateDisplayShortcut = { _ in }
         let helper = PrivilegedHelperController(defaults: defaults, inspectInstallation: { .init(state: .missing) },
             requestInformation: { _ in })

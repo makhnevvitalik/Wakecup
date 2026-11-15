@@ -1,51 +1,19 @@
 ## English
 
-### Changes in build 13
+- If you turn the built-in backlight on with the macOS brightness controls, Wakecup keeps the brightness you chose and returns to the previous display mode. The timer keeps the same end time.
+- Stopping the timer or quitting Wakecup immediately after a manual brightness change also keeps the new brightness. The **Restore brightness** shortcut still brings back the level saved before the screen went dark.
+- The display mode help explains both ways to turn the backlight on again.
 
-- Wakecup leaves its settings usable when a helper warning or a help error appears. Helper settings, removal confirmation and the brightness shortcut editor open on the settings window.
-- Wakecup reports when normal sleep still needs to be restored and when recovery is in progress. Long messages can be scrolled in the panel.
-- CLI and MCP reject invalid calendar dates. If a reply is lost after a command may have reached Wakecup, both report `unknown`. Check `status` before retrying. CLI help shows the full invocation and exit codes.
-- A second instance exits without interrupting the running Wakecup session.
+Requires macOS 14 or later. The universal DMG and ZIP support Apple Silicon and Intel. See the [user guide](https://github.com/makhnevvitalik/Wakecup#english) for installation.
 
-### Release overview
-
-Wakecup keeps your Mac awake while your AI agent works. Turn off the built-in display’s backlight to save battery and set a cutoff for when your Mac is running on battery.
-
-- Choose 1, 3 or 5 hours, set an end date and time up to 30 calendar days ahead, or run until stopped manually.
-- Keep your Mac awake with the lid closed or on battery. Let macOS manage the display, keep it on, or turn off the backlight and restore it with your own shortcut.
-- Set a battery stop threshold from 10% to 90%.
-- Optionally install the helper to avoid repeated administrator prompts for closed-lid use.
-- Open the same controls from the menu bar or from Applications and Spotlight. The menu bar icon can be hidden.
-- Connect Codex and other MCP clients to read status and control the timer. Existing connections recover after a brief Wakecup restart.
-- The panel keeps its position when a calendar edit adds the Apply and Cancel buttons.
-- English and Russian interface, login startup and GitHub release checks.
-
-Requires macOS 14 or later. Download the universal package for Apple Silicon and Intel. Open the DMG and drag Wakecup into Applications; a ZIP is also available. See the [user guide](https://github.com/makhnevvitalik/Wakecup#english) for first-launch and sleep-recovery instructions.
-
-Before updating Wakecup, stop the active session. If it asks to update the helper, use **Helper → Update** before starting closed-lid mode again.
+Stop the active session before updating. If Wakecup asks to update the helper, use **Helper → Update** before starting closed-lid mode again.
 
 ## Русский
 
-### Изменения в сборке 13
+- Если включить подсветку встроенного экрана средствами macOS, Wakecup оставит выбранную яркость и вернёт предыдущий режим экрана. Время окончания таймера останется прежним.
+- Если сразу после ручной регулировки остановить таймер или закрыть Wakecup, выбранная яркость сохранится. Сочетание **«Вернуть яркость»** по-прежнему возвращает уровень, сохранённый до затемнения.
+- В подсказке к режимам экрана описаны оба способа вернуть подсветку.
 
-- Настройки Wakecup остаются доступны при предупреждении помощника или ошибке открытия справки. Настройки помощника, подтверждение удаления и редактор сочетания для возврата яркости открываются в окне настроек.
-- Wakecup сообщает, если обычный сон ещё нужно восстановить, и показывает ход восстановления. Длинный текст можно прокрутить прямо в панели.
-- CLI и MCP отклоняют невозможные даты. Если команда могла дойти до Wakecup, а ответ потерялся, оба возвращают `unknown`. Перед повтором проверьте `status`. В справке CLI указаны полный вызов и коды выхода.
-- Второй экземпляр завершается, сохраняя текущий сеанс Wakecup.
+Нужна macOS 14 или новее. Универсальные DMG и ZIP подходят для Apple Silicon и Intel. Установка описана в [инструкции](https://github.com/makhnevvitalik/Wakecup#русский).
 
-### Возможности версии
-
-ИИ работает — Mac не дремлет. Погасите подсветку встроенного экрана, чтобы экономить заряд, и задайте порог остановки при работе от аккумулятора.
-
-- Выберите 1, 3 или 5 часов, задайте дату и время окончания на срок до 30 календарных дней вперёд или оставьте Wakecup включённым до ручной остановки.
-- Работайте с закрытой крышкой или от аккумулятора. Подсветку можно оставить под управлением macOS, держать включённой или погасить и вернуть своим сочетанием клавиш.
-- Остановка при выбранном уровне заряда от 10% до 90%.
-- Необязательный помощник для работы с закрытой крышкой без повторного ввода пароля.
-- Открывайте те же настройки из строки меню, папки «Программы» или Spotlight. Значок в строке меню можно скрыть.
-- Подключайте Codex и другие MCP-клиенты, чтобы читать статус и управлять таймером. После короткого перезапуска Wakecup существующее подключение восстанавливается.
-- Панель сохраняет положение, когда после выбора даты появляются кнопки «Применить» и «Отменить».
-- Русский и английский интерфейс, автозапуск и проверка релизов GitHub.
-
-Нужна macOS 14 или новее. Скачайте универсальный пакет для Apple Silicon и Intel. Откройте DMG и перенесите Wakecup в «Программы»; также доступен ZIP. Первый запуск и восстановление сна описаны в [инструкции](https://github.com/makhnevvitalik/Wakecup#русский).
-
-Перед обновлением Wakecup остановите активный сеанс. Если приложение предложит обновить помощника, нажмите **Помощник → Обновить**, прежде чем снова включать режим с закрытой крышкой.
+Перед обновлением остановите активный сеанс. Если Wakecup предложит обновить помощника, нажмите **«Помощник» → «Обновить»**, прежде чем снова включать режим с закрытой крышкой.

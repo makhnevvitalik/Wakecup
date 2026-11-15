@@ -115,6 +115,8 @@ final class BacklightSession {
                 pause: { Thread.sleep(forTimeInterval: $0) }, validate: { try driver.validateIdentity($0) })
         }
     }
+    private static let darkBrightnessTolerance: Float = 0.001
+
     private let operations: Operations
     private var record: BacklightRecoveryRecord?
     private var file: URL?
@@ -146,7 +148,7 @@ final class BacklightSession {
             attemptedZero = true
             try operations.write(display.id, 0)
             let current = try operations.read(display.id)
-            guard current.isFinite, abs(current) <= 0.001, child?.isRunning() == true else {
+            guard current.isFinite, abs(current) <= Self.darkBrightnessTolerance, child?.isRunning() == true else {
                 throw BacklightError(message: "macOS did not confirm backlight off with a live restoration process.")
             }
         } catch {
@@ -163,8 +165,22 @@ final class BacklightSession {
         }
     }
 
-    func restore() throws {
+    var hasVisibleBrightness: Bool {
+        guard let record,
+              (try? operations.validate(record.display)) != nil,
+              let current = try? operations.read(record.display.id) else { return false }
+        return current.isFinite && current > Self.darkBrightnessTolerance && current <= 1
+    }
+
+    func endIfBrightnessReturned() throws -> Bool {
+        guard hasVisibleBrightness else { return false }
+        try clearRecovery()
+        return true
+    }
+
+    func restore(preservingVisibleBrightness: Bool = false) throws {
         guard let record else { return }
+        if preservingVisibleBrightness, try endIfBrightnessReturned() { return }
         do {
             try BacklightRestoreCommand.restore(record: record, write: { id, value in
                 try operations.validate(record.display); try operations.write(id, value)
@@ -175,14 +191,18 @@ final class BacklightSession {
             child?.requestRestore() // EOF triggers independent retry; never terminate a safety child.
             throw BacklightError(message: "Could not verify brightness restoration. Recovery information was retained.")
         }
+        try clearRecovery()
+    }
+
+    private func clearRecovery() throws {
         try child?.disarm()
         if let file { try operations.remove(file) }
-        child = nil; file = nil; self.record = nil
+        child = nil; file = nil; record = nil
     }
 
     deinit {
         // Releasing the control pipe also covers unexpected owner teardown.
-        if record != nil { try? restore() }
+        if record != nil { try? restore(preservingVisibleBrightness: true) }
     }
 }
 

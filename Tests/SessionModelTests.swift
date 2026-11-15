@@ -258,9 +258,9 @@ private extension SessionModelTests {
         for restorationSucceeds in [false, true] {
             let environment = try SessionTestEnvironment()
             var operations = environment.operations
-            var restore: ((Result<Void, Error>) -> Void)?
+            var restore: ((Result<Bool, Error>) -> Void)?
             operations.enterBacklight = { _, _, complete in complete(.success(()), true) }
-            operations.restoreBacklight = { restore = $0 }
+            operations.restoreBacklight = { _, complete in restore = complete }
             let model = SessionModel(defaults: environment.defaults, operations: operations,
                                      helper: isolatedHelper(environment.defaults))
             let control = AutomationController(model: model, defaults: environment.defaults)
@@ -283,7 +283,7 @@ private extension SessionModelTests {
             model.tick()
             try expect(model.phase == .idle, "The timer must expire before brightness restoration completes")
             if restorationSucceeds {
-                restore?(.success(()))
+                restore?(.success(true))
             } else {
                 restore?(.failure(WakecupError(message: "Brightness restoration refused.")))
             }
@@ -301,9 +301,9 @@ private extension SessionModelTests {
     static func automationIsolatesDisplayOutcomes() throws {
         let environment = try SessionTestEnvironment()
         var operations = environment.operations
-        var restore: ((Result<Void, Error>) -> Void)?
+        var restore: ((Result<Bool, Error>) -> Void)?
         operations.enterBacklight = { _, _, complete in complete(.success(()), true) }
-        operations.restoreBacklight = { restore = $0 }
+        operations.restoreBacklight = { _, complete in restore = complete }
         let model = SessionModel(defaults: environment.defaults, operations: operations, helper: isolatedHelper(environment.defaults))
         let control = AutomationController(model: model, defaults: environment.defaults)
         func command(_ request: AutomationRequest, session: UUID? = nil) -> AutomationReply {
@@ -339,7 +339,7 @@ private extension SessionModelTests {
                    "Cancelling an absent countdown must not report an earlier display error")
         let retry = command(.init(action: .configure, display: .keepOn))
         try expect(retry.outcome == .pending, "The display change alone can be retried")
-        restore?(.success(()))
+        restore?(.success(true))
         let recovered = command(.init(action: .status))
         try expect(recovered.status?.settingsPartiallyApplied == false && recovered.status?.message == nil
                    && model.displayMode == .keepOn && model.remaining == 120,

@@ -21,9 +21,11 @@ struct SessionOperations {
     var enterBacklight: (DisplayShortcut, @escaping () -> Void, @escaping (Result<Void, Error>, Bool) -> Void) -> Void = { _, _, complete in
         complete(.failure(WakecupError(message: "Backlight control is unavailable.")), false)
     }
-    var restoreBacklight: (@escaping (Result<Void, Error>) -> Void) -> Void = { $0(.success(())) }
+    var restoreBacklight: (DisplayModeController.RestorationPolicy, @escaping (Result<Bool, Error>) -> Void) -> Void = { _, complete in
+        complete(.success(true))
+    }
     var validateDisplayShortcut: (DisplayShortcut) throws -> Void = { _ in }
-    var checkBacklightHealth: (@escaping (Bool) -> Void) -> Void = { $0(true) }
+    var checkBacklight: (@escaping (DisplayModeController.BacklightState) -> Void) -> Void = { $0(.monitoring) }
 
 
     static func system(helper: PrivilegedHelperController) -> SessionOperations {
@@ -71,19 +73,32 @@ struct SessionOperations {
                         complete(result, needsRestoration)
                     }
                 }
-            }, restoreBacklight: { complete in
+            }, restoreBacklight: { policy, complete in
                 backlightQueue.async {
-                    let result = Result { try backlight.restore() }
+                    let result = Result {
+                        switch policy {
+                        case .saved:
+                            try backlight.restore()
+                        case .preserveVisible:
+                            try backlight.restore(preservingVisibleBrightness: true)
+                        case .visibleOnly:
+                            return try backlight.endIfBrightnessReturned()
+                        }
+                        return true
+                    }
                     DispatchQueue.main.async {
-                        if case .success = result { displayHotKey.unregister() }
+                        if case .success(true) = result { displayHotKey.unregister() }
                         complete(result)
                     }
                 }
             }, validateDisplayShortcut: GlobalDisplayHotKey.validate,
-               checkBacklightHealth: { complete in
+               checkBacklight: { complete in
                    backlightQueue.async {
-                       let healthy = backlight.isHealthy
-                       DispatchQueue.main.async { complete(healthy) }
+                       // The controller decides which request wins before recovery state is changed.
+                       let state: DisplayModeController.BacklightState
+                       if backlight.hasVisibleBrightness { state = .brightnessReturned }
+                       else { state = backlight.isHealthy ? .monitoring : .restorerStopped }
+                       DispatchQueue.main.async { complete(state) }
                    }
                })
     }

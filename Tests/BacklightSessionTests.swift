@@ -71,6 +71,38 @@ import Darwin
         normal.childAlive = true
         try session.restore()
         try expect(normal.level == 0.65 && normal.disarmed && normal.cleaned && !session.needsRestoration, "Verified parent restore disarms child and clears recovery")
+        let manual = Fixture(), manualSession = manual.session()
+        try manualSession.begin()
+        for value: Float in [0, 0.001, -0.1, 1.1, .nan, .infinity] {
+            manual.level = value
+            try expect(try !manualSession.endIfBrightnessReturned() && manualSession.needsRestoration,
+                       "Dark or invalid brightness must leave recovery armed")
+        }
+        manual.level = 0.2
+        try expect(try manualSession.endIfBrightnessReturned() && manual.level == 0.2 && manual.writes == [0]
+                   && manual.disarmed && manual.cleaned && !manualSession.needsRestoration,
+                   "System brightness changes must end blackout without overwriting the new level")
+        try manualSession.restore()
+        try expect(manual.level == 0.2 && manual.writes == [0], "Later restoration must not overwrite manual brightness")
+        let stopped = Fixture(), stoppedSession = stopped.session()
+        try stoppedSession.begin()
+        stopped.level = 0.2
+        try stoppedSession.restore(preservingVisibleBrightness: true)
+        try expect(stopped.level == 0.2 && stopped.writes == [0] && stopped.disarmed && stopped.cleaned,
+                   "Stop before the next poll must preserve the chosen brightness and end recovery")
+        let darkStop = Fixture(), darkStopSession = darkStop.session()
+        try darkStopSession.begin()
+        try darkStopSession.restore(preservingVisibleBrightness: true)
+        try expect(darkStop.level == 0.65 && darkStop.writes == [0, 0.65],
+                   "Stop must still restore the saved level if the display is dark")
+        let explicit = Fixture(), explicitSession = explicit.session()
+        try explicitSession.begin()
+        explicit.level = 0.2
+        try expect(explicitSession.hasVisibleBrightness && explicitSession.needsRestoration && !explicit.disarmed,
+                   "A brightness check must leave the snapshot and restorer in place")
+        try explicitSession.restore()
+        try expect(explicit.level == 0.65 && explicit.writes == [0, 0.65],
+                   "An explicit hotkey restore after a read must still write the saved brightness")
         for value: Float in [0, -0.1, 1.1, .nan, .infinity] {
             let invalid = Fixture(); invalid.level = value
             do { try invalid.session().begin(); throw NSError(domain: "invalid brightness accepted", code: 1) }

@@ -71,6 +71,9 @@ import Foundation
         try check(model.displayShortcut == nil, "A shortcut can be cleared after brightness is restored")
         try resetAndStartupFailure()
         try expiryAndHealth()
+        try brightnessChangedOutsideWakecup()
+        try shortcutWinsWhileBrightnessCheckIsPending()
+        try stopWhileConfirmingVisibleBrightness()
         try uncertainEntryRetainsEscape()
         try stopDuringBacklightEntry()
         try stopDuringModeChange()
@@ -117,6 +120,79 @@ import Foundation
             model.stop()
         }
     }
+    static func brightnessChangedOutsideWakecup() throws {
+        for previousMode: DisplayMode in [.mayTurnOff, .keepOn] {
+            let fixture = try Fixture()
+            let model = fixture.model()
+            model.editClosedLid(false)
+            try model.setDisplayShortcut(shortcut)
+            model.selectDisplayMode(previousMode)
+            model.selectDisplayMode(.backlightOff)
+            model.start()
+            let deadline = model.deadline
+            fixture.advance(10, model)
+            fixture.brightnessReturned = true
+            fixture.advance(1, model)
+            try check(!model.isBacklightOff && model.displayMode == previousMode
+                      && model.phase == .active && model.deadline == deadline
+                      && fixture.assertions.last == previousMode.keepsDisplayOn && fixture.restores == 0,
+                      "Brightness changes outside Wakecup must return to the previous mode without writing brightness or stopping the timer")
+            try check(fixture.defaults.string(forKey: "displayMode") == previousMode.rawValue,
+                      "The previous display mode must also be saved")
+            fixture.callbacks.last?()
+            model.stop()
+            try check(fixture.restorationPolicies == [.visibleOnly] && fixture.restores == 0,
+                      "Stopping or invoking a stale hotkey after manual restore must leave brightness alone")
+        }
+    }
+
+    static func shortcutWinsWhileBrightnessCheckIsPending() throws {
+        let fixture = try Fixture()
+        let model = fixture.model()
+        model.editClosedLid(false)
+        try model.setDisplayShortcut(shortcut)
+        model.selectDisplayMode(.backlightOff)
+        model.start()
+        fixture.advance(10, model)
+
+        fixture.brightnessReturned = true
+        fixture.deferBacklightCheck = true
+        fixture.deferRestore = true
+        fixture.advance(1, model)
+        fixture.callbacks.last?()
+        fixture.completeBacklightCheck?()
+        try check(fixture.restorationPolicies == [.saved] && model.display.transitioning,
+                  "A pending read must not replace the accepted hotkey restore")
+        fixture.completeRestore?()
+        try check(!model.isBacklightOff && model.displayMode == .mayTurnOff && fixture.restores == 1,
+                  "The accepted hotkey restore must return to the previous mode")
+        model.stop()
+    }
+
+    static func stopWhileConfirmingVisibleBrightness() throws {
+        let fixture = try Fixture()
+        let model = fixture.model()
+        model.editClosedLid(false)
+        try model.setDisplayShortcut(shortcut)
+        model.selectDisplayMode(.backlightOff)
+        model.start()
+        fixture.advance(10, model)
+
+        fixture.brightnessReturned = true
+        fixture.deferRestore = true
+        fixture.advance(1, model)
+        model.stop()
+        try check(fixture.restorationPolicies == [.visibleOnly] && !fixture.events.contains("stopAssertions"),
+                  "Stopping waits for the in-flight brightness confirmation")
+        fixture.brightnessReturned = false
+        fixture.completeRestore?()
+        try check(fixture.restorationPolicies == [.visibleOnly, .preserveVisible] && model.display.transitioning,
+                  "Stopping must still restore brightness if the display went dark again")
+        fixture.completeRestore?()
+        try check(!model.isBacklightOff && model.phase == .idle && fixture.events.last == "stopAssertions",
+                  "Stopping must clear the blackout before releasing display assertions")
+    }
+
     static func uncertainEntryRetainsEscape() throws {
         let fixture = try Fixture()
         let model = fixture.model()
@@ -314,6 +390,7 @@ import Foundation
         var assertions: [Bool] = []
         var entries = 0
         var restores = 0
+        var restorationPolicies: [DisplayModeController.RestorationPolicy] = []
         var callbacks: [() -> Void] = []
         var events: [String] = []
         var entryFailure = false
@@ -322,9 +399,12 @@ import Foundation
         var restoreFailure = false
         var validationFailure = false
         var healthy = true
+        var brightnessReturned = false
         var lidState: Bool? = false
         var deferEntry = false
         var deferRestore = false
+        var deferBacklightCheck = false
+        var completeBacklightCheck: (() -> Void)?
         var completeEntry: (() -> Void)?
         var completeRestore: (() -> Void)?
         init() throws {
@@ -355,13 +435,23 @@ import Foundation
                     self.entries += 1; self.callbacks.append(callback); self.events.append("enter")
                     if self.deferEntry { self.completeEntry = { complete(.success(()), true) } }
                     else { complete(.success(()), true) }
-                }, restoreBacklight: { complete in
+                }, restoreBacklight: { policy, complete in
+                    self.restorationPolicies.append(policy)
                     if self.restoreFailure { complete(.failure(WakecupError(message: "Fake restore rejection"))); return }
-                    self.restores += 1; self.events.append("restore"); self.needsRestoration = false
-                    if self.deferRestore { self.completeRestore = { complete(.success(())) } }
-                    else { complete(.success(())) }
+                    if policy != .visibleOnly {
+                        self.restores += 1; self.events.append("restore"); self.needsRestoration = false
+                    }
+                    let finish = { complete(.success(policy != .visibleOnly || self.brightnessReturned)) }
+                    if self.deferRestore { self.completeRestore = finish }
+                    else { finish() }
                 }, validateDisplayShortcut: { _ in if self.validationFailure { throw WakecupError(message: "display.shortcut.conflict") } },
-                checkBacklightHealth: { $0(self.healthy) })
+                checkBacklight: { complete in
+                    let state: DisplayModeController.BacklightState
+                    if self.brightnessReturned { state = .brightnessReturned }
+                    else { state = self.healthy ? .monitoring : .restorerStopped }
+                    if self.deferBacklightCheck { self.completeBacklightCheck = { complete(state) } }
+                    else { complete(state) }
+                })
             ops.wallNow = { Date(timeIntervalSince1970: 1_794_309_600 + self.now - 1_000) }
             let helper = PrivilegedHelperController(defaults: defaults, inspectInstallation: { .init(state: .missing) }, requestInformation: { _ in })
             return SessionModel(defaults: defaults, operations: ops, helper: helper)

@@ -570,7 +570,7 @@ You can switch back to password requests or remove the helper in Wakecup Setting
 
 “Keep on” keeps the screen on while Wakecup is active.
 
-“Backlight off” turns off the built-in screen’s backlight after a 10-second countdown. The Mac and display stay awake. Use the “Restore brightness” shortcut below to bring back the previous brightness. If you forget the shortcut, press the brightness-up key to turn the backlight on again.</string>
+“Backlight off” turns off the built-in screen’s backlight after a 10-second countdown. The Mac and display stay awake. The “Restore brightness” shortcut brings back the previous brightness. If you turn the backlight on with the macOS brightness controls, Wakecup keeps the new brightness. Both actions return to the previous display mode.</string>
 	<key>Backlight turns off in %ld s</key>
 	<string>Backlight turns off in %ld s</string>
 	<key>Cancel backlight countdown</key>

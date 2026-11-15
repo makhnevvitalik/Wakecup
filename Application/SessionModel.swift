@@ -214,7 +214,7 @@ final class SessionModel: ObservableObject {
         display = DisplayModeController(defaults: defaults, operations: .init(
             assertions: operations.startAssertions, enter: operations.enterBacklight,
             restore: operations.restoreBacklight, validate: operations.validateDisplayShortcut,
-            checkHealth: operations.checkBacklightHealth))
+            checkBacklight: operations.checkBacklight))
         now = operations.now()
         power = operations.readPower()
         restoreSavedEndTime()
@@ -806,7 +806,7 @@ final class SessionModel: ObservableObject {
     func tick() {
         now = operations.now()
         power = operations.readPower()
-        display.checkHealth()
+        display.checkBacklight()
         defer {
             syncBacklightCountdown()
             if phase == .active, !isRestarting, statusReadFailedAt == nil, deadline.map({ now < $0 }) ?? true {

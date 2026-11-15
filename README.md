@@ -77,7 +77,7 @@ Quick example. While your AI agent is working, leave the lid open and turn off *
 
 To use **Backlight off** for the first time, choose the mode and save a shortcut in the **Restore brightness** dialog. Use F1–F20 with at least one of Shift, Control, Option or Command. You can change it in the **Restore brightness** row while the backlight is on.
 
-Once the backlight goes dark, press the shortcut to restore the previous brightness and display mode. The brightness-up key also brings back the backlight if you forget the shortcut. Wakecup restores brightness when you stop it or if the app exits unexpectedly. Wakecup leaves macOS lock-screen settings alone.
+Once the backlight goes dark, press the shortcut to restore the previous brightness and display mode. If you change brightness with the system controls, Wakecup returns to the previous display mode and keeps the new brightness. If you stop or quit Wakecup while the backlight is off, it restores the saved brightness. If you have already turned the backlight on, it keeps your chosen level. A separate process can restore the backlight if the app exits unexpectedly. Wakecup leaves macOS lock-screen settings alone.
 
 ### Battery and closed lid
 
@@ -203,7 +203,7 @@ Wakecup требует **macOS 14 или новее**.
 
 При первом выборе **Без подсветки** Wakecup предложит настроить сочетание **Вернуть яркость**. Назначьте F1–F20 с одним или несколькими модификаторами Shift, Control, Option или Command. Пока подсветка включена, сочетание можно изменить в строке **Вернуть яркость**.
 
-Когда подсветка погаснет, нажмите сочетание, чтобы вернуть прежнюю яркость и режим экрана. Если забыли сочетание, включите подсветку клавишей увеличения яркости. Wakecup восстанавливает яркость при остановке режима и при неожиданном завершении приложения. Настройки блокировки экрана macOS Wakecup оставляет прежними.
+Когда подсветка погаснет, нажмите сочетание, чтобы вернуть прежнюю яркость и режим экрана. Если изменить яркость системными средствами, Wakecup вернёт предыдущий режим экрана и сохранит выбранную яркость. Если остановить или закрыть Wakecup при погашенной подсветке, приложение вернёт сохранённую яркость. Если подсветка уже включена, Wakecup оставит выбранный уровень. При неожиданном завершении приложения подсветку может восстановить отдельный процесс. Настройки блокировки экрана macOS Wakecup оставляет прежними.
 
 ### Аккумулятор и закрытая крышка
 
