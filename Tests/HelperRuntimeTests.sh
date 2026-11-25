@@ -2,9 +2,12 @@
 set -euo pipefail
 project_root="${0:A:h:h}"
 app="${1:-$project_root/build/Wakecup.app}"
-[[ "$(/usr/bin/lipo -archs "$app/Contents/MacOS/Wakecup")" == "$(/usr/bin/uname -m)" ]] || {
-  print -u2 'Runtime tests require an app built for this Mac architecture'; exit 2
-}
+host_arch=$(/usr/bin/uname -m)
+for executable in Contents/MacOS/Wakecup Contents/Resources/Helper/local.wakecup.helper; do
+  /usr/bin/lipo -verify_arch "$host_arch" "$app/$executable" || {
+    print -u2 "Runtime tests require $host_arch in $executable"; exit 2
+  }
+done
 "$app/Contents/MacOS/Wakecup" --helper-self-test
 fixture=$(/usr/bin/mktemp -d "${TMPDIR:-/private/tmp}/wakecup-injection-XXXXXXXX")
 trap '/bin/rm -rf "$fixture"' EXIT

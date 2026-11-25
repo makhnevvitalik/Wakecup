@@ -47,7 +47,7 @@ final class HelperService: NSObject, NSXPCListenerDelegate {
                     reply(pid, nil); return
                 }
                 let status = try files.read("status.json", as: SessionStatus.self)
-                guard restoreOnly || status.phase == "preparing" else {
+                guard restoreOnly || status.isPristine else {
                     throw WakecupError(message: "This session has already been started. Check its current status.")
                 }
                 let context = ManagedGuardContext(ownerUID: self.manifest.ownerUID, directory: files.identity,

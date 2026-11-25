@@ -9,9 +9,11 @@ final class DisplayModeController: ObservableObject {
 
     struct Operations {
         let assertions: (Bool) throws -> Void
-        let enter: (DisplayShortcut, @escaping () -> Void, @escaping (Result<Void, Error>, Bool) -> Void) -> Void
+        let enter: (@escaping (Result<Void, Error>, Bool) -> Void) -> Void
         let restore: (RestorationPolicy, @escaping (Result<Bool, Error>) -> Void) -> Void
         let validate: (DisplayShortcut) throws -> Void
+        let register: (DisplayShortcut, @escaping () -> Void) throws -> Void
+        let unregister: () -> Void
         let checkBacklight: (@escaping (BacklightState) -> Void) -> Void
     }
     private enum Transition { case entering, restoring }
@@ -21,14 +23,18 @@ final class DisplayModeController: ObservableObject {
     @Published private(set) var mode: DisplayMode
     @Published private(set) var shortcut: DisplayShortcut?
     @Published private(set) var isBacklightOff = false
+    @Published private(set) var isReturningControl = false
     @Published private(set) var error: SessionMessage?
+    @Published private(set) var shortcutRegistrationError: SessionMessage?
     @Published private var transition: Transition?
     @Published private var countdown: BlackoutCountdown?
     var transitioning: Bool { transition != nil }
     var hasCountdown: Bool { countdown != nil }
 
+    var shortcutPressed: (() -> Void)?
     private let defaults: UserDefaults
     private let operations: Operations
+    private var shortcutSessionActive = false
     private var activationID: UUID?
     private var previousMode: DisplayMode
     private var restoreAfterEntry: RestorationPolicy?
@@ -39,10 +45,10 @@ final class DisplayModeController: ObservableObject {
 
     init(defaults: UserDefaults, operations: Operations) {
         self.defaults = defaults; self.operations = operations
-        if let data = defaults.data(forKey: "displayRestoreShortcut") {
+        if let data = defaults.data(forKey: SettingsKey.displayRestoreShortcut) {
             if let value = try? JSONDecoder().decode(DisplayShortcut.self, from: data), value.isValid {
                 shortcut = value
-            } else { defaults.removeObject(forKey: "displayRestoreShortcut") }
+            } else { defaults.removeObject(forKey: SettingsKey.displayRestoreShortcut) }
         }
         mode = defaults.string(forKey: "displayMode").flatMap(DisplayMode.init(rawValue:))
             ?? .mayTurnOff
@@ -53,19 +59,45 @@ final class DisplayModeController: ObservableObject {
 
     func clearError() { error = nil }
 
+    func setShortcutSessionActive(_ active: Bool) {
+        guard active != shortcutSessionActive else { return }
+        shortcutSessionActive = active
+        if active, let shortcut {
+            do { try registerShortcut(shortcut) }
+            catch { shortcutRegistrationError = SessionMessage(error.localizedDescription) }
+        } else {
+            releaseShortcutIfUnused()
+        }
+    }
+
+    private func releaseShortcutIfUnused() {
+        // Keep the escape chord available until brightness is restored, even after stop.
+        if !shortcutSessionActive && !isBacklightOff && !transitioning { operations.unregister() }
+    }
+
+    private func registerShortcut(_ value: DisplayShortcut) throws {
+        try operations.register(value) { [weak self] in self?.shortcutPressed?() }
+        shortcutRegistrationError = nil
+    }
+
     func validateShortcut(_ value: DisplayShortcut) throws {
-        guard value.isValid else { throw WakecupError(message: "display.shortcut.invalid") }
         try operations.validate(value)
     }
 
     func setShortcut(_ value: DisplayShortcut?, running: Bool) throws -> SessionOperationResult {
         guard !isBacklightOff, !transitioning else { throw WakecupError(message: "display.shortcut.locked") }
-        if let value { try validateShortcut(value) }
+        if let value {
+            if shortcutSessionActive { try registerShortcut(value) }
+            else { try validateShortcut(value) }
+        } else {
+            operations.unregister()
+        }
+        shortcutRegistrationError = nil
         shortcut = value
         error = nil
-        if let value { defaults.set(try JSONEncoder().encode(value), forKey: "displayRestoreShortcut") }
+        if let value { defaults.set(try JSONEncoder().encode(value), forKey: SettingsKey.displayRestoreShortcut) }
         else {
-            defaults.removeObject(forKey: "displayRestoreShortcut")
+            defaults.removeObject(forKey: SettingsKey.displayRestoreShortcut)
             if mode == .backlightOff {
                 cancelCountdown()
                 return returnToMode(previousMode, running: running)
@@ -144,20 +176,36 @@ final class DisplayModeController: ObservableObject {
         darken()
     }
 
+    func darkenImmediately() {
+        guard !transitioning, !isBacklightOff, shortcut != nil else { return }
+        if mode != .backlightOff {
+            do { try operations.assertions(true) }
+            catch { self.error = Self.assertionFailure; return }
+            // The shortcut changes the running display without changing the next session's preference.
+            previousMode = mode
+            mode = .backlightOff
+            error = nil
+        }
+        cancelCountdown()
+        darken()
+    }
+
     private func darken() {
         guard let shortcut else {
             error = "Choose a restore shortcut before turning the backlight off."
             return
         }
-        let token = UUID()
-        activationID = token
+        do { try registerShortcut(shortcut) }
+        catch {
+            returnToMode(previousMode, running: true)
+            shortcutRegistrationError = SessionMessage(error.localizedDescription)
+            return
+        }
+        activationID = UUID()
         blackoutSessionEnded = false
         reportedHealthFailure = false
         transition = .entering
-        operations.enter(shortcut, { [weak self] in
-            guard let self, self.activationID == token else { return }
-            self.restoreForUser(running: !self.blackoutSessionEnded)
-        }, { [weak self] result, needsRestoration in
+        operations.enter { [weak self] result, needsRestoration in
             guard let self else { return }
             self.transition = nil
             self.isBacklightOff = needsRestoration
@@ -174,19 +222,25 @@ final class DisplayModeController: ObservableObject {
             if let restore {
                 if needsRestoration {
                     self.restoreBrightness(to: self.previousMode, running: !self.blackoutSessionEnded, policy: restore)
-                } else { self.flushRestorationWaiters() }
+                } else { self.finishRestoration() }
+            } else {
+                self.releaseShortcutIfUnused()
             }
-        })
+        }
     }
 
     @discardableResult
     private func returnToMode(_ value: DisplayMode, running: Bool) -> SessionOperationResult {
-        mode = value
-        save()
         if running {
             do { try operations.assertions(value.keepsDisplayOn) }
-            catch { return reportFailure(Self.assertionFailure) }
+            catch let termination as SessionTermination where termination.code == .thermal {
+                // Brightness can finish before the model receives the thermal stop.
+                returnToMode(previousMode, running: false)
+                return reportFailure(SessionMessage(termination.text))
+            } catch { return reportFailure(Self.assertionFailure) }
         }
+        mode = value
+        save()
         return .completed
     }
 
@@ -194,6 +248,7 @@ final class DisplayModeController: ObservableObject {
     private func restoreBrightness(to value: DisplayMode, running: Bool, policy: RestorationPolicy,
                                    notice: SessionMessage? = nil,
                                    completion: ((SessionOperationResult) -> Void)? = nil) -> SessionOperationResult {
+        if blackoutSessionEnded && !isReturningControl { isReturningControl = true }
         transition = .restoring
         var outcome = SessionOperationResult.pending()
         operations.restore(policy) { [weak self] result in
@@ -218,7 +273,7 @@ final class DisplayModeController: ObservableObject {
                 outcome = self.reportFailure(SessionMessage(failure.localizedDescription))
             }
             completion?(outcome)
-            self.flushRestorationWaiters()
+            self.finishRestoration()
         }
         return outcome
     }
@@ -233,7 +288,7 @@ final class DisplayModeController: ObservableObject {
         if transition == .restoring { return .pending() }
         guard isBacklightOff else { return .completed }
         error = nil
-        return restoreBrightness(to: previousMode, running: running, policy: .saved)
+        return restoreBrightness(to: previousMode, running: running, policy: running ? .saved : .preserveVisible)
     }
 
     @discardableResult
@@ -241,20 +296,22 @@ final class DisplayModeController: ObservableObject {
         cancelCountdown()
         blackoutSessionEnded = true
         if let completion { restorationWaiters.append(completion) }
-        if transition == .entering {
-            restoreAfterEntry = restoreAfterEntry ?? .preserveVisible
+        if let transition {
+            if !isReturningControl { isReturningControl = true }
+            if transition == .entering { restoreAfterEntry = restoreAfterEntry ?? .preserveVisible }
             return .pending()
         }
-        if transition == .restoring { return .pending() }
         if isBacklightOff { return restoreBrightness(to: previousMode, running: false, policy: .preserveVisible) }
-        flushRestorationWaiters()
+        finishRestoration()
         return .completed
     }
 
-    private func flushRestorationWaiters() {
+    private func finishRestoration() {
+        releaseShortcutIfUnused()
         let waiters = restorationWaiters
         restorationWaiters.removeAll()
         waiters.forEach { $0() }
+        if isReturningControl { isReturningControl = false }
     }
 
     func checkBacklight() {

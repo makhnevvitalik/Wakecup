@@ -24,7 +24,7 @@ private final class RecoveryFixture {
     var probe: GuardianStatusSocket.Reply = .timedOut
 
     init() {
-        status = SessionStatus(phase: "active", helperPID: helper.pid, helperIdentity: helper,
+        status = SessionStatus(phase: .active, helperPID: helper.pid, helperIdentity: helper,
             phaseChangedAt: 100, ownsSleepChange: true, sleepRestored: false)
         owner = GuardLeaseOwner(session: session, process: helper, bootID: "boot", recovering: false, ownsSleepChange: true)
         processes[helper.pid] = RecoveryProcess(identity: helper, parentPID: 10, executable: "/Wakecup",
@@ -90,7 +90,7 @@ struct RecoveryTests {
 
         let stale = RecoveryFixture()
         let recovered = try recoverSession(stale.session, using: stale.operations)
-        try expect(recovered.sleepRestored && recovered.phase == "stopped", "stale live helper is recovered")
+        try expect(recovered.sleepRestored && recovered.phase == .stopped, "stale live helper is recovered")
         try expect(stale.events.firstIndex(of: "signal:301:\(SIGKILL)")! < stale.events.firstIndex(of: "pmset0")!, "old pmset cannot run after restoration")
         try expect(stale.events.firstIndex(of: "signal:300:\(SIGKILL)")! < stale.events.firstIndex(of: "pmset0")!, "helper is dead before restoration")
 

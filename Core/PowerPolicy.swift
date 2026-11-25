@@ -44,7 +44,3 @@ func powerRestriction(_ state: PowerState?, mode: PowerMode, threshold: Int) -> 
     }
     return nil
 }
-
-func powerStopReason(_ state: PowerState?, mode: PowerMode, threshold: Int) -> String? {
-    powerRestriction(state, mode: mode, threshold: threshold)?.reason
-}

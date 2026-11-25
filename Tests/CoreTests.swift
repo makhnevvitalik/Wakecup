@@ -19,7 +19,16 @@ struct CoreTests {
         expect(identity.matches(ProcessIdentity(pid: 123, startedAtMicroseconds: 100)), "same process identity accepted")
         expect(!identity.matches(ProcessIdentity(pid: 123, startedAtMicroseconds: 200)), "reused PID is not the previous helper")
         expect(!identity.matches(nil), "missing process is not the previous helper")
-        let active = SessionStatus(phase: "active", phaseChangedAt: 100)
+        let legacyStatusData = Data(#"{"phase":"stopped","helperPID":0,"reason":"время истекло","ownsSleepChange":true,"sleepRestored":true}"#.utf8)
+        var legacyStatus = try JSONDecoder().decode(SessionStatus.self, from: legacyStatusData)
+        expect(legacyStatus.phase == .stopped && legacyStatus.reasonCode == .expired,
+               "old status retains its phase and stop semantics")
+        legacyStatus.setTermination(.requested)
+        let wireStatus = try JSONEncoder().encode(legacyStatus)
+        let oldWire = try JSONSerialization.jsonObject(with: wireStatus) as? [String: Any]
+        expect(oldWire?["phase"] as? String == "stopped" && oldWire?["reason"] as? String == "остановлено"
+               && oldWire?["stopCode"] as? String == "requested", "new status preserves old phase and reason fields alongside its code")
+        let active = SessionStatus(phase: .active, phaseChangedAt: 100)
         expect(active.hasRecentActivity(at: 105), "a recent phase change gives the first socket probe time to answer")
         expect(!active.hasRecentActivity(at: 112), "a phase change expires at the response timeout")
         expect(!active.hasRecentActivity(at: 50), "a phase change from a future monotonic time is rejected")
@@ -37,23 +46,23 @@ struct CoreTests {
             && updatedThreshold.effectiveThreshold == 90 && updatedThreshold.settingsError == nil, "Guardian accepts a live 90-percent cutoff")
         let maximumTimer = try? SessionMonitor(configuration: config(3_596_400), now: 100)
         expect(maximumTimer?.deadline == 3_596_500, "Guardian accepts a 999-hour timer")
-        expect(powerStopReason(ac, mode: .battery, threshold: 20) == nil, "allow battery profile also allows charging")
+        expect(powerRestriction(ac, mode: .battery, threshold: 20) == nil, "allow battery profile also allows charging")
         for threshold in [10, 20, 50, 90] {
-            expect(powerStopReason(PowerState(onAC: false, percent: threshold + 1), mode: .battery, threshold: threshold) == nil, "above threshold \(threshold)")
-            expect(powerStopReason(PowerState(onAC: false, percent: threshold), mode: .battery, threshold: threshold) != nil, "at threshold \(threshold)")
-            expect(powerStopReason(PowerState(onAC: false, percent: threshold - 1), mode: .battery, threshold: threshold) != nil, "below threshold \(threshold)")
+            expect(powerRestriction(PowerState(onAC: false, percent: threshold + 1), mode: .battery, threshold: threshold) == nil, "above threshold \(threshold)")
+            expect(powerRestriction(PowerState(onAC: false, percent: threshold), mode: .battery, threshold: threshold) != nil, "at threshold \(threshold)")
+            expect(powerRestriction(PowerState(onAC: false, percent: threshold - 1), mode: .battery, threshold: threshold) != nil, "below threshold \(threshold)")
         }
-        expect(powerStopReason(nil, mode: .battery, threshold: 20) != nil, "missing power snapshot stops session")
-        expect(powerStopReason(PowerState(onAC: false, percent: nil), mode: .battery, threshold: 20) != nil, "unknown battery stops session")
-        expect(powerStopReason(PowerState(onAC: false, percent: 101), mode: .battery, threshold: 20) != nil, "invalid percentage stops session")
-        expect(powerStopReason(battery, mode: .ac, threshold: 20) != nil, "mains-only stops on disconnect")
+        expect(powerRestriction(nil, mode: .battery, threshold: 20) != nil, "missing power snapshot stops session")
+        expect(powerRestriction(PowerState(onAC: false, percent: nil), mode: .battery, threshold: 20) != nil, "unknown battery stops session")
+        expect(powerRestriction(PowerState(onAC: false, percent: 101), mode: .battery, threshold: 20) != nil, "invalid percentage stops session")
+        expect(powerRestriction(battery, mode: .ac, threshold: 20) != nil, "mains-only stops on disconnect")
         for invalid in [9, 91] {
-            expect(powerStopReason(ac, mode: .battery, threshold: invalid) != nil, "invalid threshold \(invalid) rejected")
+            expect(powerRestriction(ac, mode: .battery, threshold: invalid) != nil, "invalid threshold \(invalid) rejected")
         }
         var timed = try SessionMonitor(configuration: config(2), now: 100)
         expect(timed.deadline == 102, "timer starts after authorization at actual start")
         expect(timed.step(now: 101.99, control: SessionControl(), power: battery, ownerAlive: true) == nil, "does not stop early")
-        expect(timed.step(now: 102, control: SessionControl(), power: battery, ownerAlive: true) == "время истекло", "auto-stop exactly at deadline")
+        expect(timed.step(now: 102, control: SessionControl(), power: battery, ownerAlive: true)?.code == .expired, "auto-stop exactly at deadline")
         var resumed = try SessionMonitor(configuration: config(2), now: 100)
         expect(resumed.step(now: 500, control: SessionControl(), power: battery, ownerAlive: true) != nil, "past deadline after sleep stops immediately")
         var infinite = try SessionMonitor(configuration: config(nil), now: 100)
@@ -99,7 +108,7 @@ struct CoreTests {
                "finite timer can become infinite")
         expect(live.step(now: 115, control: update(4, 130), power: battery, ownerAlive: true) == nil && live.deadline == 130,
                "infinite timer can become finite")
-        expect(live.step(now: 130, control: update(5, 500), power: battery, ownerAlive: true) == "время истекло",
+        expect(live.step(now: 130, control: update(5, 500), power: battery, ownerAlive: true)?.code == .expired,
                "new settings cannot revive an expired deadline")
         expect(live.deadline == 130 && live.settingsRevision == 4, "expired session does not acknowledge or apply revival")
 
@@ -126,16 +135,16 @@ struct CoreTests {
         expect(exactMaximum.deadline == 3_596_510 && exactMaximum.settingsError == nil, "maximum remaining live duration is accepted inclusively")
 
         var changedPower = try SessionMonitor(configuration: config(), now: 100)
-        expect(changedPower.step(now: 110, control: update(1, 300, mode: .ac), power: battery, ownerAlive: true) == "зарядка отключена",
+        expect(changedPower.step(now: 110, control: update(1, 300, mode: .ac), power: battery, ownerAlive: true)?.code == .powerRestriction,
                "new power policy is checked on the same step")
         expect(changedPower.settingsRevision == 1 && changedPower.effectivePowerMode == .ac && changedPower.deadline == 300,
                "terminal changed-policy step exposes the applied settings for acknowledgement")
         var changedThreshold = try SessionMonitor(configuration: config(), now: 100)
         expect(changedThreshold.step(now: 110, control: update(1, 300, threshold: 50),
-                                    power: PowerState(onAC: false, percent: 40), ownerAlive: true) == "заряд достиг порога 50%",
+                                    power: PowerState(onAC: false, percent: 40), ownerAlive: true)?.text == "заряд достиг порога 50%",
                "new battery threshold is checked immediately")
         var expiredUpdate = try SessionMonitor(configuration: config(), now: 100)
-        expect(expiredUpdate.step(now: 110, control: update(1, 109), power: battery, ownerAlive: true) == "время истекло",
+        expect(expiredUpdate.step(now: 110, control: update(1, 109), power: battery, ownerAlive: true)?.code == .expired,
                "valid already-elapsed replacement deadline stops immediately")
         expect(expiredUpdate.deadline == 109 && expiredUpdate.settingsRevision == 1, "elapsed replacement is acknowledged before terminal status")
         var relaxedPower = try SessionMonitor(configuration: config(mode: .ac), now: 100)
@@ -144,11 +153,11 @@ struct CoreTests {
         var stoppedUpdate = try SessionMonitor(configuration: config(), now: 100)
         var stopControl = update(1)
         stopControl.stop = true
-        expect(stoppedUpdate.step(now: 110, control: stopControl, power: battery, ownerAlive: true) == "остановлено"
+        expect(stoppedUpdate.step(now: 110, control: stopControl, power: battery, ownerAlive: true)?.code == .requested
                && stoppedUpdate.settingsRevision == 0, "manual stop takes precedence over live settings")
-        expect(stoppedUpdate.step(now: 110, control: update(1), power: battery, ownerAlive: false) == "приложение закрыто"
+        expect(stoppedUpdate.step(now: 110, control: update(1), power: battery, ownerAlive: false)?.code == .ownerExited
                && stoppedUpdate.settingsRevision == 0, "owner death takes precedence over live settings")
-        expect(stoppedUpdate.step(now: 110, control: update(1), power: battery, ownerAlive: true, interrupted: true) == "защитный процесс завершён"
+        expect(stoppedUpdate.step(now: 110, control: update(1), power: battery, ownerAlive: true, interrupted: true)?.code == .interrupted
                && stoppedUpdate.settingsRevision == 0, "interruption takes precedence over live settings")
 
         var restartConfiguration = config(120)
@@ -156,7 +165,7 @@ struct CoreTests {
         let restarted = try SessionMonitor(configuration: restartConfiguration, now: 200)
         expect(restarted.deadline == 250, "restart retains exact absolute deadline instead of resetting the duration")
         var expiredRestart = try SessionMonitor(configuration: restartConfiguration, now: 260)
-        expect(expiredRestart.step(now: 260, control: update(1, 500), power: battery, ownerAlive: true) == "время истекло",
+        expect(expiredRestart.step(now: 260, control: update(1, 500), power: battery, ownerAlive: true)?.code == .expired,
                "expiry during authorization is detected on the first step before mutation")
         restartConfiguration.absoluteDeadline = 10_000_000
         expect(try SessionMonitor(configuration: restartConfiguration, now: 0).deadline == 10_000_000,
@@ -167,7 +176,7 @@ struct CoreTests {
             do { _ = try SessionMonitor(configuration: restartConfiguration, now: 100) } catch { rejected = true }
             expect(rejected, "invalid restart deadline rejected: \(invalidDeadline)")
         }
-        var published = SessionStatus(phase: "active")
+        var published = SessionStatus(phase: .active)
         expect(published.update(from: changedPower), "terminal power-policy update requests immediate status publication")
         expect(published.settingsRevision == 1 && published.settingsError == nil && published.powerMode == .ac
                && published.threshold == 25 && published.deadline == 300,
@@ -186,6 +195,91 @@ struct CoreTests {
         let encodedUpdate = try decoder.decode(SessionControl.self, from: encoder.encode(update(4, nil, mode: .ac, threshold: 40)))
         expect(encodedUpdate.update == SessionLiveUpdate(revision: 4, powerMode: .ac, threshold: 40, deadline: nil),
                "live settings round-trip finite revision and infinite deadline")
+
+        let legacyConfigurationJSON = #"{"id":"61B251AC-C22A-4F5F-8F59-F495D3C31AD3","parentPID":123,"powerMode":"battery","threshold":20,"closedLid":true,"keepDisplayOn":false}"#
+        let legacyConfiguration = try decoder.decode(SessionConfiguration.self, from: Data(legacyConfigurationJSON.utf8))
+        let legacyControl = try decoder.decode(SessionControl.self, from: Data(#"{"stop":false}"#.utf8))
+        var legacyThermalPolicy = try SessionMonitor(configuration: legacyConfiguration, now: 100)
+        expect(legacyThermalPolicy.step(now: 101, control: legacyControl, power: ac, ownerAlive: true, thermalState: .serious) == nil,
+               "a legacy session continues at serious with the default cutoff")
+        expect(legacyThermalPolicy.step(now: 102, control: legacyControl, power: ac, ownerAlive: true, thermalState: .critical)?.code == .thermal,
+               "a legacy session still stops at critical")
+        let invalidConfigurationJSON = legacyConfigurationJSON.dropLast() + #","thermalStopLevel":"unsupported"}"#
+        let invalidConfiguration = try? decoder.decode(SessionConfiguration.self, from: Data(invalidConfigurationJSON.utf8))
+        expect(invalidConfiguration == nil, "an unrecognized configured thermal cutoff prevents startup")
+        let invalidControl = try? decoder.decode(SessionControl.self, from: Data(#"{"stop":false,"thermalStopLevel":"unsupported"}"#.utf8))
+        expect(invalidControl == nil, "an unrecognized live thermal cutoff cannot silently relax protection")
+
+        var seriousConfiguration = config()
+        seriousConfiguration.thermalStopLevel = .serious
+        let savedConfiguration = try decoder.decode(SessionConfiguration.self, from: encoder.encode(seriousConfiguration))
+        var seriousThermalPolicy = try SessionMonitor(configuration: savedConfiguration, now: 100)
+        expect(seriousThermalPolicy.step(now: 101, control: legacyControl, power: ac, ownerAlive: true, thermalState: .fair) == nil,
+               "a serious cutoff permits fair thermal state")
+        expect(seriousThermalPolicy.step(now: 102, control: legacyControl, power: ac, ownerAlive: true, thermalState: .serious)?.code == .thermal,
+               "the configured serious cutoff survives persistence and stops the session")
+
+        var liveThermalPolicy = try SessionMonitor(configuration: seriousConfiguration, now: 100)
+        let relaxedThermalControl = SessionControl(thermalStopLevel: .critical)
+        expect(liveThermalPolicy.step(now: 101, control: relaxedThermalControl, power: ac, ownerAlive: true, thermalState: .serious) == nil,
+               "a live cutoff change applies independently of revisioned settings")
+        let tighterThermalControl = SessionControl(stop: true, thermalStopLevel: .serious)
+        expect(liveThermalPolicy.step(now: 102, control: tighterThermalControl, power: ac, ownerAlive: true, thermalState: .serious)?.code == .thermal,
+               "the current thermal cutoff takes precedence over a pending regular stop")
+
+        let thermallyCancelled = try decoder.decode(SessionControl.self,
+            from: Data(#"{"stop":true,"thermalStopRequested":true}"#.utf8))
+        var cancelledDuringAuthorization = try SessionMonitor(configuration: config(), now: 100)
+        let thermalReason = cancelledDuringAuthorization.step(now: 101, control: thermallyCancelled,
+            power: ac, ownerAlive: true)
+        expect(thermalReason?.code == .thermal,
+               "a latched thermal stop during authorization retains its reason after cooling")
+        let thermalWire = Data(#"{"phase":"stopped","helperPID":0,"reason":"Wakecup stopped because the Mac is too hot.","stopCode":"thermal","ownsSleepChange":true,"sleepRestored":true}"#.utf8)
+        let thermalStatus = try decoder.decode(SessionStatus.self, from: thermalWire)
+        expect(thermalStatus.reasonCode == .thermal && thermalStatus.reason == thermalReason?.text,
+               "a thermal terminal status exposes the typed stop and localized message key")
+
+        // Only fake reads and writes are used for both sides of the power transaction.
+        var sleepDisabled = false
+        var writes: [Bool] = []
+        var preflightThermalState = ProcessInfo.ThermalState.nominal
+        do {
+            try temporaryDisable(read: {
+                preflightThermalState = .critical
+                return sleepDisabled
+            }, preflight: {
+                if let reason = cancelledDuringAuthorization.thermalTermination(control: legacyControl,
+                    thermalState: preflightThermalState) {
+                    throw reason
+                }
+            }, write: { writes.append($0) }, body: {})
+            expect(false, "the guardian vetoes startup when the Mac heats up during the baseline check")
+        } catch {
+            expect((error as? SessionTermination)?.code == .thermal,
+                   "the last preflight reports thermal shutdown")
+        }
+        expect(writes.isEmpty, "the last preflight does not disable sleep or attempt an unowned restoration")
+
+        var enteredActiveSession = false
+        do {
+            try temporaryDisable(read: { sleepDisabled }, write: { disabled in
+                sleepDisabled = disabled
+                writes.append(disabled)
+            }, body: {
+                let thermalState: ProcessInfo.ThermalState = sleepDisabled ? .critical : .nominal
+                if let reason = cancelledDuringAuthorization.step(now: 102, control: legacyControl,
+                    power: ac, ownerAlive: true, thermalState: thermalState) {
+                    throw reason
+                }
+                enteredActiveSession = true
+            })
+            expect(false, "the post-mutation thermal stop is reported")
+        } catch {
+            expect((error as? SessionTermination)?.code == .thermal,
+                   "the post-mutation stop is classified as thermal")
+        }
+        expect(!sleepDisabled && writes == [true, false] && !enteredActiveSession,
+               "thermal stop after enabling restores sleep before returning without going active")
 
         print("Core checks: \(count), failures: \(failures.count)")
         failures.forEach { print("FAIL: " + $0) }

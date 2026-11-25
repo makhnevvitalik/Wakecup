@@ -1,7 +1,6 @@
 import AppKit
 import SwiftUI
 
-// Quick actions fill the concrete end time; selection belongs to the time row.
 struct DurationPresetPicker: NSViewRepresentable {
     @ObservedObject var model: SessionModel
     private let presets = [60, 180, 300, 0]
@@ -9,7 +8,7 @@ struct DurationPresetPicker: NSViewRepresentable {
     func makeCoordinator() -> Coordinator { Coordinator(model: model) }
 
     func makeNSView(context: Context) -> NSSegmentedControl {
-        let control = NSSegmentedControl(labels: ["", "", "", "∞"], trackingMode: .momentary,
+        let control = NSSegmentedControl(labels: ["", "", "", "∞"], trackingMode: .selectOne,
             target: context.coordinator, action: #selector(Coordinator.selectPreset(_:)))
         control.controlSize = .small
         control.font = AppStyle.Font.controlLabel
@@ -28,7 +27,7 @@ struct DurationPresetPicker: NSViewRepresentable {
         }
         control.setAccessibilityLabel(localized("Duration"))
         control.setToolTip(localized("Until stopped manually"), forSegment: 3)
-        control.selectedSegment = -1
+        control.selectedSegment = model.selectedEndTimePreset.flatMap { presets.firstIndex(of: $0.rawValue) } ?? -1
     }
 
     final class Coordinator: NSObject {

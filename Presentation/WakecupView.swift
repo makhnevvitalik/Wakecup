@@ -1,40 +1,22 @@
 import SwiftUI
 
-struct WakecupView: View {
+struct WakecupHeaderView: View {
     @ObservedObject var model: SessionModel
-    @ObservedObject private var updates: UpdateChecker
+    @ObservedObject var updates: UpdateChecker
     let showAbout: () -> Void
-    let configureDisplayShortcut: (Bool, @escaping (Bool) -> Void) -> Void
     let showMCPSetup: () -> Void
     let helperInteraction: HelperInteraction
     let isMCPEnabled: () -> Bool
     let setMCPEnabled: (Bool) -> Void
 
-    init(model: SessionModel, updates: UpdateChecker? = nil, showAbout: @escaping () -> Void, configureDisplayShortcut: @escaping (Bool, @escaping (Bool) -> Void) -> Void = { _, complete in complete(false) },
-         showMCPSetup: @escaping () -> Void = {}, helperInteraction: HelperInteraction = .init(),
-         isMCPEnabled: @escaping () -> Bool = { false }, setMCPEnabled: @escaping (Bool) -> Void = { _ in }) {
-        self.model = model
-        self.updates = updates ?? UpdateChecker()
-        self.showAbout = showAbout
-        self.configureDisplayShortcut = configureDisplayShortcut
-        self.showMCPSetup = showMCPSetup
-        self.helperInteraction = helperInteraction
-        self.isMCPEnabled = isMCPEnabled
-        self.setMCPEnabled = setMCPEnabled
-    }
-
     var body: some View {
         VStack(alignment: .leading, spacing: AppStyle.Layout.cardSpacing) {
             header
             SessionActionsView(model: model)
-            SessionOptionsView(model: model, configureDisplayShortcut: configureDisplayShortcut, helperInteraction: helperInteraction)
         }
-        .padding(AppStyle.Layout.panelInset).frame(width: MenuLayout.width).font(Font(AppStyle.Font.body)).controlSize(.small).tint(Color(AppStyle.Color.accent))
-    }
-
-    private var releaseURL: URL? {
-        guard case let .finished(.updateAvailable(_, url)) = updates.state else { return nil }
-        return url
+        .padding([.top, .horizontal], AppStyle.Layout.panelInset)
+        .padding(.bottom, AppStyle.Layout.cardSpacing)
+        .wakecupPanelContent()
     }
 
     private static let headerIcon = AppStyle.Icon.brandImage(WakecupBrand.appIcon, size: AppStyle.Icon.brandSize)
@@ -55,7 +37,7 @@ struct WakecupView: View {
                         version
                     }.fixedSize(horizontal: false, vertical: true)
                 }
-                SessionStatusView(model: model, releaseURL: releaseURL)
+                SessionStatusView(model: model, releaseURL: updates.availableRelease?.url)
             }.frame(maxWidth: .infinity, alignment: .leading)
             SettingsMenu(model: model, showAbout: showAbout, showMCPSetup: showMCPSetup, helperInteraction: helperInteraction,
                          isMCPEnabled: isMCPEnabled, setMCPEnabled: setMCPEnabled)
@@ -74,5 +56,26 @@ struct WakecupView: View {
            !version.isEmpty {
             Text(version).font(Font(AppStyle.Font.metadata)).foregroundStyle(.secondary)
         }
+    }
+}
+
+struct WakecupOptionsView: View {
+    let model: SessionModel
+    let configureDisplayShortcut: (Bool, @escaping (Bool) -> Void) -> Void
+    let helperInteraction: HelperInteraction
+
+    var body: some View {
+        SessionOptionsView(model: model, configureDisplayShortcut: configureDisplayShortcut, helperInteraction: helperInteraction)
+            .padding([.horizontal, .bottom], AppStyle.Layout.panelInset)
+            .wakecupPanelContent()
+    }
+}
+
+private extension View {
+    func wakecupPanelContent() -> some View {
+        frame(width: MenuLayout.width)
+            .font(Font(AppStyle.Font.body))
+            .controlSize(.small)
+            .tint(Color(AppStyle.Color.accent))
     }
 }

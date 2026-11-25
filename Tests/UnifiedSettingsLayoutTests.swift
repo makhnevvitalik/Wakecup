@@ -10,6 +10,7 @@ import SwiftUI
     }
 
     @MainActor private static func run() throws {
+        NSTimeZone.default = TimeZone(identifier: "Asia/Yekaterinburg")!
         let language = CommandLine.arguments[1]
         UserDefaults.standard.setVolatileDomain([AppLocalization.languageKey: language], forName: UserDefaults.argumentDomain)
         NSApplication.shared.setActivationPolicy(.prohibited)
@@ -17,7 +18,7 @@ import SwiftUI
         guard let resources = Bundle.main.resourceURL else { throw WakecupError(message: "Missing test bundle resources") }
         let data = try Data(contentsOf: resources.appendingPathComponent(language + ".lproj/Localizable.strings"))
         let translations = try PropertyListSerialization.propertyList(from: data, format: nil) as! [String: String]
-        for key in ["When to stop", "Stop at", "Today", "Tomorrow", "Choose date…", "End time", "Stops in %@", "Active until %@", "Choose an end date within the next 30 days.", "Until stopped manually", "Apply", "Cancel edits", "Applying settings…", "The Wakecup timer ended. “Keep awake with lid closed” was not changed.", "Display backlight", "May turn off", "Keep on", "Backlight off", "Restore brightness", "Configure…"] {
+        for key in ["Run time", "Stop at", "Today", "Tomorrow", "Choose date…", "End time", "Until %@ (%@)", "%@ tomorrow", "New stop time", "Enter a time such as %@.", "Active until %@", "Choose an end date within the next 30 days.", "Until stopped manually", "Apply", "Cancel edits", "Backlight turns off in %@", "%ld s", "Cancel backlight countdown", "Cancel turning off the backlight", "Applying settings…", "The Wakecup timer ended. “Keep awake with lid closed” was not changed.", "Display backlight", "May turn off", "Keep on", "Backlight off", "Backlight shortcut", "Configure…", "Change…", "Not assigned", "Configure backlight shortcut", "Change backlight shortcut"] {
             try expect(translations[key] != nil && localized(key) == translations[key], "Fixture must load the real \(language) translation: \(key)")
         }
         let suite = "WakecupUnifiedSettings-" + UUID().uuidString
@@ -44,7 +45,8 @@ import SwiftUI
             scheduleTicks: { _ in {} }, readLidClosed: { fixture.lidState }, guardianIsRunning: { _ in false })
         operations.wallNow = { Date(timeIntervalSince1970: 1_794_309_600 + fixture.now - 1000) }
         let model = SessionModel(defaults: defaults, operations: operations, helper: helper)
-        let host = NSHostingController(rootView: WakecupView(model: model, showAbout: {})
+        let host = NSHostingController(rootView: WakecupLayoutFixture(model: model, updates: UpdateChecker(), showAbout: {})
+            .environment(\.locale, Locale(identifier: "en-GB-u-hc-h23"))
             .background(Color(nsColor: NSColor(calibratedWhite: 0.91, alpha: 1))))
         let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: MenuLayout.width, height: 900),
             styleMask: [.borderless], backing: .buffered, defer: false)
@@ -52,7 +54,7 @@ import SwiftUI
         defer { model.stop(); window.orderOut(nil) }
 
         @MainActor func layout(_ name: String) throws -> NSSize {
-            for _ in 0..<3 { RunLoop.main.run(until: Date().addingTimeInterval(0.03)); host.view.layoutSubtreeIfNeeded() }
+            for _ in 0..<5 { RunLoop.main.run(until: Date().addingTimeInterval(0.04)); host.view.layoutSubtreeIfNeeded() }
             let size = host.view.fittingSize
             try expect(abs(size.width - MenuLayout.width) < 1, "Unified settings widened the menu: \(name)")
             if model.settingsMessage == nil && model.displayControlError == nil {
@@ -62,7 +64,7 @@ import SwiftUI
             host.view.setFrameSize(size); window.setContentSize(size); host.view.layoutSubtreeIfNeeded()
             host.view.displayIfNeeded()
             if model.phase == .active && model.durationEditDirty,
-               let heading = descendants(host.view).compactMap({ $0 as? NSTextField }).first(where: { $0.stringValue == localized("When to stop") }) {
+               let heading = descendants(host.view).compactMap({ $0 as? NSTextField }).first(where: { $0.stringValue == localized("Run time") }) {
                 let needed = (heading.stringValue as NSString).size(withAttributes: [.font: AppStyle.Font.sectionTitle]).width
                 try expect(heading.bounds.width + 1 >= needed, "The time heading must fit while editing: " + name)
             }
@@ -107,28 +109,31 @@ import SwiftUI
             completeSetup = completion
         }
         model.selectDisplayMode(.keepOn)
-        DisplayShortcutEditor.selectMode(.backlightOff, model: model, configure: requestSetup)
+        model.selectDisplayMode(.backlightOff, configureShortcut: requestSetup)
         try expect(setupRequests == 1 && model.displayMode == .keepOn && model.displayShortcut == nil,
                    "The editor must leave the previous mode selected while setup is open")
         completeSetup?(false)
         try expect(model.displayMode == .keepOn && model.displayShortcut == nil,
                    "First-use Cancel must keep the previous display mode")
-        DisplayShortcutEditor.selectMode(.backlightOff, model: model, configure: requestSetup)
+        model.selectDisplayMode(.backlightOff, configureShortcut: requestSetup)
         completeSetup?(true)
         try expect(model.displayMode == .keepOn, "Closing setup without a shortcut cannot select Backlight off")
         let chosen = DisplayShortcut(keyCode: 120, modifiers: DisplayShortcut.control | DisplayShortcut.option)
-        DisplayShortcutEditor.selectMode(.backlightOff, model: model, configure: requestSetup)
+        model.selectDisplayMode(.backlightOff, configureShortcut: requestSetup)
         try model.setDisplayShortcut(chosen)
         try expect(model.displayMode == .keepOn, "Do not change the mode while setup is still open")
         completeSetup?(true)
         try expect(setupRequests == 3 && model.displayMode == .backlightOff && !model.isBacklightOff,
                    "Successful first-use setup must select the requested idle mode without darkening")
         model.selectDisplayMode(.mayTurnOff)
-        DisplayShortcutEditor.selectMode(.backlightOff, model: model, configure: requestSetup)
+        model.selectDisplayMode(.backlightOff, configureShortcut: requestSetup)
         try expect(setupRequests == 3 && model.displayMode == .backlightOff,
                    "An existing shortcut must avoid repeated setup prompts")
         model.selectDisplayMode(.mayTurnOff)
         try model.setDisplayShortcut(nil)
+        let card = StopTimeCard(model: model)
+        let clock = StopTimeInput.Clock(locale: Locale(identifier: "en-GB-u-hc-h23"))
+        let idleCaption = card.caption(using: clock)
         let offSize = try layout("off")
         try checkControls(enabled: true)
         model.selectEndDate(model.currentDate.addingTimeInterval(-60))
@@ -154,7 +159,40 @@ import SwiftUI
         try checkControls(enabled: true)
         try expect(zip(originalEditors, fields()).allSatisfy { $0 === $1 }, "Starting must retain the same duration controls")
 
-        model.selectEndTimePreset(0); model.applySettingsDraft()
+        let originalEnd = model.endDate
+        let statusView = SessionStatusView(model: model, releaseURL: nil)
+        let appliedTitle = statusView.title(using: clock)
+        try expect(appliedTitle.contains("10 Nov 2026") && appliedTitle.contains("17:20"),
+                   "The active header must show the complete date, even for today")
+        let oneHour = card.caption(using: clock)
+        model.selectEndTimePreset(300)
+        let formatter = DateComponentsFormatter()
+        var calendar = Calendar.current
+        calendar.locale = Locale(identifier: language)
+        formatter.calendar = calendar
+        formatter.allowedUnits = [.day, .hour, .minute]
+        formatter.unitsStyle = .abbreviated
+        let difference = formatter.string(from: 4 * 3600)!
+        let initial = localizedFormat("Until %@ (%@)", "17:20", formatter.string(from: 3600)!)
+        try expect(idleCaption == initial && oneHour == initial, "Idle and running timers must use the same caption")
+        try expect(card.caption(using: clock) == localizedFormat("Until %@ (%@)", "21:20", "+" + difference) && model.endDate == originalEnd,
+                   "Preview must compare the five-hour choice with the applied one-hour deadline")
+        _ = try layout("extension")
+        try expect(statusView.title(using: clock) == appliedTitle,
+                   "The active header must keep the applied deadline while the card shows the draft")
+        let tomorrow = calendar.startOfDay(for: calendar.date(byAdding: .day, value: 1, to: model.currentDate)!)
+        model.selectEndDate(tomorrow.addingTimeInterval(30 * 60))
+        let overnight = localizedFormat("Until %@ (%@)", localizedFormat("%@ tomorrow", "00:30"),
+                                       "+" + formatter.string(from: (7 * 60 + 10) * 60)!)
+        try expect(card.caption(using: clock) == overnight, "An overnight draft must name tomorrow and its exact stop time")
+        model.selectEndDate(model.currentDate.addingTimeInterval(30 * 60))
+        try expect(card.caption(using: clock) == localizedFormat("Until %@ (%@)", "16:50", "−" + formatter.string(from: 30 * 60)!),
+                   "A shorter session must show the earlier clock time and the negative difference")
+        model.discardSettingsDraft()
+        try expect(card.caption(using: clock) == oneHour, "Cancel must restore the applied countdown")
+        model.selectEndTimePreset(0)
+        try expect(card.caption(using: clock) == localized("Until stopped manually"), "Unlimited drafts must use the manual-stop caption")
+        model.applySettingsDraft()
         let unlimitedSize = try layout("unlimited")
         try expect(model.endDate == nil && abs(unlimitedSize.height - activeSize.height) < 1,
                    "Infinity must omit the countdown and keep all settings on the same page")
@@ -172,11 +210,13 @@ import SwiftUI
         try expect(abs(restoredSize.height - activeSize.height) < 1, "Restoring the battery option must preserve active menu geometry")
         let draftDate = model.currentDate.addingTimeInterval(180)
         model.selectEndDate(draftDate)
-        _ = try layout("draft")
+        let durationDraftSize = try layout("draft")
+        try expect(abs(durationDraftSize.height - activeSize.height) < 1,
+                   "Draft actions must replace Stop without adding a row")
         fixture.now += 12
         model.tick()
         _ = try layout("draft-tick")
-        try expect(fields().map(\.stringValue) == [StopTimeInput.text(for: draftDate, calendar: .current)], "The time field must retain the exact dirty endpoint across ticks")
+        try expect(fields().map(\.stringValue) == [clock.editorText(draftDate)], "The time field must retain the exact dirty endpoint across ticks")
         model.discardSettingsDraft()
         let cancelledSize = try layout("cancelled")
         try expect(abs(cancelledSize.height - activeSize.height) < 1,
@@ -192,18 +232,15 @@ import SwiftUI
         try expect(model.isRestarting && model.phase == .authorizing && model.showsSettingsActions,
                    "A combined lid transition must show the internal restart")
         let restartingSize = try layout("restart")
-        let footer = SessionSettingsFooter(model: model, showHelp: {})
         let helpFooterHeight = MenuLayout.helpLinkHeight + AppStyle.Layout.panelInset
-        let actionsFooterHeight = MenuLayout.settingsActionsHeight + AppStyle.Layout.cardSpacing
-        let errorFooterHeight = MenuLayout.feedbackRowHeight + AppStyle.Layout.cardSpacing
-        let footerHeightWithActionsAndFeedback = helpFooterHeight + actionsFooterHeight + MenuLayout.feedbackRowHeight
-        try expect(footer.preferredHeight == footerHeightWithActionsAndFeedback,
-                   "The system confirmation during Apply must have one row in the footer")
+        let actionNoticeHeight = MenuLayout.feedbackRowHeight + AppStyle.Layout.cardSpacing
+        let footerNoticeHeight = actionNoticeHeight + AppStyle.Layout.cardSpacing
         try checkControls(enabled: false)
-        try expect(abs(restartingSize.height - appliedSize.height) < 1, "Restart must retain the header status and options geometry")
+        try expect(abs(restartingSize.height - appliedSize.height - actionNoticeHeight) < 1,
+                   "System confirmation must add one notice directly below the actions")
         guard let files = fixture.files else { throw WakecupError(message: "Missing fake guardian files") }
         let newDeadline = fixture.now + 40 * 60
-        try files.write(SessionStatus(phase: "active", deadline: newDeadline), to: "status.json")
+        try files.write(SessionStatus(phase: .active, deadline: newDeadline), to: "status.json")
         model.tick()
         model.selectDisplayMode(.mayTurnOff)
         model.applySettingsDraft()
@@ -214,12 +251,11 @@ import SwiftUI
         model.selectDisplayMode(.keepOn)
         model.applySettingsDraft()
         let pendingSize = try layout("pending")
-        try expect(footer.preferredHeight == footerHeightWithActionsAndFeedback,
-                   "Applying settings must have one progress row in the footer")
-        try expect(abs(pendingSize.height - beforePending.height) < 1, "Pending feedback must use the reserved inline space")
+        try expect(abs(pendingSize.height - beforePending.height - footerNoticeHeight) < 1,
+                   "Applying settings must add a single progress notice")
         let control = try files.read("control.json", as: SessionControl.self)
         guard let update = control.update else { throw WakecupError(message: "Missing fake live update") }
-        var status = SessionStatus(phase: "active", deadline: update.deadline)
+        var status = SessionStatus(phase: .active, deadline: update.deadline)
         status.settingsRevision = update.revision
         status.powerMode = update.powerMode
         status.threshold = update.threshold
@@ -228,11 +264,12 @@ import SwiftUI
         model.selectDisplayMode(.mayTurnOff)
         model.applySettingsDraft()
         let acknowledgedSize = try layout("acknowledged")
-        try expect(abs(acknowledgedSize.height - pendingSize.height) < 1, "Acknowledgement must not move the controls")
+        try expect(abs(pendingSize.height - acknowledgedSize.height - footerNoticeHeight) < 1, "Acknowledgement must remove the progress notice")
         fixture.rejectDisplay = true
         model.selectDisplayMode(.keepOn)
         model.applySettingsDraft()
-        try expect(model.displayControlError != nil && !model.keepDisplayOn, "Display rejection must leave the applied preference unchanged")
+        try expect(model.displayControlError != nil && !model.keepDisplayOn && model.displayModeDraft == .keepOn,
+                   "Display rejection must retain the draft and leave the applied preference unchanged")
         _ = try layout("display-error")
         model.editThreshold(30)
         model.selectDisplayMode(.keepOn)
@@ -246,10 +283,10 @@ import SwiftUI
         try files.write(status, to: "status.json")
         model.tick()
         try expect(!model.settingsApplying && model.settingsMessage != nil && model.displayControlError != nil,
-                   "Both independent error results must remain available to the footer")
-        try expect(footer.preferredHeight == footerHeightWithActionsAndFeedback,
+                   "Both independent error results must remain available to the action area")
+        let bothErrorsSize = try layout("both-errors")
+        try expect(abs(bothErrorsSize.height - acknowledgedSize.height - actionNoticeHeight) < 1,
                    "Concurrent issues must share one visible message row")
-        _ = try layout("both-errors")
         try checkControls(enabled: true)
         model.discardSettingsDraft()
         _ = try layout("cancelled-after-error")
@@ -257,7 +294,7 @@ import SwiftUI
         try expect(!fixture.unexpectedHelperCall, "The offscreen fixture must never use a helper")
         // A short screen still needs scrolling; its scrollbar must not steal
         // width from the fixed-width document and clip the right controls.
-        let panelController = MenuPanelController(model: model, statusButton: { nil })
+        let panelController = MenuPanelController(model: model, updates: UpdateChecker(), statusButton: { nil })
         guard let panel = NSApp.windows.first(where: { $0.title == "Wakecup" }),
               let scroll = panel.contentView.flatMap({ descendants($0).compactMap { $0 as? NSScrollView }.first }) else {
             throw WakecupError(message: "Missing hidden menu panel")
@@ -267,45 +304,58 @@ import SwiftUI
         panel.contentView?.layoutSubtreeIfNeeded()
         try expect(scroll.scrollerStyle == .overlay && abs(scroll.contentSize.width - MenuLayout.width) < 1,
                    "Small-screen scrolling must leave the full control width available")
-        // Footer constraints update on the main queue after the model publishes.
-        func expectViewportHeight(_ expected: CGFloat, _ message: String) throws {
-            let timeout = Date().addingTimeInterval(1)
-            repeat {
-                panel.contentView?.layoutSubtreeIfNeeded()
-                if abs(scroll.contentSize.height - expected) < 1 { return }
-                RunLoop.main.run(until: Date().addingTimeInterval(0.01))
-            } while Date() < timeout
+        let pinnedHeight = AppStyle.Layout.panelInset + AppStyle.Layout.headerHeight
+            + 2 * AppStyle.Layout.cardSpacing + AppStyle.Layout.sessionActionAreaHeight
+        let shortViewportHeight = 400 - helpFooterHeight - pinnedHeight
+        func expectViewportHeight(withNotice: Bool = false) throws {
+            RunLoop.main.run(until: Date().addingTimeInterval(0.04))
+            panel.contentView?.layoutSubtreeIfNeeded()
+            let expected = shortViewportHeight - (withNotice ? footerNoticeHeight : 0)
             try expect(abs(scroll.contentSize.height - expected) < 1,
-                       "\(message) Expected \(expected), got \(scroll.contentSize.height).")
+                       "The header and actions must stay pinned above the settings, with space for a notice when needed")
         }
-        let heightWithError = scroll.contentSize.height
         try expect(!model.showsSettingsActions && model.displayControlError != nil,
-                   "A failed display change must leave an error without draft actions")
+                   "Discarding a failed display draft must leave the error available")
+        try expectViewportHeight(withNotice: true)
         fixture.rejectDisplay = false
         model.selectDisplayMode(.keepOn)
         model.applySettingsDraft()
-        let heightWithHelpOnly = heightWithError + errorFooterHeight
-        try expectViewportHeight(heightWithHelpOnly,
-                                 "A display error alone must reserve space below the scroller")
+        try expectViewportHeight()
+        if let document = scroll.documentView {
+            document.setFrameSize(document.fittingSize)
+            let bottom = max(0, document.frame.height - scroll.contentSize.height)
+            scroll.contentView.scroll(to: NSPoint(x: 0, y: document.isFlipped ? bottom : 0))
+            scroll.reflectScrolledClipView(scroll.contentView)
+        }
+        let viewportBeforeDraft = scroll.documentVisibleRect
         model.editThreshold(28)
-        try expectViewportHeight(heightWithHelpOnly - actionsFooterHeight,
-                                 "Pending edits must reserve the footer outside the scrolling document")
+        try expectViewportHeight()
+        try expect(model.showsSettingsActions && scroll.documentVisibleRect == viewportBeforeDraft,
+                   "Showing Apply and Cancel above the scroller must leave the viewport on the edited setting")
         model.discardSettingsDraft()
-        try expectViewportHeight(heightWithHelpOnly,
-                                 "Cancelling the draft must give the footer space back to the scroller")
+        try expectViewportHeight()
         try expect(!panelController.isVisible, "Panel geometry check must stay offscreen")
         fixture.rejectDisplay = false
         try model.setDisplayShortcut(chosen)
         model.selectDisplayMode(.backlightOff)
         model.applySettingsDraft()
         try expect(model.backlightCountdown == 10, "Applying the blackout must start a visible countdown")
+        let countdownSize = try layout("countdown")
+        try expect(abs(countdownSize.height - acknowledgedSize.height) < 1,
+                   "The two-line countdown must replace Stop without expanding the action area")
+        fixture.now += 1
+        model.tick()
+        let nextSecondSize = try layout("countdown-next-second")
+        try expect(model.backlightCountdown == 9 && abs(nextSecondSize.height - countdownSize.height) < 1,
+                   "A countdown tick must keep the action area at the same height")
         fixture.lidState = nil
         model.editClosedLid(false)
         model.applySettingsDraft()
         try expect(model.settingsMessage != nil && model.displayMode == .keepOn && model.backlightCountdown == nil,
                    "A rejected lid change must expose the error and cancel the pending blackout")
-        try expect(footer.preferredHeight == footerHeightWithActionsAndFeedback,
-                   "The Apply error must occupy the feedback row")
+        let applyErrorSize = try layout("apply-error")
+        try expect(abs(applyErrorSize.height - countdownSize.height - actionNoticeHeight) < 1,
+                   "A rejected Apply must add one notice below the draft actions")
         fixture.lidState = false
         model.discardSettingsDraft()
         try expect(model.backlightCountdown == nil, "Clearing the error must not restart the countdown")
@@ -321,8 +371,7 @@ import SwiftUI
                    "Closing the panel must discard the draft and restart the applied countdown")
         fixture.now += 10
         model.tick()
-        try expectViewportHeight(heightWithHelpOnly - errorFooterHeight,
-                                 "A failure after the countdown must reserve space outside the scroller")
+        try expectViewportHeight(withNotice: true)
         try expect(model.displayControlError != nil && !model.showsSettingsActions,
                    "A failure after the countdown must show an error without draft actions")
         model.selectDisplayMode(.mayTurnOff)
@@ -340,17 +389,15 @@ import SwiftUI
             }
         }
         model.stop()
-        try files.write(SessionStatus(phase: "stopped", reason: "зарядка отключена", sleepRestored: true), to: "status.json")
+        try files.write(SessionStatus(phase: .stopped, reason: "зарядка отключена", sleepRestored: true), to: "status.json")
         model.tick()
-        try expectViewportHeight(heightWithHelpOnly - errorFooterHeight,
-                                 "A stop caused by disconnecting power must reserve space in the footer")
+        try expectViewportHeight(withNotice: true)
         try expect(model.phase == .idle && model.message != nil && !model.showsSettingsActions,
-                   "A stop caused by disconnecting power must use the footer with no draft actions")
+                   "A stop caused by disconnecting power must show its reason without draft actions")
         model.message = nil
-        try expectViewportHeight(heightWithHelpOnly,
-                                 "An idle menu without a notice must keep only the help link in the footer")
+        try expectViewportHeight()
         try expect(activeSize.height > 0, "Active layout must be measurable")
-        print("PASS: unified off/active controls, translated labels, dirty duration, Apply, inline pending/error and restart layout (\(language))")
+        print("PASS: unified off/active controls, translated labels, dirty duration, Apply, action replacement, countdown, and inline feedback layout (\(language))")
     }
 
     private final class Fixture {

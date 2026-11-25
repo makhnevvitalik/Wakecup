@@ -104,6 +104,7 @@ struct SettingsMenu: NSViewRepresentable {
             return menu
         }
         func refresh() {
+            let helper = model.helperStatus
             remainingItem.title = localized("Show remaining time in menu bar")
             remainingItem.state = model.showRemaining ? .on : .off
             loginItem.title = localized(model.loginNeedsApproval ? "Allow login item in macOS…" : "Open at Login")
@@ -116,15 +117,15 @@ struct SettingsMenu: NSViewRepresentable {
             languageItem.title = localized("Language")
             helperItem.title = localized("Closed-lid permission")
             passwordItem.title = localized("Ask for a password each session")
-            passwordItem.state = model.helper.selected ? .off : .on
-            passwordItem.isEnabled = model.canSelectHelperMode
+            passwordItem.state = helper.selected ? .off : .on
+            passwordItem.isEnabled = model.canSetHelperMode(false)
             installedItem.title = localized("Use installed helper")
-            installedItem.state = model.helper.selected ? .on : .off
-            installedItem.isEnabled = model.canSelectHelperMode && model.helper.state == .ready
-            installItem.title = localized(model.helper.working ? "Changing helper…" : model.helper.installed ? "Update helper…" : "Install helper…")
+            installedItem.state = helper.selected ? .on : .off
+            installedItem.isEnabled = model.canSetHelperMode(true)
+            installItem.title = localized(helper.working ? "Changing helper…" : helper.installed ? "Update helper…" : "Install helper…")
             installItem.isEnabled = model.canChangeHelper
             removeItem.title = localized("Remove helper…")
-            removeItem.isEnabled = model.canChangeHelper && model.helper.installed
+            removeItem.isEnabled = model.canChangeHelper && helper.installed
             helperExplanationItem.title = localized("Why install a helper?")
             aboutItem.title = localized("About Wakecup…")
             quitItem.title = localized("Quit Wakecup")
@@ -132,11 +133,11 @@ struct SettingsMenu: NSViewRepresentable {
                 item.state = item.representedObject as? String == AppLocalization.shared.language.rawValue ? .on : .off
             }
         }
-        func menuWillOpen(_ menu: NSMenu) { model.refreshLoginState(); model.helper.refresh(); refresh() }
-        @objc private func selectPasswordMode() { guard model.canSelectHelperMode else { return }; model.helper.select(false) }
-        @objc private func selectHelperMode() { guard model.canSelectHelperMode else { return }; model.helper.select(true) }
-        @objc private func installHelper() { guard model.canChangeHelper else { return }; helperInteraction.changeInstallation(for: model.helper, remove: false) }
-        @objc private func removeHelper() { guard model.canChangeHelper else { return }; helperInteraction.changeInstallation(for: model.helper, remove: true) }
+        func menuWillOpen(_ menu: NSMenu) { model.refreshLoginState(); model.refreshHelperStatus(); refresh() }
+        @objc private func selectPasswordMode() { model.setHelperMode(false) }
+        @objc private func selectHelperMode() { model.setHelperMode(true) }
+        @objc private func installHelper() { helperInteraction.changeInstallation(for: model, remove: false) }
+        @objc private func removeHelper() { helperInteraction.changeInstallation(for: model, remove: true) }
         @objc private func explainHelper() { helperInteraction.showExplanation() }
         @objc private func toggleRemaining() { model.showRemaining.toggle() }
         @objc private func toggleMCP() { settings.setMCPEnabled(!settings.isMCPEnabled()); refresh() }
@@ -147,7 +148,6 @@ struct SettingsMenu: NSViewRepresentable {
         @objc private func selectLanguage(_ sender: NSMenuItem) {
             guard let raw = sender.representedObject as? String, let language = AppLanguage(rawValue: raw) else { return }
             AppLocalization.shared.select(language)
-            model.statusDidChange?()
         }
         @objc private func quit() { model.quit() }
     }

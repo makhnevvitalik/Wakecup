@@ -3,21 +3,25 @@ import Combine
 import SwiftUI
 
 @MainActor
-final class AboutWindowController: NSObject {
+final class AboutWindowController: NSObject, NSWindowDelegate {
     private var window: NSWindow?
+    private var returnToSource: (() -> Void)?
     private var licenseWindow: NSWindow?
     private let updates: UpdateChecker
+    private let openURL: (URL) -> Void
     private var languageObserver: AnyCancellable?
     private var updateObserver: AnyCancellable?
     private var taglineLabel: NSTextField?
     private var licensesButton: NSButton?
     private var updateButton: NSButton?
+    private var releaseButton: NSButton?
     private var updateProgressIndicator: NSProgressIndicator?
     private var updateStatusLabel: NSTextField?
     private weak var contentStack: NSStackView?
 
-    init(updates: UpdateChecker? = nil) {
-        self.updates = updates ?? UpdateChecker()
+    init(updates: UpdateChecker, openURL: @escaping (URL) -> Void = { NSWorkspace.shared.open($0) }) {
+        self.updates = updates
+        self.openURL = openURL
         super.init()
         languageObserver = AppLocalization.shared.$language.sink { [weak self] _ in
             DispatchQueue.main.async { self?.refreshPresentation() }
@@ -27,12 +31,22 @@ final class AboutWindowController: NSObject {
         }
     }
 
-    func show() {
+    func show(returningTo source: (() -> Void)? = nil) {
         if window == nil { window = makeAboutWindow() }
+        if let source { returnToSource = source }
         refreshPresentation()
         NSApp.activate(ignoringOtherApps: true)
         if let window {
             AppStyle.showWithoutInitialControlFocus(window)
+        }
+    }
+
+    func windowWillClose(_ notification: Notification) {
+        guard let returnToSource else { return }
+        self.returnToSource = nil
+        DispatchQueue.main.async { [weak self] in
+            guard self?.window?.isVisible == false else { return }
+            returnToSource()
         }
     }
 
@@ -42,9 +56,20 @@ final class AboutWindowController: NSObject {
         taglineLabel?.stringValue = localized("AI works. Your Mac stays wide awake.")
         licensesButton?.title = localized("License…")
         updateButton?.title = updateButtonTitle
-        updateStatusLabel?.stringValue = statusText
-        updateStatusLabel?.toolTip = statusText.isEmpty ? nil : statusText
+        updateButton?.isEnabled = updates.state != .checking
+        let release = updates.availableRelease
+        let releaseTitle = release.map { localizedFormat("%@ is available", $0.tag) }
+        releaseButton?.title = releaseTitle.map { $0 + " ↗" } ?? ""
+        releaseButton?.toolTip = releaseTitle
+        releaseButton?.setAccessibilityLabel(releaseTitle)
+        releaseButton?.setAccessibilityHelp(localized("View Release"))
+        releaseButton?.isHidden = release == nil
+        // When a release is known, the button and spinner already show the progress.
+        let status = updates.state == .checking && release != nil ? "" : statusText
+        updateStatusLabel?.stringValue = status
+        updateStatusLabel?.toolTip = status.isEmpty ? nil : status
         updateStatusLabel?.textColor = statusColor
+        updateStatusLabel?.isHidden = release != nil && status.isEmpty
         updateProgressIndicator?.isHidden = updates.state != .checking
         if updates.state == .checking { updateProgressIndicator?.startAnimation(nil) }
         else { updateProgressIndicator?.stopAnimation(nil) }
@@ -54,8 +79,14 @@ final class AboutWindowController: NSObject {
     }
 
     @objc private func openGitHub() {
+        returnToSource = nil
         window?.close()
-        NSWorkspace.shared.open(UpdateChecker.repositoryURL)
+        openURL(UpdateChecker.repositoryURL)
+    }
+
+    @objc private func openRelease() {
+        guard let release = updates.availableRelease else { return }
+        openURL(release.url)
     }
 
     @objc private func showLicenses() {
@@ -77,11 +108,13 @@ final class AboutWindowController: NSObject {
         let updateButton = NSButton(title: localized("Check for Updates"), target: self,
                                     action: #selector(updateButtonPressed))
         let licensesButton = NSButton(title: localized("License…"), target: self, action: #selector(showLicenses))
+        let releaseButton = NSButton(title: "", target: self, action: #selector(openRelease))
         let content = AboutContent(name: "Wakecup", icon: WakecupBrand.appIcon,
             tagline: localized("AI works. Your Mac stays wide awake."),
-            copyright: copyrightText, updateButton: updateButton,
+            copyright: copyrightText, updateButton: updateButton, releaseButton: releaseButton,
             gitHubButton: NSButton(title: "GitHub ↗", target: self, action: #selector(openGitHub)),
             licensesButton: licensesButton, statusIdentifier: "WakecupUpdateStatus")
+        self.releaseButton = releaseButton
         self.updateButton = updateButton
         updateProgressIndicator = content.progressIndicator
         updateStatusLabel = content.statusLabel
@@ -99,6 +132,7 @@ final class AboutWindowController: NSObject {
         window.titleVisibility = .hidden
         window.isReleasedWhenClosed = false
         window.contentView = content.view
+        window.delegate = self
         AppStyle.sizeAboutWindow(window, to: content.contentStack)
         window.center()
 
@@ -111,20 +145,11 @@ final class AboutWindowController: NSObject {
     }
 
     private var updateButtonTitle: String {
-        switch updates.state {
-        case .checking: return localized("Checking…")
-        case .finished(.updateAvailable): return localized("View Release")
-        case .finished(.failure): return localized("Try Again")
-        default: return localized("Check for Updates")
-        }
+        localized(updates.state == .checking ? "Checking…" : "Check for Updates")
     }
 
     @objc private func updateButtonPressed() {
-        if case let .finished(.updateAvailable(_, url)) = updates.state {
-            NSWorkspace.shared.open(url)
-        } else {
-            updates.check()
-        }
+        updates.check()
     }
 
     private var statusText: String {
@@ -132,7 +157,7 @@ final class AboutWindowController: NSObject {
         case .idle: return ""
         case .checking: return localized("Checking GitHub for updates…")
         case .finished(.upToDate): return localized("You’re up to date.")
-        case let .finished(.updateAvailable(tag, _)): return localizedFormat("%@ is available.", tag)
+        case .finished(.updateAvailable): return ""
         case .finished(.notPublished): return localized("The repository or a public release has not been published yet.")
         case let .finished(.failure(failure)):
             switch failure {

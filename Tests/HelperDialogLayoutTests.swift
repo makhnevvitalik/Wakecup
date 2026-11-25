@@ -20,7 +20,7 @@ import AppKit
         let manifest = HelperManifest(protocolVersion: HelperConstants.protocolVersion, ownerUID: getuid(),
             clientHash: String(repeating: "a", count: 40), helperHash: HelperBuildIdentity.cdHash,
             helperSHA256: HelperBuildIdentity.sha256)
-        for (name, state) in [("ready", PrivilegedHelperController.State.ready), ("update", .updateRequired),
+        for (name, state) in [("ready", HelperStatus.State.ready), ("update", .updateRequired),
                               ("unavailable", .unavailable), ("missing", .missing), ("long-error", .unavailable)] {
             for selected in [false, true] {
                 defaults.set(selected, forKey: "useInstalledHelper")
@@ -32,12 +32,13 @@ import AppKit
                     throw WakecupError(message: "Unexpected installation in layout test")
                 }, inspectInstallation: { .init(state: state, detail: name == "long-error" ? String(repeating: "Long diagnostic message. ", count: 300) : "", manifest: state == .ready ? manifest : nil) },
                    requestInformation: { $0(.success(HelperInformation(manifest: manifest, clientConfirmed: true))) })
+                let model = helperTestModel(defaults: defaults, helper: helper)
                 let interaction = HelperPresentation(activate: {}, settingsOwner: { owner }, presentSettings: { alert, _, completion in
                     let dialog = HelperSettingsDialog(alert: alert, completion: completion)
                     captured = dialog
                     (acceptChange ? dialog.buttons.first : dialog.buttons.last)?.performClick(nil)
                 }).interaction
-                interaction.showSettings(for: helper)
+                interaction.showSettings(for: model)
                 guard let dialog = captured, let content = dialog.window.contentView else {
                     throw WakecupError(message: "Helper settings presenter was not used")
                 }
@@ -75,12 +76,15 @@ import AppKit
                     try expect(dialog.buttons.first?.title == localized(selected ? "Switch to password prompts" : "Use helper"),
                                "Permission-mode action must explain its destination")
                     acceptChange = true
-                    interaction.showSettings(for: helper)
+                    interaction.showSettings(for: model)
                     try expect(helper.selected != selected && helper.usesHelper != selected,
                                "Mode selection must switch helper usage without authorization or installation")
                 }
                 acceptChange = false
-                interaction.showSettings(for: helper, allowInstallationChanges: false)
+                model.start()
+                try expect(model.phase == .active, "An active session must disable helper installation")
+                interaction.showSettings(for: model)
+                model.stop()
                 try expect(captured?.buttons.first?.isEnabled == (state == .ready),
                            "Read-only settings must disable installation/update while allowing permission-mode selection")
                 try expect(installationRequests == 0, "Layout and mode selection must not install the helper")
@@ -108,7 +112,8 @@ import AppKit
             throw WakecupError(message: "Fixture installation failure")
         }, inspectInstallation: { available ? .init(state: .ready, manifest: manifest) : .init(state: .updateRequired) },
            requestInformation: { $0(.success(HelperInformation(manifest: manifest, clientConfirmed: true))) })
-        presenter.observeRecovery(of: helper)
+        let model = helperTestModel(defaults: defaults, helper: helper)
+        presenter.observeRecovery(of: model)
         let interaction = presenter.interaction
         let windowsBeforeExplanation = NSApp.windows.filter(\.isVisible)
         interaction.showExplanation()
@@ -118,14 +123,20 @@ import AppKit
         defer { explanation.close() }
         try expect(explanation.level == .normal && explanation.sheetParent == nil && NSApp.modalWindow == nil,
                    "Explanation must allow continued settings work")
+        guard let explanationContent = explanation.contentView,
+              let close = findButton(in: explanationContent, titled: localized("Close")) else {
+            throw WakecupError(message: "Explanation must have a Close button")
+        }
+        try expect(close.controlSize == .small && close.bezelStyle == .rounded && close.keyEquivalent == "\u{1b}",
+                   "Explanation must use a compact, neutral Close button with Escape")
 
-        interaction.showSettings(for: helper)
+        interaction.showSettings(for: model)
         guard let settings = owner.attachedSheet, let body = settings.contentView,
               let remove = findButton(in: body, titled: localized("Remove")) else {
             throw WakecupError(message: "Manage helper must present an attached sheet with a Remove action")
         }
         let windowsBeforeFailure = NSApp.windows.filter(\.isVisible)
-        interaction.changeInstallation(for: helper, remove: false)
+        interaction.changeInstallation(for: model, remove: false)
         guard let failure = NSApp.windows.first(where: { window in
             window.isVisible && !windowsBeforeFailure.contains(where: { $0 === window })
         }) else { throw WakecupError(message: "Operation failure must open an independent window") }

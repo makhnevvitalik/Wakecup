@@ -15,7 +15,7 @@ struct AutomationRequest: Codable {
     var threshold: Int?
     var closedLid: Bool?
     var display: DisplayMode?
-    var shortcut: DisplayShortcut?
+    var shortcut: LegacyDisplayShortcut?
     var useHelper: Bool?
 }
 
@@ -35,7 +35,7 @@ struct AutomationStatus: Codable {
     let batteryPercent: Int?
     let onAC: Bool?
     let display: DisplayMode
-    let shortcut: DisplayShortcut?
+    let shortcut: LegacyDisplayShortcut?
     let backlightOff: Bool
     let blackoutCountdown: Int?
     let helperState: String

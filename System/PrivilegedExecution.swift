@@ -119,18 +119,8 @@ enum PrivilegedExecution {
         task.arguments = ["-e", "with timeout of 180 seconds\ndo shell script \"\(escaped)\" with administrator privileges\nend timeout"]
         return task
     }
+}
 
-    static func isStagedPath(_ path: String) -> Bool {
-        let prefix = "/Library/PrivilegedHelperTools/.wakecup-stage-"
-        guard path.hasPrefix(prefix) else { return false }
-        let suffix = path.dropFirst(prefix.count)
-        return suffix.utf8.count == 8 && suffix.utf8.allSatisfy { (48...57).contains($0) || (65...90).contains($0) || (97...122).contains($0) }
-    }
-
-    static func validateStagedExecutable() throws {
-        guard let path = try recoveryProcess(getpid())?.executable, isStagedPath(path),
-              try HelperTrust.read(path, maximum: HelperConstants.maximumExecutableBytes, executable: true) != nil else {
-            throw WakecupError(message: "The operation must run from a verified system staging file.")
-        }
-    }
+func shellQuote(_ string: String) -> String {
+    "'" + string.replacingOccurrences(of: "'", with: "'\\''") + "'"
 }

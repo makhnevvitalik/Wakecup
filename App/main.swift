@@ -70,6 +70,11 @@ if arguments.dropFirst().first == "--cli" {
             fputs("Wakecup could not start: \(error.localizedDescription)\n", stderr)
             exit(1)
         }
+        do { try SettingsMigrator.run() }
+        catch {
+            fputs("Wakecup could not migrate its settings: \(error.localizedDescription)\n", stderr)
+            exit(1)
+        }
         let application = NSApplication.shared
         delegate = AppDelegate()
         application.delegate = delegate

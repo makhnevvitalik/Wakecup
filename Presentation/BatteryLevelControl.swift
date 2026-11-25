@@ -71,7 +71,8 @@ final class BatteryLevelScaleView: NSView {
         guard let cell = slider.cell as? NSSliderCell else { return }
         // Measure the system knob at both ends before shortening the slider.
         // Keeping its native end insets makes both scales share exact positions.
-        slider.frame = NSRect(x: 0, y: 19, width: bounds.width, height: 24)
+        let sliderHeight: CGFloat = 24
+        slider.frame = NSRect(x: 0, y: bounds.maxY - sliderHeight - 1, width: bounds.width, height: sliderHeight)
         let value = slider.doubleValue
         slider.doubleValue = slider.minValue
         let left = cell.knobRect(flipped: false).midX

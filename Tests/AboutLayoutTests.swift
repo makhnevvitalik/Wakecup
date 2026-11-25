@@ -1,6 +1,6 @@
 import AppKit
 
-// Uses process-local language defaults and never requests updates or starts a session.
+// Uses process-local language defaults and fake update requests without starting a session.
 @main struct AboutLayoutTests {
     @MainActor static func main() throws {
         let language = CommandLine.arguments[1]
@@ -8,7 +8,13 @@ import AppKit
         let app = NSApplication.shared
         app.setActivationPolicy(.accessory)
         app.finishLaunching()
-        let controller = AboutWindowController()
+        var requests: [UpdateChecker.Completion] = []
+        let updates = UpdateChecker(currentVersion: { "1.0.0" }) { _, complete in
+            requests.append(complete)
+            return AboutUpdateRequest()
+        }
+        var openedURLs: [URL] = []
+        let controller = AboutWindowController(updates: updates, openURL: { openedURLs.append($0) })
         controller.show()
         settle()
         guard let window = app.windows.first(where: { $0.title == localized("About Wakecup") }),
@@ -34,6 +40,19 @@ import AppKit
                        && content.convert(label.bounds, from: label).maxY <= content.convert(name.bounds, from: name).minY,
                        "The version must sit below the name")
         }
+        guard let identity = name.superview as? NSStackView,
+              let icon = controls.compactMap({ $0 as? NSImageView }).first(where: {
+                  $0.frame.width == AppStyle.AboutLayout.iconSize
+              }) else {
+            throw WakecupError(message: "About header is missing its icon or identity")
+        }
+        let textBounds = identity.arrangedSubviews.reduce(NSRect.null) { bounds, label in
+            bounds.union(content.convert(label.bounds, from: label))
+        }
+        let iconBounds = content.convert(icon.bounds, from: icon)
+        try expect(abs(textBounds.midY - iconBounds.midY) < 1,
+                   "The name and version must center as a block beside the icon")
+
         let links = controls.compactMap { $0 as? NSButton }.filter { $0.title == "GitHub ↗" || $0.title == localized("License…") }
         try expect(links.count == 2 && links.allSatisfy { $0.font?.isEqual(AppStyle.Font.secondaryAction) == true }, "All About links must share one role")
         for text in ["", localized("Checking GitHub for updates…"), localized("You’re up to date."),
@@ -73,6 +92,69 @@ import AppKit
                 try data.write(to: URL(fileURLWithPath: "/private/tmp/wakecup-about-\(language).png"))
             }
         }
+        guard let checkButton = controls.compactMap({ $0 as? NSButton }).first(where: { $0.title == localized("Check for Updates") }) else {
+            throw WakecupError(message: "Manual update check is missing")
+        }
+        let releaseURL = URL(string: "https://github.com/makhnevvitalik/Wakecup/releases/tag/v2.0.0")!
+        let responseURL = UpdateChecker.latestReleaseAPIURL
+        updates.check()
+        try expect(requests.count == 1, "The updater should start the first background check")
+        settle()
+        try expect(!status.isHidden && status.stringValue == localized("Checking GitHub for updates…"),
+                   "The first check uses the result line to describe progress")
+        requests[0](Data(#"{"tag_name":"v2.0.0","html_url":"\#(releaseURL)"}"#.utf8),
+                    HTTPURLResponse(url: responseURL, statusCode: 200, httpVersion: nil, headerFields: nil), nil)
+        settle()
+        try expect(checkButton.title == localized("Check for Updates") && checkButton.isEnabled,
+                   "About must still offer a manual check after the background check finds an update")
+        let releaseTitle = localizedFormat("%@ is available", "v2.0.0") + " ↗"
+        guard let release = descendants(content).compactMap({ $0 as? NSButton }).first(where: { $0.title == releaseTitle }) else {
+            throw WakecupError(message: "About must show a separate link to the known release")
+        }
+        let availableHeight = window.frame.height
+        checkButton.performClick(nil)
+        settle()
+        try expect(window.frame.height == availableHeight && status.isHidden,
+                   "Repeating a check with a known release must retain one result line and keep the window height")
+        try expect(requests.count == 2 && !checkButton.isEnabled,
+                   "The manual check should start a new request and be disabled while checking")
+        try expect(!release.isHidden && release.title == releaseTitle, "Keep the release link during a refresh")
+        let tagline = controls.compactMap { $0 as? NSTextField }.first {
+            $0.stringValue == localized("AI works. Your Mac stays wide awake.")
+        }!
+        let linkLeading = content.convert(release.alignmentRect(forFrame: release.frame), from: release.superview).minX
+        let taglineLeading = content.convert(tagline.alignmentRect(forFrame: tagline.frame), from: tagline.superview).minX
+        try expect(abs(linkLeading - taglineLeading) < 0.5,
+                   "The release text must align with the About text at \(taglineLeading) pt, got \(linkLeading) pt")
+        release.performClick(nil)
+        try expect(openedURLs == [releaseURL], "The release link should open the known release during a refresh")
+        requests[1](nil, nil, URLError(.notConnectedToInternet))
+        settle()
+        try expect(checkButton.isEnabled && checkButton.title == localized("Check for Updates")
+                   && !release.isHidden && release.title == releaseTitle,
+                   "A transient failure must preserve the release link and the Check for Updates action")
+        try expect(!status.isHidden && status.stringValue == localized("Could not contact GitHub. Please try again."),
+                   "A failed refresh still displays its error with the known release")
+        release.performClick(nil)
+        try expect(openedURLs == [releaseURL, releaseURL], "The release link should open the same release after a transient failure")
+        checkButton.performClick(nil)
+        settle()
+        try expect(requests.count == 3, "A failed check should be retryable")
+        requests[2](Data(#"{"tag_name":"v1.0.0"}"#.utf8),
+                    HTTPURLResponse(url: responseURL, statusCode: 200, httpVersion: nil, headerFields: nil), nil)
+        settle()
+        try expect(release.isHidden, "An up-to-date result should remove the known release link")
+
+        updates.check()
+        let longTag = "9000000000000000000.9000000000000000000.9000000000000000000"
+        try expect(requests.count == 4, "The next background check should run")
+        requests[3](Data(#"{"tag_name":"\#(longTag)"}"#.utf8),
+                    HTTPURLResponse(url: responseURL, statusCode: 200, httpVersion: nil, headerFields: nil), nil)
+        settle()
+        content.layoutSubtreeIfNeeded()
+        let releaseFrame = content.convert(release.bounds, from: release)
+        try expect(!release.isHidden && content.bounds.contains(releaseFrame) && release.toolTip?.contains(longTag) == true,
+                   "A long tag should fit its link inside About and remain readable in the tooltip")
         license.performClick(nil)
         settle()
         guard let licenses = app.windows.first(where: { $0.title == localized("Wakecup License") }),
@@ -81,11 +163,16 @@ import AppKit
                    "A single license must not have an empty third-party selector")
         try expect(Bundle.main.url(forResource: "THIRD_PARTY_NOTICES", withExtension: "txt") == nil,
                    "Obsolete third-party notice must not remain bundled")
-        print("PASS: compact About, unclipped controls and stable update status; single license (\(language))")
+        print("PASS: About layout, independent update check and release link, single license (\(language))")
     }
     private static func settle() { RunLoop.main.run(until: Date().addingTimeInterval(0.15)) }
     private static func descendants(_ view: NSView) -> [NSView] { [view] + view.subviews.flatMap(descendants) }
     private static func expect(_ condition: Bool, _ message: String) throws {
         guard condition else { throw WakecupError(message: message) }
     }
+}
+
+private final class AboutUpdateRequest: UpdateRequestTask {
+    func resume() {}
+    func cancel() {}
 }

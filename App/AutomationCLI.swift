@@ -85,7 +85,7 @@ enum AutomationCLI {
             let key = try next("function key").uppercased()
             guard key.first == "F", let number = Int(key.dropFirst()) else { throw invalid() }
             let modifiers = try next("shortcut modifiers").lowercased().split(separator: "+", omittingEmptySubsequences: false).map(String.init)
-            request = .init(action: .setShortcut, shortcut: try DisplayShortcut.automationShortcut(function: number, modifiers: modifiers))
+            request = .init(action: .setShortcut, shortcut: LegacyDisplayShortcut(try .automationShortcut(function: number, modifiers: modifiers)))
         case "extend", "shorten":
             guard let seconds = duration(try next("duration")) else { throw invalid("Use a duration such as 30m or 1h.") }
             try EndTimeSelection.validateDuration(seconds)

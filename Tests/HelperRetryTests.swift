@@ -18,6 +18,9 @@ import Foundation
             try checkRetry(after: HelperClient.startResult(pid: 42, error: rejection), remainsReady: false)
             try checkRetry(after: HelperClient.startResult(pid: 0, error: ""), remainsReady: false)
             try checkRetry(after: HelperClient.startResult(pid: 0, error: String(repeating: "x", count: 16_385)), remainsReady: false)
+            try checkRetry(after: .failure(WakecupError(message: "Simulated helper timeout.")),
+                           remainsReady: false, finishOlderHealthCheck: true)
+            try checkStaleTransportReplies()
             print("PASS: \(checks) helper operation, transport, malformed-reply and recovery retry checks")
         } catch {
             FileHandle.standardError.write(Data(("FAIL: " + error.localizedDescription + "\n").utf8))
@@ -25,7 +28,56 @@ import Foundation
         }
     }
 
-    private static func checkRetry(after result: Result<Int32, Error>, remainsReady: Bool) throws {
+    private static func checkStaleTransportReplies() throws {
+        let defaults = MemoryDefaults()
+        defaults.set(true, forKey: "useInstalledHelper")
+        let manifest = HelperManifest(protocolVersion: HelperConstants.protocolVersion, ownerUID: getuid(),
+            clientHash: String(repeating: "a", count: 40), helperHash: HelperBuildIdentity.cdHash,
+            helperSHA256: HelperBuildIdentity.sha256)
+        let information = HelperInformation(manifest: manifest, clientConfirmed: true)
+        var statusReplies: [(Result<HelperInformation, Error>) -> Void] = []
+        var startReplies: [(Result<Int32, Error>) -> Void] = []
+        let helper = PrivilegedHelperController(defaults: defaults,
+            inspectInstallation: { .init(state: .ready, manifest: manifest) },
+            requestInformation: { statusReplies.append($0) },
+            requestStart: { _, _, completion in startReplies.append(completion) })
+        statusReplies[0](.success(information))
+        try expect(helper.usesHelper, "The initial health check must confirm readiness")
+
+        let timeout = WakecupError(message: "Simulated delayed helper timeout.")
+        var olderReplyDelivered = false
+        helper.start(path: "old", restoreOnly: true) { reply in
+            if case .failure = reply { olderReplyDelivered = true }
+        }
+        helper.start(path: "new", restoreOnly: true) { _ in }
+        startReplies[1](.success(42))
+        startReplies[0](.failure(timeout))
+        try expect(olderReplyDelivered && helper.usesHelper,
+            "Deliver the old transport failure to its caller without invalidating a newer request")
+
+        helper.start(path: "old-before-refresh", restoreOnly: true) { _ in }
+        helper.refresh()
+        startReplies[2](.failure(timeout))
+        try expect(helper.checking && helper.usesHelper,
+            "An older failure must leave a newer health check in progress")
+        statusReplies[1](.success(information))
+        try expect(!helper.checking && helper.usesHelper, "The pending health confirmation must still be usable")
+
+        helper.start(path: "old-before-confirmation", restoreOnly: true) { _ in }
+        helper.refresh()
+        statusReplies[2](.success(information))
+        startReplies[3](.failure(timeout))
+        try expect(helper.usesHelper && helper.detail.isEmpty,
+            "An older failure must not replace fresh health confirmation or its diagnostic")
+
+        helper.start(path: "latest", restoreOnly: true) { _ in }
+        startReplies[4](.failure(timeout))
+        try expect(helper.state == .unavailable && helper.detail == timeout.localizedDescription,
+            "The latest transport failure must still mark the helper unavailable")
+    }
+
+    private static func checkRetry(after result: Result<Int32, Error>, remainsReady: Bool,
+                                   finishOlderHealthCheck: Bool = false) throws {
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent("WakecupHelperRetry-" + UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: directory) }
         let defaults = MemoryDefaults()
@@ -35,14 +87,20 @@ import Foundation
             helperSHA256: HelperBuildIdentity.sha256)
         var replies: [(Result<Int32, Error>) -> Void] = []
         var requests: [(String, Bool)] = []
+        var deferHealthCheck = false
+        var healthReply: ((Result<HelperInformation, Error>) -> Void)?
+        let information = HelperInformation(manifest: manifest, clientConfirmed: true)
         let helper = PrivilegedHelperController(defaults: defaults,
             inspectInstallation: { .init(state: .ready, manifest: manifest) },
-            requestInformation: { $0(.success(HelperInformation(manifest: manifest, clientConfirmed: true))) },
+            requestInformation: { reply in
+                if deferHealthCheck { healthReply = reply }
+                else { reply(.success(information)) }
+            },
             requestStart: { path, restoreOnly, completion in requests.append((path, restoreOnly)); replies.append(completion) })
         let configuration = SessionConfiguration(id: UUID().uuidString, parentPID: getpid(), duration: 60,
             powerMode: .battery, threshold: 20, closedLid: true, keepDisplayOn: false)
         let files = try SessionFiles.create(at: directory, configuration: configuration)
-        try files.write(SessionStatus(phase: "failed", helperPID: 4242, phaseChangedAt: 980,
+        try files.write(SessionStatus(phase: .failed, helperPID: 4242, phaseChangedAt: 980,
             ownsSleepChange: true, sleepRestored: false), to: "status.json")
         defaults.set(directory.path, forKey: "lastSession")
         var passwordRequests = 0
@@ -56,9 +114,19 @@ import Foundation
             scheduleTicks: { _ in {} })
         let model = SessionModel(defaults: defaults, operations: operations, helper: helper)
         try expect(helper.usesHelper && model.needsRecovery, "A mutually trusted selected helper must handle previous-session recovery")
+        if finishOlderHealthCheck {
+            deferHealthCheck = true
+            helper.refresh()
+            try expect(helper.checking && helper.usesHelper, "An ordinary refresh can overlap recovery for a ready helper")
+        }
         model.recover()
         try expect(requests.count == 1 && requests[0].0 == directory.path && requests[0].1 && !model.waitingForPassword,
             "Recovery must use the actual controller with the original path and restore-only mode")
+        if finishOlderHealthCheck {
+            guard let healthReply else { throw WakecupError(message: "Missing deferred health check") }
+            healthReply(.success(information))
+            try expect(!helper.checking, "The earlier health check must complete before the recovery reply")
+        }
         replies[0](result)
         try expect(model.phase == .failed && model.needsRecovery && model.message != nil,
             "A failed recovery must report its error and keep recovery available")

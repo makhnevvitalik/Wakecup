@@ -1,4 +1,5 @@
 import AppKit
+import Combine
 import CoreServices
 
 @MainActor
@@ -11,9 +12,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private let updates = UpdateChecker()
     private lazy var about = AboutWindowController(updates: updates)
     var status: NSStatusItem!
-    private lazy var inactiveStatusImage = makeStatusIcon(active: false)
-    private lazy var activeStatusImage = makeStatusIcon(active: true)
-    private lazy var attentionStatusImage = makeStatusIcon(state: .attention)
+    private let statusBadge = StatusBadge()
+    private var statusIconObservation: AnyCancellable?
+    private var languageObservation: AnyCancellable?
+    private lazy var statusImages = Dictionary(uniqueKeysWithValues: StatusIconState.allCases.map {
+        ($0, makeStatusIcon(state: $0))
+    })
 
     func receiveAutomation(_ envelope: AutomationEnvelope) -> AutomationReply {
         automation.receive(envelope)
@@ -40,29 +44,31 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         status.button?.target = self
         status.button?.action = #selector(toggle)
         status.button?.toolTip = "Wakecup"
+        if let button = status.button {
+            statusBadge.frame = button.bounds
+            statusBadge.autoresizingMask = [.width, .height]
+            statusBadge.isHidden = true
+            statusBadge.setAccessibilityElement(false)
+            button.addSubview(statusBadge)
+        }
         let helperPresentation = HelperPresentation(settingsOwner: { [weak self] in self?.menuPanel.settingsSheetOwner() })
-        helperPresentation.observeRecovery(of: model.helper)
+        helperPresentation.observeRecovery(of: model)
         var helperInteraction = helperPresentation.interaction
         helperInteraction.dismissPanel = { [weak self] in self?.menuPanel.close() }
-        helperInteraction.canSelectMode = { [weak self] in self?.model.canSelectHelperMode ?? false }
-        helperInteraction.canChangeInstallation = { [weak self] in self?.model.canChangeHelper ?? false }
+        helperInteraction.leaveForExplanation = { [weak self] in self?.menuPanel.leaveForAuxiliaryWindow() }
         menuPanel = MenuPanelController(model: model, updates: updates,
             statusButton: { [weak self] in self?.status?.button }, showHelp: { [weak self] in
                 self?.menuPanel.close()
                 self?.sleepHelp.show()
             }, showAbout: { [weak self] in
-                self?.menuPanel.close()
-                self?.about.show()
+                guard let self else { return }
+                self.about.show(returningTo: self.menuPanel.leaveForAuxiliaryWindow())
             }, showMCPSetup: { [weak self] in
                 self?.menuPanel.close()
                 self?.mcpSetup.show()
             }, configureDisplayShortcut: { [weak self] requiresShortcut, completion in
-                guard let self, self.model.canChangeDisplayShortcut, let owner = self.menuPanel.settingsSheetOwner() else {
-                    completion(false)
-                    return
-                }
-                DisplayShortcutEditor.present(model: self.model, owner: owner,
-                    requiresShortcut: requiresShortcut, completion: completion)
+                guard let self else { completion(false); return }
+                self.menuPanel.configureDisplayShortcut(requiresShortcut: requiresShortcut, completion: completion)
             }, helperInteraction: helperInteraction,
             isMCPEnabled: { [weak self] in self?.automation.mcpEnabled ?? false },
             setMCPEnabled: { [weak self] enabled in self?.automation.mcpEnabled = enabled })
@@ -76,7 +82,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 fflush(stdout)
             }
         }
-        updates.check()
+        statusIconObservation = updates.$availableRelease.map { $0 != nil }.removeDuplicates()
+            .combineLatest(model.helperStatuses.map(\.updateRequired).removeDuplicates())
+            .sink { [weak self] hasUpdate, helperNeedsUpdate in
+                self?.updateStatusIcon(hasUpdate: hasUpdate, helperNeedsUpdate: helperNeedsUpdate)
+            }
+        languageObservation = AppLocalization.shared.$language.dropFirst()
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in self?.updateStatus() }
+        updates.startAutomaticChecks()
         if !launchedAtLogin, !CommandLine.arguments.contains("--automation-launch") { show() }
     }
 
@@ -87,23 +101,28 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 menuPanel.showWindow()
             }
         }
-        let running = model.phase == .active || model.isRestarting
+        let running = model.statusPhase == .active || model.isRestarting
         status?.length = running && model.showRemaining ? NSStatusItem.variableLength : NSStatusItem.squareLength
-        status?.button?.contentTintColor = nil
-        let iconState = StatusIconState(phase: model.isRestarting ? .active : model.phase, needsRecovery: model.needsRecovery)
-        switch iconState {
-        case .inactive: status?.button?.image = inactiveStatusImage
-        case .active: status?.button?.image = activeStatusImage
-        case .attention: status?.button?.image = attentionStatusImage
-        }
-        let description = model.needsRecovery ? localized("Wakecup — restore normal sleep") : "Wakecup"
-        status?.button?.toolTip = description
-        status?.button?.setAccessibilityLabel(description)
         if running, model.showRemaining {
             if let seconds = model.remaining {
                 status?.button?.title = seconds >= 3600 ? " " + localizedFormat("%dh", Int(ceil(Double(seconds) / 3600))) : " " + localizedFormat("%dm", max(1, Int(ceil(Double(seconds) / 60))))
             } else { status?.button?.title = " ∞" }
         } else { status?.button?.title = "" }
+        updateStatusIcon(hasUpdate: updates.availableRelease != nil,
+                         helperNeedsUpdate: model.helperStatus.updateRequired)
+    }
+
+    private func updateStatusIcon(hasUpdate: Bool, helperNeedsUpdate: Bool) {
+        let notice = StatusIconNotice(needsBrightnessRecovery: model.needsBrightnessRecovery,
+                                      needsSleepRecovery: model.needsRecovery,
+                                      helperNeedsUpdate: helperNeedsUpdate, hasAppUpdate: hasUpdate)
+        let state = StatusIconState(phase: model.isRestarting ? .active : model.statusPhase, notice: notice)
+        guard let button = status?.button else { return }
+        button.image = statusImages[state]
+        statusBadge.color = state.badgeColor
+        let description = localized(notice.titleKey)
+        button.toolTip = description
+        button.setAccessibilityLabel(description)
     }
 
     @objc func toggle() {
@@ -120,7 +139,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         model.refreshLoginState()
         menuPanel.showWindow()
     }
-    func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool { show(); return false }
+    func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
+        model.refreshLoginState()
+        menuPanel.reopen()
+        return false
+    }
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
         let waiting = model.prepareToQuit {
             DispatchQueue.main.async { sender.reply(toApplicationShouldTerminate: true) }

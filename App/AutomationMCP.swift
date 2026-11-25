@@ -61,12 +61,12 @@ enum AutomationMCP {
         Tool(.configure, "Apply timer, battery, lid or display changes. The response may be pending while Wakecup waits for macOS.", settings),
         Tool(.restoreBrightness, "Return to the previous display mode and brightness."),
         Tool(.cancelBlackout, "Cancel the countdown before the backlight turns off."),
-        Tool(.setShortcut, "Set the shortcut for restoring brightness.", [
+        Tool(.setShortcut, "Set the shortcut that toggles the backlight during a session.", [
             "function": ["type": "integer", "minimum": 1, "maximum": 20],
             "modifiers": ["type": "array", "minItems": 1, "uniqueItems": true,
                           "items": ["type": "string", "enum": ["shift", "control", "option", "command"]]]
         ], required: ["function", "modifiers"]),
-        Tool(.clearShortcut, "Clear the brightness restore shortcut."),
+        Tool(.clearShortcut, "Clear the backlight shortcut."),
         Tool(.helperStatus, "Read closed-lid helper state and selection."),
         Tool(.helperInstall, "Install the closed-lid helper. Requires macOS administrator authorization."),
         Tool(.helperUpdate, "Update the closed-lid helper. Requires macOS administrator authorization."),
@@ -200,7 +200,7 @@ enum AutomationMCP {
                   let function = number as? Int, let modifiers = fields["modifiers"] as? [String] else {
                 throw WakecupError(message: "Provide a function key number and modifiers.")
             }
-            return AutomationRequest(action: .setShortcut, shortcut: try DisplayShortcut.automationShortcut(function: function, modifiers: modifiers))
+            return AutomationRequest(action: .setShortcut, shortcut: LegacyDisplayShortcut(try .automationShortcut(function: function, modifiers: modifiers)))
         }
         fields["action"] = tool.action.rawValue
         let request = try AutomationJSON.decode(AutomationRequest.self, from: JSONSerialization.data(withJSONObject: fields))

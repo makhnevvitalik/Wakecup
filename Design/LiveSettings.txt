@@ -2,7 +2,7 @@ Wakecup live settings
 
 Current behavior
 - The same settings are available while Wakecup is off or running. The header shows when the active timer ends.
-- The When to stop card uses a date and time, the 1/3/5-hour presets, or Indefinitely. The calendar allows today and the next 30 local calendar days. Editing the selection does not change an active timer until Apply.
+- The Run time card uses a date and time, the 1/3/5-hour presets, or Indefinitely. The calendar allows today and the next 30 local calendar days. Editing the selection does not change an active timer until Apply.
 - During a run, the end time, battery permission, charge threshold, closed-lid mode, and display mode share one draft with Apply and Cancel at the bottom of the panel. Backlight off starts a visible 10-second countdown. Display changes preserve the running timer. The selected power policy can stop Wakecup if its conditions are no longer met.
 - Open the lid before changing closed-lid mode during a run. Wakecup preserves the original end time or indefinite mode during the internal handoff.
 - See ../README.md for the current user flow and DisplayModes.txt for the backlight design and verification history.

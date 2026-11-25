@@ -55,19 +55,21 @@ Wakecup requires **macOS 14 or later**.
 
 - You can also download a ZIP archive, unpack it, and move Wakecup to **Applications**.
 - macOS may block Wakecup the first time you open it. If that happens, go to **System Settings → Privacy & Security**, find the message about Wakecup, and choose **Open Anyway** if available.
-- The cup icon is outlined when Wakecup is off and filled when it is active. If a warning appears on the icon, see [how to restore sleep](#if-your-mac-does-not-sleep-after-wakecup-is-off).
+- The cup icon is outlined when Wakecup is off and filled when it is active. If an orange dot appears, open the Wakecup panel to see what needs attention.
 
 ### Set when to stop
 
 - **1 hour**, **3 hours**, **5 hours** set an end time relative to now. If you pick **1 hour** at 23:30, Wakecup stops at 00:30 tomorrow.
-- To stop at a specific time, choose **Today**, **Tomorrow** or **Choose date…**, then enter the time in **Stop at**. You can type `0930` for `09:30`. If the time has already passed, choose **Tomorrow** to keep the same time on the next day.
+- In the **Run time** card, choose **Today**, **Tomorrow** or **Choose date…**, then enter the time in **Stop at**. Dates and times follow the macOS regional settings, including the 12- or 24-hour clock. You can type `0930` for 9:30. In 12-hour mode, also choose AM or PM. If the time has already passed, choose **Tomorrow** to keep the same time on the next day.
 - **∞** or **Indefinitely** runs until you stop it manually or your power settings cause Wakecup to stop.
 
-While Wakecup is active, changes to the end time, power, lid or display settings take effect when you click **Apply** at the bottom. Use **Cancel** to discard the edits. To change the closed-lid option, open the lid first. If you leave the timer alone, the end time stays the same even if macOS asks for administrator permission.
+While Wakecup is active, changes to the end time, power, lid or display settings take effect when you click **Apply** below the header. Use **Cancel** to discard the edits. To change the closed-lid option, open the lid first. If you leave the timer alone, the end time stays the same even if macOS asks for administrator permission.
+
+Wakecup stops the session when macOS reports a critical thermal state. On the main panel, choose **Serious** under **Stop when hot** to stop at serious or critical thermal states. Wakecup restores brightness and lets macOS manage sleep again. It shows the reason and waits for you to start a new session after the Mac cools down.
 
 ### Display backlight
 
-Quick example. While your AI agent is working, leave the lid open and turn off **Keep awake with lid closed**. Choose **3 hours** and **Backlight off**, then save a **Restore brightness** shortcut if prompted. If you’re on battery, enable **Keep awake on battery** and set the stop threshold below the current charge. Click **Start**.
+Quick example. While your AI agent is working, leave the lid open and turn off **Keep awake with lid closed**. Choose **3 hours** and **Backlight off**, then save a **Toggle backlight** shortcut if prompted. If you’re on battery, enable **Keep awake on battery** and set the stop threshold below the current charge. Click **Start**.
 
 | Mode | What happens |
 | --- | --- |
@@ -75,9 +77,9 @@ Quick example. While your AI agent is working, leave the lid open and turn off *
 | **Keep on** | The display stays on while Wakecup is active. |
 | **Backlight off** | A supported built-in display stays on at zero brightness after a 10-second countdown. |
 
-To use **Backlight off** for the first time, choose the mode and save a shortcut in the **Restore brightness** dialog. Use F1–F20 with at least one of Shift, Control, Option or Command. You can change it in the **Restore brightness** row while the backlight is on.
+To use **Backlight off** for the first time, choose the mode and save a shortcut in the **Toggle backlight** dialog. In the editor, use a letter or digit with Control, Option or Command, or F1–F20 with at least one of Shift, Control, Option or Command. Letters and digits refer to physical keys and are shown using US keyboard labels. You can change it in the **Toggle backlight** row on the main panel while the backlight is on. The editor blocks shortcuts already used by macOS and asks for confirmation if the shortcut may override a common command such as Copy or intercept text input in a keyboard layout enabled in macOS. The warning shows the current layout if affected, or another enabled layout.
 
-Once the backlight goes dark, press the shortcut to restore the previous brightness and display mode. If you change brightness with the system controls, Wakecup returns to the previous display mode and keeps the new brightness. If you stop or quit Wakecup while the backlight is off, it restores the saved brightness. If you have already turned the backlight on, it keeps your chosen level. A separate process can restore the backlight if the app exits unexpectedly. Wakecup leaves macOS lock-screen settings alone.
+During an active Wakecup session, press the shortcut from any app to turn the backlight off immediately, even during a countdown. Press it again to restore the previous brightness and display mode. The timer keeps running. If you change brightness with the system controls, Wakecup returns to the previous display mode and keeps the new brightness. If you stop or quit Wakecup while the backlight is off, it restores the saved brightness. If you have already turned the backlight on, it keeps your chosen level. A separate process can restore the backlight if the app exits unexpectedly. Wakecup leaves macOS lock-screen settings alone.
 
 ### Battery and closed lid
 
@@ -87,13 +89,13 @@ To work with the lid closed, turn on **Keep awake with lid closed** with the lid
 
 If you use this mode often, stop Wakecup and click **Install** in the **Helper** row below the lid option. Confirm the macOS prompt. The helper gets permission during installation and never stores your password. Use **Configure…** in the same row to manage the helper. Installation, update and removal still require administrator permission.
 
-After updating Wakecup, update the helper if prompted. Use **Configure…** to return to password prompts or remove the helper. Stop Wakecup before updating or removing the app or helper.
+After updating Wakecup, click **Update** in the **Helper** row if prompted. Wakecup installs the new helper from the app bundle. Use **Configure…** to return to password prompts or remove the helper. Stop Wakecup before updating or removing the app or helper.
 
 Keep ventilation clear when using closed-lid mode. Wakecup requests that macOS stay awake; it cannot guarantee that every task will continue through a system shutdown or other system-enforced interruption.
 
 ### Settings and updates
 
-Open the gear menu to change **Language**, enable **Open at Login**, or manage the icon and remaining time in the menu bar. **Show in Menu Bar** is on by default. To restore the hidden icon, open Wakecup from **Applications** or Spotlight, then enable **Show in Menu Bar** in the gear menu. Wakecup checks GitHub in the background at launch. When Wakecup is idle, the **Update available** link below the app name opens the new release. While Wakecup is active, that line shows the session status. You can also check manually in **About… → Check for Updates**.
+Open the gear menu to change **Language**, enable **Open at Login**, or manage the icon and remaining time in the menu bar. **Show in Menu Bar** is on by default. To restore the hidden icon, open Wakecup from **Applications** or Spotlight, then enable **Show in Menu Bar** in the gear menu. Wakecup checks GitHub in the background at launch and every 24 hours while running. A blue dot on the menu bar icon signals a new release. An orange dot takes priority if sleep or brightness needs to be restored or if the selected helper needs an update. When Wakecup is idle, the **Update available** link below the app name opens the new release. While Wakecup is active, that line shows the session status. You can also check manually in **About… → Check for Updates**.
 
 ### CLI and MCP
 
@@ -181,19 +183,21 @@ Wakecup требует **macOS 14 или новее**.
 
 - Можно также скачать ZIP-архив, распаковать его и перенести Wakecup в папку **Программы**.
 - При первом запуске macOS может заблокировать Wakecup. Если это произошло, откройте **Системные настройки → Конфиденциальность и безопасность**, найдите сообщение о Wakecup и нажмите **Всё равно открыть**, если кнопка доступна.
-- Когда Wakecup выключен, в строке меню виден контур кружки. Когда режим активен, кружка заполнена. Если на значке появилось предупреждение, см. [как восстановить сон](#если-wakecup-выключен-а-mac-не-засыпает).
+- Когда Wakecup выключен, в строке меню виден контур кружки. Когда режим активен, кружка заполнена. Если на значке появилась оранжевая точка, откройте панель Wakecup, чтобы узнать причину.
 
 ### Когда остановить
 
 - **1 час**, **3 часа**, **5 часов** задают время окончания от текущего момента. Например, если в 23:30 выбрать **1 час**, Wakecup остановится завтра в 00:30.
-- Чтобы остановить Wakecup к определённому времени, выберите **Сегодня**, **Завтра** или **Выбрать дату…**, а затем введите время в поле **Остановить в**. Можно набрать `0930`, чтобы получить `09:30`. Если время уже прошло, кнопка **Завтра** перенесёт его на следующий день.
+- В карточке **Время работы** выберите **Сегодня**, **Завтра** или **Выбрать дату…**, а затем введите время в поле **Остановить в**. Формат даты и времени следует региональным настройкам macOS, включая 12- или 24-часовой режим. Можно набрать `0930`, чтобы получить 9:30. В 12-часовом режиме также выберите время до или после полудня. Если время уже прошло, кнопка **Завтра** перенесёт его на следующий день.
 - **∞** или **Бессрочно** оставляет Wakecup включённым до ручной остановки или пока это позволяют настройки питания.
 
-Пока Wakecup активен, изменения времени, питания, режима крышки или подсветки вступают в силу после нажатия **Применить** внизу панели. **Отменить** сбрасывает правки. Чтобы изменить режим крышки, сначала откройте её. Если вы не меняли таймер, время окончания сохранится, даже если macOS запросит разрешение администратора.
+Пока Wakecup активен, изменения времени, питания, режима крышки или подсветки вступают в силу после нажатия **Применить** под шапкой. **Отменить** сбрасывает правки. Чтобы изменить режим крышки, сначала откройте её. Если вы не меняли таймер, время окончания сохранится, даже если macOS запросит разрешение администратора.
+
+Wakecup завершает сеанс, когда macOS сообщает о критическом нагреве. Чтобы остановиться раньше, на основной панели в строке **Остановить при нагреве** выберите **Высоком**. Этот порог срабатывает при высоком и критическом нагреве. Wakecup восстанавливает подсветку, возвращает управление сном macOS и показывает причину остановки. После охлаждения запустите новый сеанс вручную.
 
 ### Подсветка экрана
 
-Простой пример. Пока ИИ-агент выполняет задачу, оставьте крышку открытой и отключите **Не засыпать с закрытой крышкой**. Выберите **3 часа** и **Без подсветки**. Если Wakecup предложит, сохраните сочетание **Вернуть яркость**. Если Mac работает от аккумулятора, включите **Не засыпать без зарядки** и задайте порог остановки ниже текущего заряда. Нажмите **Включить**.
+Простой пример. Пока ИИ-агент выполняет задачу, оставьте крышку открытой и отключите **Не засыпать с закрытой крышкой**. Выберите **3 часа** и **Без подсветки**. Если Wakecup предложит, настройте сочетание для переключения подсветки. Если Mac работает от аккумулятора, включите **Не засыпать без зарядки** и задайте порог остановки ниже текущего заряда. Нажмите **Включить**.
 
 | Режим | Что происходит |
 | --- | --- |
@@ -201,9 +205,9 @@ Wakecup требует **macOS 14 или новее**.
 | **Не выключать** | Экран остаётся включённым, пока работает Wakecup. |
 | **Без подсветки** | Через 10 секунд яркость поддерживаемого встроенного экрана падает до нуля, а сам экран остаётся включённым. |
 
-При первом выборе **Без подсветки** Wakecup предложит настроить сочетание **Вернуть яркость**. Назначьте F1–F20 с одним или несколькими модификаторами Shift, Control, Option или Command. Пока подсветка включена, сочетание можно изменить в строке **Вернуть яркость**.
+При первом выборе **Без подсветки** Wakecup предложит настроить сочетание **Переключение подсветки**. В редакторе можно выбрать букву или цифру с Control, Option или Command, либо F1–F20 с одним или несколькими модификаторами Shift, Control, Option или Command. Буквы и цифры привязаны к физическим клавишам и подписаны по американской раскладке. Пока подсветка включена, сочетание можно изменить в строке **Переключение подсветки** на основной панели. Если сочетание уже занято macOS, редактор предложит выбрать другое. Если сочетание может заменить распространённую команду, например копирование, или перехватить ввод текста в одной из раскладок, включённых в macOS, редактор попросит подтвердить назначение. Предупреждение показывает текущую раскладку, если сочетание влияет на ввод в ней, или другую включённую раскладку.
 
-Когда подсветка погаснет, нажмите сочетание, чтобы вернуть прежнюю яркость и режим экрана. Если изменить яркость системными средствами, Wakecup вернёт предыдущий режим экрана и сохранит выбранную яркость. Если остановить или закрыть Wakecup при погашенной подсветке, приложение вернёт сохранённую яркость. Если подсветка уже включена, Wakecup оставит выбранный уровень. При неожиданном завершении приложения подсветку может восстановить отдельный процесс. Настройки блокировки экрана macOS Wakecup оставляет прежними.
+Во время сеанса Wakecup сочетание срабатывает из любого приложения и сразу гасит подсветку, даже если идёт отсчёт. Следующее нажатие вернёт прежнюю яркость и режим экрана. Таймер продолжит идти. Если изменить яркость системными средствами, Wakecup вернёт предыдущий режим экрана и сохранит выбранную яркость. Если остановить или закрыть Wakecup при погашенной подсветке, приложение вернёт сохранённую яркость. Если подсветка уже включена, Wakecup оставит выбранный уровень. При неожиданном завершении приложения подсветку может восстановить отдельный процесс. Настройки блокировки экрана macOS Wakecup оставляет прежними.
 
 ### Аккумулятор и закрытая крышка
 
@@ -213,13 +217,13 @@ Wakecup требует **macOS 14 или новее**.
 
 Если пользуетесь этим режимом часто, остановите Wakecup, нажмите **Установить** в строке **Помощник** и подтвердите запрос macOS. Помощник получает права при установке и не хранит пароль. Управлять им можно через **Настроить…** в той же строке. Установка, обновление и удаление по-прежнему требуют разрешения администратора.
 
-После обновления Wakecup обновите помощника, если приложение предложит это сделать. Через **Настроить…** можно вернуть запрос пароля или удалить помощника. Перед обновлением или удалением приложения или помощника остановите Wakecup.
+После обновления Wakecup нажмите **Обновить** в строке **Помощник**, если приложение предложит это сделать. Новая версия помощника уже входит в приложение. Через **Настроить…** можно вернуть запрос пароля или удалить помощника. Перед обновлением или удалением приложения или помощника остановите Wakecup.
 
 При работе с закрытой крышкой оставляйте вентиляцию открытой. Wakecup просит macOS не засыпать, но не гарантирует продолжение задач при выключении компьютера или других принудительных остановках системы.
 
 ### Настройки и обновления
 
-В меню шестерёнки можно выбрать **Язык**, включить **Запускать при входе**, настроить значок и остаток времени в строке меню. Пункт **Показывать в строке меню** включён по умолчанию. Чтобы вернуть скрытый значок, откройте Wakecup из папки **«Программы»** или через Spotlight, затем включите **Показывать в строке меню** в меню шестерёнки. При запуске Wakecup проверяет GitHub в фоне. Если вышла новая версия, под названием появится ссылка **Доступно обновление**. Пока Wakecup активен, на этой строке виден статус работы. Проверить обновления вручную можно через **О приложении… → Проверить обновления**.
+В меню шестерёнки можно выбрать **Язык**, включить **Запускать при входе**, настроить значок и остаток времени в строке меню. Пункт **Показывать в строке меню** включён по умолчанию. Чтобы вернуть скрытый значок, откройте Wakecup из папки **«Программы»** или через Spotlight, затем включите **Показывать в строке меню** в меню шестерёнки. Wakecup проверяет GitHub в фоне при запуске и каждые 24 часа, пока приложение запущено. Синяя точка на значке в строке меню сообщает о новом релизе. Оранжевая точка имеет приоритет, если нужно восстановить сон или яркость либо обновить выбранного помощника. Если вышла новая версия, под названием появится ссылка **Доступно обновление**. Пока Wakecup активен, на этой строке виден статус работы. Проверить обновления вручную можно через **О приложении… → Проверить обновления**.
 
 ### CLI и MCP
 

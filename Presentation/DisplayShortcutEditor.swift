@@ -21,6 +21,9 @@ final class DisplayShortcutCaptureBox: NSBox {
         window?.makeFirstResponder(self)
         if window?.firstResponder === self { modifiersDidChange?(event.modifierFlags) }
     }
+    override func hitTest(_ point: NSPoint) -> NSView? {
+        super.hitTest(point) == nil ? nil : self
+    }
     override func flagsChanged(with event: NSEvent) {
         guard event.window === window, window?.firstResponder === self else {
             super.flagsChanged(with: event); return
@@ -35,73 +38,72 @@ final class DisplayShortcutCaptureBox: NSBox {
     }
 }
 
-final class DisplayShortcutEditor: NSObject, NSWindowDelegate {
+@MainActor final class DisplayShortcutEditor: NSObject, NSWindowDelegate {
     let window: NSPanel
     let captureBox = DisplayShortcutCaptureBox()
-    let valueLabel = NSTextField(labelWithString: "")
+    let valueLabel = NSTextField(wrappingLabelWithString: "")
     let hintLabel = NSTextField(labelWithString: "")
-    let errorLabel = NSTextField(wrappingLabelWithString: "")
+    let feedback = ShortcutFeedbackLayout()
     let saveButton = NSButton(title: localized("Save"), target: nil, action: nil)
     let cancelButton = NSButton(title: localized("Cancel"), target: nil, action: nil)
     let clearButton = NSButton(title: localized("Clear"), target: nil, action: nil)
     private(set) var draft: DisplayShortcut?
     private(set) var didFinish = false
     private(set) var savedSuccessfully = false
-    private let currentShortcut: DisplayShortcut?
-    private let currentLabel = NSTextField(labelWithString: "")
     private let requiresShortcut: Bool
     private let canEdit: () -> Bool
-    private let validate: (DisplayShortcut) throws -> Void
-    private let save: (DisplayShortcut?) throws -> Void
-    private let finish: () -> Void
+    private let checkConflict: @MainActor (DisplayShortcut) -> DisplayShortcutConflict?
+    private let save: (DisplayShortcut?, DisplayShortcutConflict?) throws -> Void
+    private let editingFocusChanged: (Bool) -> Void
+    private let finish: (Bool) -> Void
+    private var hasEditingFocus = false
     private var eventMonitor: Any?
     private var heldModifiers: UInt32 = 0
     private var previewModifiers: UInt32 = 0
     private var captureError: String?
+    private var displayedConflict: DisplayShortcutConflict?
     private var draftIsValid = true
+    private var registrationConflict = false
 
     init(currentShortcut: DisplayShortcut?, canEdit: @escaping () -> Bool,
-         validate: @escaping (DisplayShortcut) throws -> Void,
-         save: @escaping (DisplayShortcut?) throws -> Void, requiresShortcut: Bool = false,
-         finish: @escaping () -> Void = {}) {
-        self.currentShortcut = currentShortcut
+         checkConflict: @escaping @MainActor (DisplayShortcut) -> DisplayShortcutConflict?,
+         save: @escaping (DisplayShortcut?, DisplayShortcutConflict?) throws -> Void, requiresShortcut: Bool = false,
+         editingFocusChanged: @escaping (Bool) -> Void = { _ in },
+         finish: @escaping (Bool) -> Void = { _ in }) {
         self.requiresShortcut = requiresShortcut
         self.draft = currentShortcut
         self.canEdit = canEdit
-        self.validate = validate
+        self.checkConflict = checkConflict
+        self.displayedConflict = currentShortcut.flatMap { checkConflict($0) }
         self.save = save
+        self.editingFocusChanged = editingFocusChanged
         self.finish = finish
-        let width = AppStyle.HelperDialogLayout.width
+        let width = AppStyle.Layout.shortcutEditorWidth
         window = NSPanel(contentRect: NSRect(x: 0, y: 0, width: width, height: 310),
             styleMask: [.titled, .closable], backing: .buffered, defer: false)
         super.init()
-        window.title = localized("Restore brightness shortcut")
+        window.title = localized("Backlight shortcut")
         window.isReleasedWhenClosed = false
         window.delegate = self
         window.collectionBehavior = [.moveToActiveSpace]
-        let title = NSTextField(labelWithString: localized("Restore brightness"))
+        let title = NSTextField(labelWithString: localized("Backlight shortcut"))
         title.font = AppStyle.Font.windowTitle
-        let explanation = NSTextField(wrappingLabelWithString: localized(requiresShortcut ? "display.shortcut.firstUse" : "display.shortcut.explanation"))
-        explanation.font = AppStyle.Font.body
-        explanation.preferredMaxLayoutWidth = width - 2 * AppStyle.Layout.windowInset
-        let current = currentLabel
-        current.font = AppStyle.Font.supportingText
-        current.textColor = .secondaryLabelColor
-        current.lineBreakMode = .byTruncatingTail
+        let shortcutTitle = NSTextField(labelWithString: localized("Shortcut"))
+        shortcutTitle.font = AppStyle.Font.emphasizedBody
+        shortcutTitle.textColor = .secondaryLabelColor
 
         captureBox.boxType = .custom
         captureBox.titlePosition = .noTitle
         captureBox.fillColor = .controlBackgroundColor
         captureBox.cornerRadius = 9
-        captureBox.focusDidChange = { [weak self] in
-            guard let self else { return }
-            self.heldModifiers = 0; self.previewModifiers = 0
-            self.refresh()
-        }
+        captureBox.contentViewMargins = .zero
+        captureBox.focusDidChange = { [weak self] in self?.resetModifierPreview() }
         captureBox.modifiersDidChange = { [weak self] in self?.modifiersChanged($0) }
-        captureBox.setAccessibilityLabel(localized("Restore brightness shortcut"))
+        captureBox.setAccessibilityLabel(localized("Backlight shortcut"))
         captureBox.identifier = NSUserInterfaceItemIdentifier("WakecupDisplayShortcutCapture")
-        valueLabel.font = AppStyle.Font.emphasizedBody
+        valueLabel.isSelectable = false
+        valueLabel.lineBreakMode = .byWordWrapping
+        valueLabel.preferredMaxLayoutWidth = width - 2 * AppStyle.Layout.windowInset - 24
         valueLabel.alignment = .center
         hintLabel.font = AppStyle.Font.supportingText
         hintLabel.textColor = .secondaryLabelColor
@@ -112,21 +114,15 @@ final class DisplayShortcutEditor: NSObject, NSWindowDelegate {
         captureContent.spacing = 5
         captureContent.translatesAutoresizingMaskIntoConstraints = false
         captureBox.contentView!.addSubview(captureContent)
-        errorLabel.font = AppStyle.Font.supportingText
-        errorLabel.textColor = .systemRed
-        errorLabel.maximumNumberOfLines = 3
-        errorLabel.preferredMaxLayoutWidth = width - 2 * AppStyle.Layout.windowInset
-        errorLabel.identifier = NSUserInterfaceItemIdentifier("WakecupDisplayShortcutError")
+        feedback.label.identifier = NSUserInterfaceItemIdentifier("WakecupDisplayShortcutError")
         for button in [clearButton, cancelButton, saveButton] {
-            button.bezelStyle = .rounded
-            button.font = AppStyle.Font.controlLabel
+            AppStyle.configureCompactButton(button)
             button.target = self
         }
         clearButton.action = #selector(clearPressed)
         cancelButton.action = #selector(cancelPressed)
         saveButton.action = #selector(savePressed)
         cancelButton.keyEquivalent = "\u{1b}"
-        saveButton.keyEquivalent = "\r"
         let spacer = NSView()
         spacer.setContentHuggingPriority(.defaultLow, for: .horizontal)
         let buttons = NSStackView(views: [clearButton, spacer, cancelButton, saveButton])
@@ -135,10 +131,14 @@ final class DisplayShortcutEditor: NSObject, NSWindowDelegate {
         let content = NSView()
         content.wantsLayer = true
         content.layer?.backgroundColor = NSColor.windowBackgroundColor.cgColor
-        let stack = NSStackView(views: [title, explanation, current, captureBox, errorLabel, buttons])
+        let stack = NSStackView(views: [title, shortcutTitle, captureBox, feedback.slot, buttons])
         stack.orientation = .vertical
         stack.alignment = .leading
-        stack.spacing = 12
+        stack.spacing = 6
+        stack.setCustomSpacing(14, after: title)
+        stack.setCustomSpacing(5, after: shortcutTitle)
+        stack.setCustomSpacing(0, after: captureBox)
+        stack.setCustomSpacing(12, after: feedback.slot)
         stack.translatesAutoresizingMaskIntoConstraints = false
         content.addSubview(stack)
         NSLayoutConstraint.activate([
@@ -146,17 +146,14 @@ final class DisplayShortcutEditor: NSObject, NSWindowDelegate {
             stack.leadingAnchor.constraint(equalTo: content.leadingAnchor, constant: AppStyle.Layout.windowInset),
             stack.trailingAnchor.constraint(equalTo: content.trailingAnchor, constant: -AppStyle.Layout.windowInset),
             stack.topAnchor.constraint(equalTo: content.topAnchor, constant: AppStyle.Layout.windowTopInset),
-            stack.bottomAnchor.constraint(equalTo: content.bottomAnchor, constant: -AppStyle.Layout.windowInset),
-            explanation.widthAnchor.constraint(equalTo: stack.widthAnchor),
-            current.widthAnchor.constraint(equalTo: stack.widthAnchor),
+            stack.bottomAnchor.constraint(equalTo: content.bottomAnchor, constant: -18),
             captureBox.widthAnchor.constraint(equalTo: stack.widthAnchor),
             captureBox.heightAnchor.constraint(equalToConstant: 66),
             captureContent.centerXAnchor.constraint(equalTo: captureBox.contentView!.centerXAnchor),
             captureContent.centerYAnchor.constraint(equalTo: captureBox.contentView!.centerYAnchor),
             captureContent.leadingAnchor.constraint(greaterThanOrEqualTo: captureBox.contentView!.leadingAnchor, constant: 12),
             captureContent.trailingAnchor.constraint(lessThanOrEqualTo: captureBox.contentView!.trailingAnchor, constant: -12),
-            errorLabel.widthAnchor.constraint(equalTo: stack.widthAnchor),
-            errorLabel.heightAnchor.constraint(greaterThanOrEqualToConstant: 42),
+            feedback.slot.widthAnchor.constraint(equalTo: stack.widthAnchor),
             buttons.widthAnchor.constraint(equalTo: stack.widthAnchor)
         ])
         window.contentView = content
@@ -171,49 +168,72 @@ final class DisplayShortcutEditor: NSObject, NSWindowDelegate {
         content.layoutSubtreeIfNeeded()
     }
 
-    static func selectMode(_ mode: DisplayMode, model: SessionModel,
-                           configure: (@escaping (Bool) -> Void) -> Void) {
-        guard model.canChangeDisplayMode else { return }
-        if mode == .backlightOff && model.displayShortcut == nil {
-            configure { saved in
-                guard saved, model.displayShortcut != nil else { return }
-                model.selectDisplayMode(mode)
-            }
-        } else {
-            model.selectDisplayMode(mode)
-        }
-    }
-
-    static func present(model: SessionModel, owner: NSWindow, requiresShortcut: Bool, completion: @escaping (Bool) -> Void) {
-        guard model.canChangeDisplayShortcut, owner.attachedSheet == nil else { completion(false); return }
-        model.beginDisplayShortcutEditing()
+    static func present(model: SessionModel, owner: NSWindow?, requiresShortcut: Bool,
+                        completion: @escaping (Bool) -> Void) -> DisplayShortcutEditor {
         let editor = DisplayShortcutEditor(currentShortcut: model.displayShortcut,
-            canEdit: { model.canChangeDisplayShortcut }, validate: model.validateDisplayShortcut,
-            save: { _ = try model.setDisplayShortcut($0) }, requiresShortcut: requiresShortcut)
+            canEdit: { model.canChangeDisplayShortcut },
+            checkConflict: { model.displayShortcutConflict(for: $0) },
+            save: { _ = try model.setDisplayShortcut($0, reviewedConflict: $1) }, requiresShortcut: requiresShortcut,
+            editingFocusChanged: { focused in
+                if focused { model.beginDisplayShortcutEditing() }
+                else { model.endDisplayShortcutEditing() }
+            }, finish: completion)
         editor.eventMonitor = NSEvent.addLocalMonitorForEvents(matching: [.keyDown]) { [weak editor] event in
-            guard let editor else { return event }
+            guard let editor, editor.hasEditingFocus else { return event }
             return editor.handleKeyDown(event)
         }
-        owner.beginSheet(editor.window) { [editor] response in
-            editor.removeMonitor()
-            editor.window.orderOut(nil)
-            model.endDisplayShortcutEditing()
-            completion(response == .OK && editor.savedSuccessfully)
+        if let owner {
+            owner.beginSheet(editor.window) { response in
+                editor.endPresentation(saved: response == .OK && editor.savedSuccessfully)
+            }
+        } else {
+            editor.window.hidesOnDeactivate = false
+            editor.window.center()
+            editor.showWindow()
         }
         editor.window.makeFirstResponder(editor.captureBox)
+        return editor
+    }
+
+    func showWindow() {
+        NSApp.activate(ignoringOtherApps: true)
+        window.makeKeyAndOrderFront(nil)
+    }
+
+    func windowDidBecomeKey(_ notification: Notification) {
+        guard !didFinish else { return }
+        setEditingFocus(true)
+    }
+
+    func windowDidResignKey(_ notification: Notification) {
+        setEditingFocus(false)
+    }
+
+    private func setEditingFocus(_ focused: Bool) {
+        guard hasEditingFocus != focused else { return }
+        hasEditingFocus = focused
+        editingFocusChanged(focused)
+        if !didFinish { resetModifierPreview() }
+    }
+
+    private func resetModifierPreview() {
+        heldModifiers = 0
+        previewModifiers = 0
+        refresh()
     }
 
     // Kept separate from monitor installation so offscreen tests never capture
     // real keyboard input or register a system shortcut.
     func handleKeyDown(_ event: NSEvent) -> NSEvent? {
-        guard event.window === window else { return event }
+        guard !didFinish, event.window === window else { return event }
         if event.keyCode == 53 { cancelPressed(); return nil }
+        let flags = event.modifierFlags.intersection([.shift, .control, .option, .command])
+        if event.keyCode == 36, event.isARepeat, flags.isEmpty { return nil }
         guard window.firstResponder === captureBox else { return event }
         if event.keyCode == 48 { return event }
-        let flags = event.modifierFlags.intersection([.shift, .control, .option, .command])
         if flags.isEmpty && [49, 123, 124, 125, 126].contains(event.keyCode) { return event }
         if event.keyCode == 36, flags.isEmpty {
-            if saveButton.isEnabled { savePressed() }
+            if saveButton.isEnabled, saveButton.keyEquivalent == "\r" { savePressed() }
             return nil
         }
         guard canEdit() else { showError(localized("display.shortcut.locked")); return nil }
@@ -226,20 +246,22 @@ final class DisplayShortcutEditor: NSObject, NSWindowDelegate {
             showError(localized("display.shortcut.invalid"))
             return nil
         }
-        do {
-            try validate(candidate)
-            draft = candidate
-            previewModifiers = 0
-            draftIsValid = true
-            captureError = nil
-            refresh()
-        } catch { draftIsValid = false; showError(localized(error.localizedDescription)) }
+        draft = candidate
+        displayedConflict = checkConflict(candidate)
+        registrationConflict = false
+        previewModifiers = 0
+        draftIsValid = true
+        captureError = nil
+        refresh()
         return nil
     }
 
     @objc func clearPressed() {
+        guard !didFinish else { return }
         guard canEdit() else { showError(localized("display.shortcut.locked")); return }
         draft = nil
+        displayedConflict = nil
+        registrationConflict = false
         heldModifiers = 0; previewModifiers = 0; captureError = nil; draftIsValid = true
         refresh()
     }
@@ -249,36 +271,90 @@ final class DisplayShortcutEditor: NSObject, NSWindowDelegate {
         refresh()
         guard saveButton.isEnabled else { return }
         do {
-            if let draft { try validate(draft) }
-            try save(draft)
+            try save(draft, displayedConflict)
             savedSuccessfully = true
             complete()
-        } catch { showError(localized(error.localizedDescription)) }
+        } catch let review as DisplayShortcutReviewRequired {
+            displayedConflict = review.conflict
+            captureError = nil
+            refresh()
+        } catch DisplayHotKeyError.conflict {
+            registrationConflict = true
+            captureError = nil
+            refresh()
+        } catch {
+            showError(localized(error.localizedDescription))
+        }
     }
     @objc func cancelPressed() { complete() }
     func windowShouldClose(_ sender: NSWindow) -> Bool { complete(); return false }
 
     private func refresh() {
-        saveButton.isEnabled = canEdit() && previewModifiers == 0 && draftIsValid && (!requiresShortcut || draft != nil)
-        clearButton.isEnabled = canEdit() && draft != nil
-        errorLabel.stringValue = captureError ?? ""
+        let systemConflict = displayedConflict == .system
+        let warning: (title: String, detail: String)?
+        switch draftIsValid && !registrationConflict ? displayedConflict : nil {
+        case .documentedSystemCommand(let command):
+            warning = (localized("display.shortcut.systemWarningTitle"), localized(command))
+        case .commonCommand(let command):
+            warning = (localized("display.shortcut.commonWarningTitle"),
+                       localizedFormat("display.shortcut.commonWarning", localized(command)))
+        case .typing(let layout, let effect):
+            let detail = switch effect {
+            case .insertsText(let text):
+                localizedFormat("display.shortcut.typingWarningText", layout, text)
+            case .startsComposition:
+                localizedFormat("display.shortcut.typingWarningComposition", layout)
+            }
+            warning = (localized("display.shortcut.typingWarningTitle"), detail)
+        default:
+            warning = nil
+        }
+        saveButton.isEnabled = !didFinish && canEdit() && previewModifiers == 0 && draftIsValid
+            && !systemConflict && !registrationConflict && (!requiresShortcut || draft != nil)
+        saveButton.title = localized(warning == nil ? "Save" : "Assign Anyway")
+        saveButton.keyEquivalent = warning == nil ? "\r" : ""
+        clearButton.isEnabled = !didFinish && canEdit() && draft != nil
+        if let captureError {
+            showFeedback(captureError)
+        } else if registrationConflict {
+            showFeedback(localized("display.shortcut.conflict"))
+        } else if systemConflict {
+            showFeedback(localized("display.shortcut.systemConflict"))
+        } else if let warning {
+            showFeedback(warning.title, detail: warning.detail, style: .warning)
+        } else if requiresShortcut {
+            showFeedback(localized("display.shortcut.firstUse"), style: .information)
+        } else {
+            feedback.hide()
+        }
         refreshCapture()
     }
 
+    private func showFeedback(_ title: String, detail: String? = nil, style: ShortcutFeedbackLayout.Style = .error) {
+        feedback.show(title, detail: detail, style: style)
+    }
+
     private func refreshCapture() {
-        currentLabel.stringValue = localizedFormat("Current shortcut: %@", currentShortcut?.displayName ?? localized("Not configured"))
         let focused = captureBox.hasKeyboardFocus
         captureBox.borderColor = focused ? .controlAccentColor : .separatorColor
         captureBox.borderWidth = focused ? 2 : 1
         let previewing = focused && previewModifiers != 0
         valueLabel.stringValue = previewing ? DisplayShortcut.modifierSymbols(for: previewModifiers)
             : draft?.displayName ?? localized(focused ? "Hold a modifier" : "Not configured")
-        valueLabel.font = draft != nil || previewing ? AppStyle.Font.emphasizedBody : AppStyle.Font.body
-        let hint = !focused ? "Click here to record" : previewing ? "Press F1–F20."
-            : draft == nil ? "Then press F1–F20." : "Hold a modifier, then press F1–F20."
+        valueLabel.font = draft != nil || previewing ? AppStyle.Font.shortcutValue : AppStyle.Font.body
+        let nextKey = previewModifiers == DisplayShortcut.shift ? "Press F1–F20." : "Press a letter, number or F1–F20."
+        let hint = if !focused {
+            "Click here to record"
+        } else if previewing {
+            nextKey
+        } else if draft == nil {
+            "Letters and digits need Control, Option, or Command."
+        } else {
+            "Hold a modifier, then press a key."
+        }
         hintLabel.stringValue = localized(hint)
         captureBox.setAccessibilityValue(valueLabel.stringValue)
-        captureBox.setAccessibilityHelp(localized(previewing ? "Press F1–F20." : focused ? "Recording shortcut" : "Click here to record"))
+        captureBox.setAccessibilityHelp(hintLabel.stringValue)
     }
     private func showError(_ text: String) { captureError = text; refresh() }
 
@@ -292,7 +368,6 @@ final class DisplayShortcutEditor: NSObject, NSWindowDelegate {
         if active == 0 { previewModifiers = 0 }
         else if pressed || previewModifiers != 0 {
             previewModifiers = active
-            if pressed { captureError = nil; draftIsValid = true }
         }
         refresh()
     }
@@ -308,13 +383,21 @@ final class DisplayShortcutEditor: NSObject, NSWindowDelegate {
     private func complete() {
         guard !didFinish else { return }
         didFinish = true
-        removeMonitor()
         if let owner = window.sheetParent {
             owner.endSheet(window, returnCode: savedSuccessfully ? .OK : .cancel)
         } else {
-            finish()
+            endPresentation(saved: savedSuccessfully)
         }
     }
+
+    private func endPresentation(saved: Bool) {
+        didFinish = true
+        setEditingFocus(false)
+        removeMonitor()
+        window.orderOut(nil)
+        finish(saved)
+    }
+
     private func removeMonitor() {
         if let eventMonitor { NSEvent.removeMonitor(eventMonitor); self.eventMonitor = nil }
     }

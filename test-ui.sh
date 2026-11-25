@@ -16,10 +16,14 @@ swiftc "$project_root"/Core/*.swift "$project_root"/System/*.swift \
   -module-cache-path "$project_root/.build/module-cache" \
   -framework SwiftUI -framework AppKit -framework IOKit -framework ServiceManagement
 "$project_root/.build/duration-input-tests"
+"$project_root/.build/duration-input-tests" --system-editor-format -AppleLocale en_US \
+  -AppleICUTimeFormatStrings '{1 = "HH: mm";}'
+"$project_root/.build/duration-input-tests" --gap-day
+"$project_root/.build/duration-input-tests" --clear-indefinite
 
 swiftc "$project_root"/Core/*.swift "$project_root"/System/*.swift \
   "$project_root"/Application/*.swift "$project_root/.build/HelperBuildIdentity.swift" "$project_root"/Presentation/*.swift \
-  "$project_root/Tests/StyleContractTests.swift" -o "$project_root/.build/style-contract-tests" \
+  "$project_root/Tests/WakecupLayoutFixture.swift" "$project_root/Tests/StyleContractTests.swift" -o "$project_root/.build/style-contract-tests" \
   -module-cache-path "$project_root/.build/module-cache" \
   -framework SwiftUI -framework AppKit -framework IOKit -framework ServiceManagement
 "$project_root/.build/style-contract-tests" "$project_root"
@@ -59,7 +63,7 @@ cp "$project_root/Info.plist" "$helper_fixture/Contents/Info.plist"
 cp -R "$project_root/Resources/." "$helper_fixture/Contents/Resources/"
 swiftc "$project_root"/Core/*.swift "$project_root"/System/*.swift \
   "$project_root"/Application/*.swift "$project_root/.build/HelperBuildIdentity.swift" "$project_root"/Presentation/*.swift \
-  "$project_root/Tests/HelperPresentationTests.swift" -o "$helper_fixture/Contents/MacOS/Wakecup" \
+  "$project_root/Tests/HelperTestModel.swift" "$project_root/Tests/HelperPresentationTests.swift" -o "$helper_fixture/Contents/MacOS/Wakecup" \
   -module-cache-path "$project_root/.build/module-cache" \
   -framework SwiftUI -framework AppKit -framework IOKit -framework ServiceManagement
 "$helper_fixture/Contents/MacOS/Wakecup" en
@@ -72,7 +76,7 @@ cp "$project_root/Info.plist" "$status_fixture/Contents/Info.plist"
 cp -R "$project_root/Resources/." "$status_fixture/Contents/Resources/"
 swiftc "$project_root"/Core/*.swift "$project_root"/System/*.swift \
   "$project_root"/Application/*.swift "$project_root/.build/HelperBuildIdentity.swift" "$project_root"/Presentation/*.swift \
-  "$project_root/Tests/SessionStatusLayoutTests.swift" -o "$status_fixture/Contents/MacOS/Wakecup" \
+  "$project_root/Tests/WakecupLayoutFixture.swift" "$project_root/Tests/SessionStatusLayoutTests.swift" -o "$status_fixture/Contents/MacOS/Wakecup" \
   -module-cache-path "$project_root/.build/module-cache" \
   -framework SwiftUI -framework AppKit -framework IOKit -framework ServiceManagement
 "$status_fixture/Contents/MacOS/Wakecup" en
@@ -98,7 +102,7 @@ cp "$project_root/Info.plist" "$battery_fixture/Contents/Info.plist"
 cp -R "$project_root/Resources/." "$battery_fixture/Contents/Resources/"
 swiftc "$project_root"/Core/*.swift "$project_root"/System/*.swift \
   "$project_root"/Application/*.swift "$project_root/.build/HelperBuildIdentity.swift" "$project_root"/Presentation/*.swift \
-  "$project_root/Tests/BatteryOptionsLayoutTests.swift" -o "$battery_fixture/Contents/MacOS/Wakecup" \
+  "$project_root/Tests/WakecupLayoutFixture.swift" "$project_root/Tests/BatteryOptionsLayoutTests.swift" -o "$battery_fixture/Contents/MacOS/Wakecup" \
   -module-cache-path "$project_root/.build/module-cache" \
   -framework SwiftUI -framework AppKit -framework IOKit -framework ServiceManagement
 "$battery_fixture/Contents/MacOS/Wakecup" en
@@ -114,7 +118,7 @@ swiftc "$project_root"/Core/*.swift "$project_root"/System/*.swift \
   "$project_root/Presentation/AppStyle.swift" "$project_root/Presentation/HelperSettingsDialog.swift" \
   "$project_root/Presentation/HelperInteraction.swift" "$project_root/Presentation/HelperPresentation.swift" \
   "$project_root/Presentation/ModelessAlert.swift" \
-  "$project_root/Tests/HelperDialogLayoutTests.swift" -o "$helper_dialog_fixture/Contents/MacOS/Wakecup" \
+  "$project_root/Tests/HelperTestModel.swift" "$project_root/Tests/HelperDialogLayoutTests.swift" -o "$helper_dialog_fixture/Contents/MacOS/Wakecup" \
   -module-cache-path "$project_root/.build/module-cache" \
   -framework AppKit -framework IOKit -framework ServiceManagement
 "$helper_dialog_fixture/Contents/MacOS/Wakecup" en
@@ -128,7 +132,7 @@ cp "$project_root/Info.plist" "$display_fixture/Contents/Info.plist"
 cp -R "$project_root/Resources/." "$display_fixture/Contents/Resources/"
 swiftc "$project_root"/Core/*.swift "$project_root"/System/*.swift \
   "$project_root"/Application/*.swift "$project_root/.build/HelperBuildIdentity.swift" "$project_root"/Presentation/*.swift \
-  "$project_root/Tests/ActiveDisplayControlLayoutTests.swift" -o "$display_fixture/Contents/MacOS/Wakecup" \
+  "$project_root/Tests/WakecupLayoutFixture.swift" "$project_root/Tests/ActiveDisplayControlLayoutTests.swift" -o "$display_fixture/Contents/MacOS/Wakecup" \
   -module-cache-path "$project_root/.build/module-cache" \
   -framework SwiftUI -framework AppKit -framework IOKit -framework ServiceManagement
 "$display_fixture/Contents/MacOS/Wakecup" en
@@ -142,7 +146,7 @@ cp "$project_root/Info.plist" "$unified_fixture/Contents/Info.plist"
 cp -R "$project_root/Resources/." "$unified_fixture/Contents/Resources/"
 swiftc "$project_root"/Core/*.swift "$project_root"/System/*.swift \
   "$project_root"/Application/*.swift "$project_root/.build/HelperBuildIdentity.swift" "$project_root"/Presentation/*.swift \
-  "$project_root/Tests/UnifiedSettingsLayoutTests.swift" -o "$unified_fixture/Contents/MacOS/Wakecup" \
+  "$project_root/Tests/WakecupLayoutFixture.swift" "$project_root/Tests/UnifiedSettingsLayoutTests.swift" -o "$unified_fixture/Contents/MacOS/Wakecup" \
   -module-cache-path "$project_root/.build/module-cache" \
   -framework SwiftUI -framework AppKit -framework IOKit -framework ServiceManagement
 "$unified_fixture/Contents/MacOS/Wakecup" en
@@ -183,3 +187,5 @@ swiftc "$project_root/Core/AppLanguage.swift" "$project_root/Core/EndTimeSelecti
   "$project_root/Tests/StopTimeDayTests.swift" -o "$project_root/.build/stop-time-day-tests" \
   -module-cache-path "$project_root/.build/module-cache" -framework AppKit -framework SwiftUI
 "$project_root/.build/stop-time-day-tests"
+"$project_root/.build/stop-time-day-tests" --fold
+"$project_root/.build/stop-time-day-tests" --empty-step

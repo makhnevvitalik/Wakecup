@@ -7,6 +7,14 @@ struct AutomationTransportTests {
         if CommandLine.arguments.dropFirst().first == "--mcp-child" {
             exit(AutomationMCP.run(path: CommandLine.arguments[2]))
         }
+        // Keep existing clients' raw numeric flags, independently of app settings.
+        let payload = Data(#"{"action":"setShortcut","shortcut":{"keyCode":8,"modifiers":10}}"#.utf8)
+        let request = try AutomationJSON.decode(AutomationRequest.self, from: payload)
+        precondition(request.shortcut?.current == DisplayShortcut(keyCode: 8, modifiers: 5))
+        let encoded = try AutomationJSON.encode(request)
+        precondition(String(decoding: encoded, as: UTF8.self).contains(#""modifiers":10"#))
+        let cliShortcut = try AutomationCLI.parse(["set-shortcut", "F2", "control+command"])
+        precondition(cliShortcut.shortcut?.current?.modifiers == 5)
         try missingReply()
         try mcpLifecycle()
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent("wc-" + String(UUID().uuidString.prefix(8)))
@@ -37,7 +45,7 @@ struct AutomationTransportTests {
         func call(_ value: String) -> [String: Any]? {
             AutomationMCP.handle(Data(value.utf8), initialized: &initialized) { request in
                 commands.append(request.action)
-                if request.action == .setShortcut { precondition(request.shortcut?.displayName == "⇧⌘F2") }
+                if request.action == .setShortcut { precondition(request.shortcut?.current?.displayName == "⇧⌘F2") }
                 return AutomationReply(outcome: .pending, message: "Test")
             }
         }

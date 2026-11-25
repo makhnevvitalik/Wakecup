@@ -4,8 +4,8 @@
 <dict>
 	<key>%@ Restore normal sleep to continue.</key>
 	<string>%@ Нужно восстановить обычный сон.</string>
-	<key>%@ is available.</key>
-	<string>Доступна версия %@.</string>
+	<key>%@ is available</key>
+	<string>Доступна версия %@</string>
 	<key>%d percent</key>
 	<string>%d процентов</string>
 	<key>%dh</key>
@@ -32,8 +32,12 @@
 	<string>Автозапуск: разрешить в macOS…</string>
 	<key>Keep awake on battery</key>
 	<string>Не засыпать без зарядки</string>
-	<key>About this setting</key>
-	<string>Об этой настройке</string>
+	<key>Help about closed-lid mode</key>
+	<string>Справка о режиме с закрытой крышкой</string>
+	<key>Help about battery power</key>
+	<string>Справка о работе от аккумулятора</string>
+	<key>Help about the helper</key>
+	<string>Справка о системном помощнике</string>
 	<key>closed.lid.help</key>
 	<string>Не даёт Mac уснуть при закрытии крышки. Чтобы не вводить пароль каждый раз, используйте помощника.</string>
 	<key>battery.power.help</key>
@@ -152,8 +156,16 @@
 	<string>Остановить</string>
 	<key>Stop at battery level</key>
 	<string>Остановить при заряде:</string>
-	<key>Stopping…</key>
-	<string>Выключаем…</string>
+	<key>Returning control to macOS…</key>
+	<string>Возвращаем управление macOS…</string>
+	<key>Restore brightness</key>
+	<string>Вернуть яркость</string>
+	<key>Could not restore brightness.</key>
+	<string>Не удалось вернуть яркость.</string>
+	<key>Press %@ to restore brightness.</key>
+	<string>Чтобы вернуть яркость, нажмите %@.</string>
+	<key>Wakecup — restore brightness</key>
+	<string>Wakecup — нужно вернуть яркость</string>
 	<key>The guardian did not start. Sleep settings were not confirmed.</key>
 	<string>Защитный процесс не запустился. Настройки сна не подтверждены.</string>
 	<key>The guardian is not responding. Restore normal sleep to continue.</key>
@@ -168,8 +180,6 @@
 	<string>Публичного релиза пока нет.</string>
 	<key>There is no interrupted session to recover.</key>
 	<string>Восстановление сна после прерванной работы Wakecup не требуется.</string>
-	<key>Try Again</key>
-	<string>Повторить</string>
 	<key>Unknown SleepDisabled value.</key>
 	<string>Неизвестное значение SleepDisabled.</string>
 	<key>Unknown session file.</key>
@@ -477,6 +487,16 @@ Wakecup не меняет таймеры сна, выключения экран
 	<string>Помощник</string>
 	<key>Configure…</key>
 	<string>Настроить…</string>
+	<key>Change…</key>
+	<string>Изменить…</string>
+	<key>Not assigned</key>
+	<string>Не назначено</string>
+	<key>Current shortcut: %@</key>
+	<string>Текущее сочетание: %@</string>
+	<key>Configure backlight shortcut</key>
+	<string>Настроить сочетание для подсветки</string>
+	<key>Change backlight shortcut</key>
+	<string>Изменить сочетание для подсветки</string>
 	<key>Install</key>
 	<string>Установить</string>
 	<key>Update</key>
@@ -570,37 +590,35 @@ Wakecup не меняет таймеры сна, выключения экран
 
 «Не выключать» — экран остаётся включённым, пока Wakecup активен.
 
-«Без подсветки» — через 10 секунд гаснет подсветка встроенного экрана. Mac и дисплей продолжают работать. Сочетание «Вернуть яркость» возвращает прежнюю яркость. Если включить подсветку средствами macOS, Wakecup сохранит выбранную яркость. В обоих случаях вернётся предыдущий режим экрана.</string>
-	<key>Backlight turns off in %ld s</key>
-	<string>Подсветка погаснет через %ld с</string>
+«Без подсветки» — через 10 секунд гаснет подсветка встроенного экрана. Mac и дисплей продолжают работать. Пока Wakecup активен, сочетание сразу выключает подсветку или возвращает прежнюю яркость. Если включить подсветку средствами macOS, Wakecup сохранит выбранную яркость. В обоих случаях вернётся предыдущий режим экрана.</string>
+	<key>%ld s</key>
+	<string>%ld с</string>
+	<key>Backlight turns off in %@</key>
+	<string>Подсветка погаснет через %@</string>
 	<key>Cancel backlight countdown</key>
 	<string>Отменить</string>
-	<key>Only in Backlight off mode</key>
-	<string>Только в режиме «Без подсветки»</string>
-	<key>Restore brightness</key>
-	<string>Вернуть яркость</string>
+	<key>Cancel turning off the backlight</key>
+	<string>Отменить выключение подсветки</string>
 	<key>Not configured</key>
 	<string>Не настроено</string>
-	<key>Restore brightness shortcut</key>
-	<string>Сочетание для возврата яркости</string>
 	<key>Click here to record</key>
 	<string>Нажмите здесь для записи</string>
-	<key>Hold a modifier, then press F1–F20.</key>
-	<string>Зажмите модификатор и нажмите F1–F20.</string>
+	<key>Hold a modifier, then press a key.</key>
+	<string>Зажмите модификатор и нажмите клавишу.</string>
 	<key>display.shortcut.explanation</key>
-	<string>Сочетание F1–F20 с Shift, Control, Option или Command возвращает прежнюю яркость и режим подсветки. Действует только в режиме «Без подсветки».</string>
+	<string>Сочетание переключает подсветку встроенного экрана, пока Wakecup активен.</string>
 	<key>display.shortcut.invalid</key>
-	<string>Используйте F1–F20 с Shift, Control, Option или Command. Буквы и сочетания только из модификаторов недоступны.</string>
+	<string>Нажмите букву или цифру с Control, Option или Command либо F1–F20 с Shift, Control, Option или Command.</string>
 	<key>display.shortcut.locked</key>
 	<string>Верните яркость перед изменением сочетания.</string>
 	<key>display.shortcut.conflict</key>
 	<string>Это сочетание уже занято. Выберите другое.</string>
 	<key>display.shortcut.unavailable</key>
-	<string>Не удалось зарегистрировать сочетание. Выберите другое и повторите попытку.</string>
-	<key>Current shortcut: %@</key>
-	<string>Текущее сочетание: %@</string>
-	<key>Recording shortcut</key>
-	<string>Запись сочетания</string>
+	<string>Не удалось зарегистрировать сочетание. Повторите попытку.</string>
+	<key>Shortcut</key>
+	<string>Сочетание</string>
+	<key>Letters and digits need Control, Option, or Command.</key>
+	<string>Для букв и цифр нужен Control, Option или Command.</string>
 	<key>Save</key>
 	<string>Сохранить</string>
 	<key>Clear</key>
@@ -678,7 +696,7 @@ Wakecup не меняет таймеры сна, выключения экран
 	<key>Backlight restoration process is still finishing. Try restoring brightness again.</key>
 	<string>Процесс ещё завершает восстановление. Повторите возврат яркости.</string>
 	<key>display.shortcut.firstUse</key>
-	<string>Выберите F1–F20 с Shift, Control, Option или Command для возврата яркости. После сохранения будет выбран режим «Без подсветки».</string>
+	<string>После сохранения будет выбран режим «Без подсветки».</string>
 	<key>helper.help</key>
 	<string>Помощник позволяет включать режим «Не засыпать с закрытой крышкой» без ввода пароля каждый раз.
 
@@ -687,8 +705,8 @@ Wakecup не меняет таймеры сна, выключения экран
 	<string>Активен до %@</string>
 	<key>battery.threshold.scale.help</key>
 	<string>Шкала показывает текущий заряд от 1% до 100%. Порог остановки можно перемещать от 10% до 90%.</string>
-	<key>When to stop</key>
-	<string>Когда остановить</string>
+	<key>Run time</key>
+	<string>Время работы</string>
 	<key>Stop at</key>
 	<string>Остановить в</string>
 	<key>Today</key>
@@ -703,8 +721,14 @@ Wakecup не меняет таймеры сна, выключения экран
 	<string>День окончания</string>
 	<key>Enter a time such as 18:30.</key>
 	<string>Введите время, например 18:30.</string>
-	<key>Stops in %@</key>
-	<string>Остановка через %@</string>
+	<key>%@ tomorrow</key>
+	<string>%@ завтра</string>
+	<key>Until %@ (%@)</key>
+	<string>До %@ (%@)</string>
+	<key>New stop time</key>
+	<string>Новое время</string>
+	<key>This time does not exist on the selected day.</key>
+	<string>Этого времени нет в выбранный день.</string>
 	<key>This time has already passed.</key>
 	<string>Это время уже прошло.</string>
 	<key>Choose a duration of at least 10 seconds.</key>
@@ -717,10 +741,14 @@ Wakecup не меняет таймеры сна, выключения экран
 	<string>Зажмите модификатор</string>
 	<key>Press F1–F20.</key>
 	<string>Нажмите F1–F20.</string>
-	<key>Then press F1–F20.</key>
-	<string>Затем нажмите F1–F20.</string>
+	<key>Press a letter, number or F1–F20.</key>
+	<string>Нажмите букву, цифру или F1–F20.</string>
 	<key>Cancel edits</key>
 	<string>Отменить</string>
+	<key>Wakecup — update available</key>
+	<string>Wakecup — доступно обновление</string>
+	<key>Wakecup — helper update required</key>
+	<string>Wakecup — нужно обновить помощника</string>
 	<key>Update available</key>
 	<string>Доступно обновление</string>
 	<key>Enable MCP</key>
@@ -751,5 +779,270 @@ Wakecup не меняет таймеры сна, выключения экран
 	<string>Выполните команду в Терминале, чтобы добавить Wakecup для вашей учётной записи. Затем откройте Claude Code и проверьте подключение через /mcp.</string>
 	<key>Settings</key>
 	<string>Настройки</string>
+	<key>Backlight shortcut</key>
+	<string>Переключение подсветки</string>
+	<key>display.shortcut.summary</key>
+	<string>Выключает подсветку, пока Wakecup активен. Повторное нажатие вернёт яркость.</string>
+	<key>thermal.stop.help</key>
+	<string>Wakecup завершает сеанс, когда macOS сообщает о выбранном уровне нагрева. При критическом нагреве сеанс завершится при любом выборе. Wakecup восстановит яркость и вернёт управление сном macOS.</string>
+	<key>Stop when hot</key>
+	<string>Остановить при нагреве</string>
+	<key>Serious</key>
+	<string>Высоком</string>
+	<key>Critical</key>
+	<string>Критическом</string>
+	<key>Wakecup stopped because the Mac is too hot.</key>
+	<string>Wakecup остановился из-за нагрева Mac.</string>
+	<key>Wakecup cannot start because the Mac is too hot.</key>
+	<string>Wakecup не может запуститься из-за нагрева Mac.</string>
+	<key>Enter a time such as %@.</key>
+	<string>Введите время, например %@.</string>
+	<key>Time of day</key>
+	<string>До или после полудня</string>
+	<key>Restoring brightness…</key>
+	<string>Возвращаем яркость…</string>
+	<key>Help about display mode</key>
+	<string>Справка о режиме подсветки</string>
+	<key>Help about the backlight shortcut</key>
+	<string>Справка о сочетании для подсветки</string>
+	<key>Help about the thermal threshold</key>
+	<string>Справка о пороге нагрева</string>
+	<!-- Keyboard shortcut conflict messages and system command names. -->
+	<key>Assign Anyway</key>
+	<string>Всё равно назначить</string>
+	<key>display.shortcut.systemConflict</key>
+	<string>Это сочетание уже использует macOS. Выберите другое.</string>
+	<key>display.shortcut.systemWarningTitle</key>
+	<string>Сочетание macOS может иметь приоритет</string>
+	<key>display.shortcut.commonWarningTitle</key>
+	<string>Распространённое сочетание</string>
+	<key>display.shortcut.commonWarning</key>
+	<string>Может заменить команду «%@» в других приложениях.</string>
+	<key>display.shortcut.typingWarningTitle</key>
+	<string>Сочетание перехватывает ввод текста</string>
+	<key>display.shortcut.typingWarningText</key>
+	<string>В раскладке «%1$@» вводит «%2$@».</string>
+	<key>display.shortcut.typingWarningComposition</key>
+	<string>В раскладке «%@» начинает ввод составного символа.</string>
+	<key>Add Finder Item to Dock</key>
+	<string>Добавить объект Finder в Dock</string>
+	<key>Add to Finder Sidebar</key>
+	<string>Добавить объект в боковое меню Finder</string>
+	<key>Align Center</key>
+	<string>Выровнять по центру</string>
+	<key>Align Left</key>
+	<string>Выровнять по левому краю</string>
+	<key>Align Right</key>
+	<string>Выровнять по правому краю</string>
+	<key>Ask Siri About Screen Area</key>
+	<string>Спросить Siri об области экрана</string>
+	<key>Bold</key>
+	<string>Полужирный</string>
+	<key>Capture Entire Screen</key>
+	<string>Сделать снимок всего экрана</string>
+	<key>Capture Screen Area</key>
+	<string>Сделать снимок области экрана</string>
+	<key>Center Cursor or Selection in View</key>
+	<string>Показать курсор или выделение по центру</string>
+	<key>Close All Windows</key>
+	<string>Закрыть все окна</string>
+	<key>Close Window</key>
+	<string>Закрыть окно</string>
+	<key>Copy Style</key>
+	<string>Скопировать стиль</string>
+	<key>Create Finder Alias</key>
+	<string>Создать псевдоним в Finder</string>
+	<key>Cut</key>
+	<string>Вырезать</string>
+	<key>Cut Selection or Text to End of Paragraph</key>
+	<string>Вырезать выделение или текст до конца абзаца</string>
+	<key>Decrease Size</key>
+	<string>Уменьшить размер</string>
+	<key>Delete Backward</key>
+	<string>Удалить символ слева</string>
+	<key>Delete Forward</key>
+	<string>Удалить символ справа</string>
+	<key>Duplicate Files or Go to Desktop</key>
+	<string>Дублировать файлы или открыть рабочий стол в диалоге</string>
+	<key>Eject Disk</key>
+	<string>Извлечь диск</string>
+	<key>Find</key>
+	<string>Найти</string>
+	<key>Find Misspelled Words</key>
+	<string>Найти слова с ошибками</string>
+	<key>Find Next</key>
+	<string>Найти далее</string>
+	<key>Find Previous or Go to Folder</key>
+	<string>Найти предыдущее совпадение или перейти к папке</string>
+	<key>Finder Column View</key>
+	<string>Вид колонками в Finder</string>
+	<key>Finder Gallery View</key>
+	<string>Вид галереей в Finder</string>
+	<key>Finder Icon View</key>
+	<string>Вид значками в Finder</string>
+	<key>Finder List View</key>
+	<string>Вид списком в Finder</string>
+	<key>Focus Dock</key>
+	<string>Перенести фокус на Dock</string>
+	<key>Focus Floating Window</key>
+	<string>Перенести фокус на плавающее окно</string>
+	<key>Focus Menu Bar</key>
+	<string>Перенести фокус на строку меню</string>
+	<key>Focus Previous Panel</key>
+	<string>Перенести фокус на предыдущую панель</string>
+	<key>Focus Search</key>
+	<string>Перейти в поле поиска</string>
+	<key>Focus Status Menus</key>
+	<string>Перенести фокус на меню состояния</string>
+	<key>Focus Window</key>
+	<string>Перенести фокус на окно</string>
+	<key>Focus Window Drawer</key>
+	<string>Перенести фокус на выдвижную панель окна</string>
+	<key>Focus Window Toolbar</key>
+	<string>Перенести фокус на панель инструментов окна</string>
+	<key>Hide App</key>
+	<string>Скрыть приложение</string>
+	<key>Hide Other Apps</key>
+	<string>Скрыть другие приложения</string>
+	<key>Increase Display Contrast</key>
+	<string>Повысить контрастность экрана</string>
+	<key>Increase Size</key>
+	<string>Увеличить размер</string>
+	<key>Insert Line After Cursor</key>
+	<string>Вставить новую строку после курсора</string>
+	<key>Insert Link or Connect to Server</key>
+	<string>Вставить ссылку или подключиться к серверу</string>
+	<key>Invert Display Colors</key>
+	<string>Инвертировать цвета экрана</string>
+	<key>Italic or Show File Info</key>
+	<string>Курсив или сведения о файле</string>
+	<key>Lock Screen</key>
+	<string>Заблокировать экран</string>
+	<key>Log Out</key>
+	<string>Завершить сеанс</string>
+	<key>Log Out Without Confirmation</key>
+	<string>Завершить сеанс без подтверждения</string>
+	<key>Look Up Word</key>
+	<string>Найти определение слова</string>
+	<key>Minimize All Windows</key>
+	<string>Свернуть все окна</string>
+	<key>Minimize Window</key>
+	<string>Свернуть окно</string>
+	<key>Move Down One Line</key>
+	<string>Перейти на строку ниже</string>
+	<key>Move One Character Backward</key>
+	<string>Перейти на символ назад</string>
+	<key>Move One Character Forward</key>
+	<string>Перейти на символ вперёд</string>
+	<key>Move Up One Line</key>
+	<string>Перейти на строку выше</string>
+	<key>Move to Beginning of Line or Paragraph</key>
+	<string>Перейти в начало строки или абзаца</string>
+	<key>Move to End of Line or Paragraph</key>
+	<string>Перейти в конец строки или абзаца</string>
+	<key>New Folder</key>
+	<string>Новая папка</string>
+	<key>New Folder With Selection</key>
+	<string>Создать папку с выбранными объектами</string>
+	<key>New Smart Folder</key>
+	<string>Новая смарт-папка</string>
+	<key>New Tab, Fonts or Finder Tab Bar</key>
+	<string>Новая вкладка, шрифты или панель вкладок Finder</string>
+	<key>New Window or Document</key>
+	<string>Новое окно или документ</string>
+	<key>Next App Window</key>
+	<string>Следующее окно приложения</string>
+	<key>Next Finder Folder</key>
+	<string>Следующая папка в Finder</string>
+	<key>Open</key>
+	<string>Открыть</string>
+	<key>Open Accessibility Shortcuts</key>
+	<string>Открыть быстрые команды универсального доступа</string>
+	<key>Open AirDrop</key>
+	<string>Открыть AirDrop</string>
+	<key>Open App Settings</key>
+	<string>Открыть настройки приложения</string>
+	<key>Open Computer in Finder</key>
+	<string>Открыть раздел «Компьютер» в Finder</string>
+	<key>Open Desktop</key>
+	<string>Открыть рабочий стол</string>
+	<key>Open Documents</key>
+	<string>Открыть «Документы»</string>
+	<key>Open Downloads</key>
+	<string>Открыть «Загрузки»</string>
+	<key>Open Help</key>
+	<string>Открыть меню «Справка»</string>
+	<key>Open Home Folder</key>
+	<string>Открыть домашнюю папку</string>
+	<key>Open Network</key>
+	<string>Открыть «Сеть»</string>
+	<key>Open Recents</key>
+	<string>Открыть «Недавние»</string>
+	<key>Open Screenshot Controls</key>
+	<string>Открыть панель снимков экрана</string>
+	<key>Open Utilities</key>
+	<string>Открыть «Утилиты»</string>
+	<key>Open iCloud Drive</key>
+	<string>Открыть iCloud Drive</string>
+	<key>Page Setup or Finder Preview</key>
+	<string>Параметры страницы или просмотр в Finder</string>
+	<key>Paste</key>
+	<string>Вставить</string>
+	<key>Paste Style or Move Files</key>
+	<string>Вставить стиль или переместить файлы</string>
+	<key>Paste Text Cut With Control-K</key>
+	<string>Вставить текст, вырезанный через Control-K</string>
+	<key>Paste and Match Style</key>
+	<string>Вставить и согласовать стиль</string>
+	<key>Previous App Window</key>
+	<string>Предыдущее окно приложения</string>
+	<key>Previous Finder Folder</key>
+	<string>Предыдущая папка в Finder</string>
+	<key>Print</key>
+	<string>Печать</string>
+	<key>Quick Look</key>
+	<string>Быстрый просмотр</string>
+	<key>Quick Look Slideshow</key>
+	<string>Слайд-шоу в быстром просмотре</string>
+	<key>Quit App</key>
+	<string>Завершить приложение</string>
+	<key>Redo</key>
+	<string>Повторить</string>
+	<key>Reduce Display Contrast</key>
+	<string>Снизить контрастность экрана</string>
+	<key>Refresh or Show Original</key>
+	<string>Обновить страницу или показать оригинал</string>
+	<key>Save As or Duplicate</key>
+	<string>Сохранить как или создать дубликат</string>
+	<key>Select All</key>
+	<string>Выделить всё</string>
+	<key>Show Finder View Options</key>
+	<string>Показать параметры вида Finder</string>
+	<key>Spelling and Grammar</key>
+	<string>Правописание и грамматика</string>
+	<key>Toggle Dock</key>
+	<string>Показать или скрыть Dock</string>
+	<key>Toggle Finder Path Bar</key>
+	<string>Показать или скрыть строку пути Finder</string>
+	<key>Toggle Finder Sidebar</key>
+	<string>Показать или скрыть боковое меню Finder</string>
+	<key>Toggle Finder Status Bar</key>
+	<string>Показать или скрыть строку состояния Finder</string>
+	<key>Toggle Finder Tab Bar</key>
+	<string>Показать или скрыть панель вкладок Finder</string>
+	<key>Toggle Full Keyboard Focus</key>
+	<string>Переключить режим навигации клавишей Tab</string>
+	<key>Toggle Full Screen</key>
+	<string>Включить или выключить полноэкранный режим</string>
+	<key>Toggle Inspector</key>
+	<string>Показать или скрыть инспектор</string>
+	<key>Toggle Toolbar</key>
+	<string>Показать или скрыть панель инструментов</string>
+	<key>Transpose Characters</key>
+	<string>Поменять местами два символа у курсора</string>
+	<key>Underline</key>
+	<string>Подчёркивание</string>
+	<key>Undo</key>
+	<string>Отменить</string>
 </dict>
 </plist>

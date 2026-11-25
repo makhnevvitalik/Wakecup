@@ -15,7 +15,7 @@ enum DisplayHotKeyError: LocalizedError, Equatable {
     }
 }
 
-/// Owns only the currently armed restore chord. It never observes raw keys.
+/// Owns the configured display chord. It never observes raw keys.
 final class GlobalDisplayHotKey {
     typealias Registrar = (DisplayShortcut, @escaping () -> Void) throws -> (() -> Void)
 
@@ -53,10 +53,13 @@ final class GlobalDisplayHotKey {
 
     func unregister() { Self.onMain { unregisterOnMain() } }
 
-    static func validate(_ shortcut: DisplayShortcut) throws {
-        let candidate = GlobalDisplayHotKey()
-        try candidate.register(shortcut, handler: {})
-        candidate.unregister()
+    func validate(_ shortcut: DisplayShortcut) throws {
+        try Self.onMain {
+            guard shortcut.isValid else { throw DisplayHotKeyError.invalid }
+            guard self.shortcut != shortcut else { return }
+            let cancel = try registrar(shortcut, {})
+            cancel()
+        }
     }
 
     private func unregisterOnMain() {
@@ -101,6 +104,48 @@ final class GlobalDisplayHotKey {
     }
 }
 
+// Sharing the snapshot and physical match keeps editor warnings consistent
+// with the exclusive Carbon registration check.
+enum DisplaySymbolicHotKeys {
+    enum Match { case enabled, disabled, unlisted }
+
+    static func snapshot() -> [[String: Any]]? {
+        var result: Unmanaged<CFArray>?
+        let status = CopySymbolicHotKeys(&result)
+        let entries = result?.takeRetainedValue() as? [[String: Any]]
+        return status == noErr ? entries : nil
+    }
+
+    static func match(for shortcut: DisplayShortcut, entries: [[String: Any]]) -> Match {
+        let modifiers = Int(shortcut.carbonModifiers)
+        let keyCode = Int(shortcut.keyCode)
+        var match = Match.unlisted
+        for entry in entries {
+            guard (entry[kHISymbolicHotKeyCode as String] as? NSNumber)?.intValue == keyCode,
+                  (entry[kHISymbolicHotKeyModifiers as String] as? NSNumber)?.intValue == modifiers else { continue }
+            if (entry[kHISymbolicHotKeyEnabled as String] as? NSNumber)?.boolValue == true { return .enabled }
+            match = .disabled
+        }
+        return match
+    }
+
+    static func requireUnreserved(_ shortcut: DisplayShortcut, entries: [[String: Any]]?) throws {
+        guard let entries else { throw DisplayHotKeyError.unavailable }
+        if match(for: shortcut, entries: entries) == .enabled { throw DisplayHotKeyError.conflict }
+    }
+}
+
+extension DisplayShortcut {
+    var carbonModifiers: UInt32 {
+        var flags: UInt32 = 0
+        if modifiers & Self.shift != 0 { flags |= UInt32(shiftKey) }
+        if modifiers & Self.control != 0 { flags |= UInt32(controlKey) }
+        if modifiers & Self.option != 0 { flags |= UInt32(optionKey) }
+        if modifiers & Self.command != 0 { flags |= UInt32(cmdKey) }
+        return flags
+    }
+}
+
 private final class NativeDisplayHotKey {
     private static var nextID: UInt32 = 0
     private static let signature: OSType = 0x57434450 // WCDP
@@ -108,20 +153,18 @@ private final class NativeDisplayHotKey {
     private var handler: (() -> Void)?
     private var hotKey: EventHotKeyRef?
     private var eventHandler: EventHandlerRef?
+    private var pressed = false
 
     init(shortcut: DisplayShortcut, handler: @escaping () -> Void) throws {
-        guard shortcut.isValid else { throw DisplayHotKeyError.invalid }
         Self.nextID &+= 1
         id = EventHotKeyID(signature: Self.signature, id: Self.nextID)
         self.handler = handler
-        var carbonModifiers: UInt32 = 0
-        if shortcut.modifiers & DisplayShortcut.shift != 0 { carbonModifiers |= UInt32(shiftKey) }
-        if shortcut.modifiers & DisplayShortcut.control != 0 { carbonModifiers |= UInt32(controlKey) }
-        if shortcut.modifiers & DisplayShortcut.option != 0 { carbonModifiers |= UInt32(optionKey) }
-        if shortcut.modifiers & DisplayShortcut.command != 0 { carbonModifiers |= UInt32(cmdKey) }
-        try Self.checkSystemShortcuts(keyCode: shortcut.keyCode, modifiers: carbonModifiers)
+        try DisplaySymbolicHotKeys.requireUnreserved(shortcut, entries: DisplaySymbolicHotKeys.snapshot())
 
-        var type = EventTypeSpec(eventClass: OSType(kEventClassKeyboard), eventKind: UInt32(kEventHotKeyPressed))
+        let eventTypes = [
+            EventTypeSpec(eventClass: OSType(kEventClassKeyboard), eventKind: UInt32(kEventHotKeyPressed)),
+            EventTypeSpec(eventClass: OSType(kEventClassKeyboard), eventKind: UInt32(kEventHotKeyReleased))
+        ]
         let installed = InstallEventHandler(GetApplicationEventTarget(), { _, event, data in
             guard let event, let data else { return OSStatus(eventNotHandledErr) }
             let registration = Unmanaged<NativeDisplayHotKey>.fromOpaque(data).takeUnretainedValue()
@@ -133,33 +176,25 @@ private final class NativeDisplayHotKey {
                   received.signature == registration.id.signature,
                   received.id == registration.id.id,
                   let handler = registration.handler else { return OSStatus(eventNotHandledErr) }
-            handler()
+            if GetEventKind(event) == UInt32(kEventHotKeyReleased) {
+                registration.pressed = false
+            } else if !registration.pressed {
+                registration.pressed = true
+                handler()
+            }
             return noErr
-        }, 1, &type, Unmanaged.passUnretained(self).toOpaque(), &eventHandler)
+        }, eventTypes.count, eventTypes, Unmanaged.passUnretained(self).toOpaque(), &eventHandler)
         guard installed == noErr, eventHandler != nil else {
             unregister()
             throw DisplayHotKeyError.unavailable
         }
         // The default Carbon registration is shared; exclusive is necessary
         // for its conflict result to protect an exit action from another owner.
-        let registered = RegisterEventHotKey(shortcut.keyCode, carbonModifiers, id,
+        let registered = RegisterEventHotKey(shortcut.keyCode, shortcut.carbonModifiers, id,
                                              GetApplicationEventTarget(), OptionBits(kEventHotKeyExclusive), &hotKey)
         guard registered == noErr, hotKey != nil else {
             unregister()
             throw registered == eventHotKeyExistsErr ? DisplayHotKeyError.conflict : .unavailable
-        }
-    }
-
-    private static func checkSystemShortcuts(keyCode: UInt32, modifiers: UInt32) throws {
-        var value: Unmanaged<CFArray>?
-        guard CopySymbolicHotKeys(&value) == noErr, let value else { throw DisplayHotKeyError.unavailable }
-        guard let keys = value.takeRetainedValue() as? [[String: Any]] else { throw DisplayHotKeyError.unavailable }
-        for key in keys {
-            if (key[kHISymbolicHotKeyEnabled as String] as? NSNumber)?.boolValue == true,
-               (key[kHISymbolicHotKeyCode as String] as? NSNumber)?.uint32Value == keyCode,
-               (key[kHISymbolicHotKeyModifiers as String] as? NSNumber)?.uint32Value == modifiers {
-                throw DisplayHotKeyError.conflict
-            }
         }
     }
 

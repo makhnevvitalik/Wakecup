@@ -1,11 +1,6 @@
 import Foundation
 import Darwin
 
-struct SessionDirectoryIdentity: Codable, Equatable {
-    let device: UInt64
-    let inode: UInt64
-}
-
 // This record is read only from the root-owned global lease, never from UI JSON.
 struct GuardLeaseOwner: Codable {
     let session: SessionDirectoryIdentity
@@ -14,14 +9,6 @@ struct GuardLeaseOwner: Codable {
     let recovering: Bool
     var ownsSleepChange = false
     var commands: [ProcessIdentity] = []
-}
-
-struct RecoveryProcess {
-    let identity: ProcessIdentity
-    let parentPID: Int32
-    let executable: String
-    let stopped: Bool
-    let effectiveUID: UInt32
 }
 
 struct RecoveryOperations {
@@ -102,8 +89,8 @@ func recoverSession(_ session: SessionDirectoryIdentity, using op: RecoveryOpera
         guard status.ownsSleepChange else { throw rejected() }
         try op.claimLease()
         try op.restoreSleep()
-        status.phase = "stopped"
-        status.reason = "сон восстановлен после прерванного сеанса"
+        status.phase = .stopped
+        status.setTermination(.recovered)
         status.sleepRestored = true
         status.helperPID = 0
         status.helperIdentity = nil
@@ -145,8 +132,8 @@ func recoverSession(_ session: SessionDirectoryIdentity, using op: RecoveryOpera
         } else if try op.process(initial.helperPID) != nil { throw rejected() }
         guard try !op.readSleepDisabled() else { throw rejected() }
         var status = initial
-        status.phase = "stopped"
-        status.reason = "сон восстановлен после прерванного сеанса"
+        status.phase = .stopped
+        status.setTermination(.recovered)
         status.sleepRestored = true
         status.helperPID = 0
         status.helperIdentity = nil

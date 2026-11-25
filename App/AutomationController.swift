@@ -81,26 +81,23 @@ final class AutomationController {
         case .stop:
             return model.stop()
         case .restoreBrightness:
-            return model.display.restoreForUser(running: model.phase == .active)
+            return model.restoreBrightness()
         case .cancelBlackout:
-            return model.display.cancelBlackout()
+            return model.cancelBacklightCountdown()
         case .setShortcut:
             guard let shortcut = request.shortcut else { throw WakecupError(message: "A restore shortcut is required.") }
-            return try model.setDisplayShortcut(shortcut)
+            guard let current = shortcut.current else { throw DisplayHotKeyError.invalid }
+            return try model.setDisplayShortcut(current)
         case .clearShortcut:
             return try model.setDisplayShortcut(nil)
         case .helperUse:
-            guard let enabled = request.useHelper, model.canSelectHelperMode, !enabled || model.helper.state == .ready else {
+            guard let enabled = request.useHelper else {
                 throw WakecupError(message: "The requested helper mode is unavailable.")
             }
-            model.helper.select(enabled)
-            return .completed
-        case .helperInstall, .helperUpdate, .helperRemove:
-            guard model.canChangeHelper else { throw WakecupError(message: "Stop Wakecup and restore sleep before changing the helper.") }
-            guard model.helper.installed == (request.action != .helperInstall) else {
-                throw WakecupError(message: model.helper.installed ? "The helper is already installed. Use update." : "The helper is not installed.")
-            }
-            return model.helper.requestInstallation(remove: request.action == .helperRemove)
+            return model.setHelperMode(enabled)
+        case .helperInstall: return model.changeHelperInstallation(.install)
+        case .helperUpdate: return model.changeHelperInstallation(.update)
+        case .helperRemove: return model.changeHelperInstallation(.remove)
         case .restoreSleep:
             return model.recover()
         }
@@ -133,18 +130,21 @@ final class AutomationController {
     }
 
     private func status() -> AutomationStatus {
-        let phase = model.recoveryInProgress ? "recovering" : model.isRestarting ? "restarting" : model.phase.rawValue
+        let phase = model.recoveryInProgress ? "recovering" : model.isRestarting ? "restarting" : model.statusPhase.rawValue
+        let helper = model.helperStatus
         return AutomationStatus(phase: phase,
             endTime: model.endDate, remainingSeconds: model.remaining, closedLid: model.closedLid,
             allowBattery: model.allowBattery, threshold: Int(model.threshold), batteryPercent: model.power?.percent,
-            onAC: model.power?.onAC, display: model.displayMode, shortcut: model.displayShortcut,
+            onAC: model.power?.onAC, display: model.displayMode, shortcut: model.displayShortcut.map(LegacyDisplayShortcut.init),
             backlightOff: model.isBacklightOff, blackoutCountdown: model.backlightCountdown,
-            helperState: model.helper.state.rawValue, helperSelected: model.helper.selected,
-            helperWorking: model.helper.working, helperChecking: model.helper.checking, helperDetail: model.helper.detail,
-            helperInstallationError: model.helper.installationError, needsRecovery: model.needsRecovery, mcpEnabled: mcpEnabled,
-            settingsApplying: model.settingsApplying, displayTransitioning: model.display.transitioning,
+            helperState: helper.state.rawValue, helperSelected: helper.selected,
+            helperWorking: helper.working, helperChecking: helper.checking, helperDetail: helper.detail,
+            helperInstallationError: helper.installationError, needsRecovery: model.needsRecovery, mcpEnabled: mcpEnabled,
+            settingsApplying: model.settingsApplying, displayTransitioning: model.isDisplayTransitioning,
             settingsPartiallyApplied: model.partialSettingsIssue != nil,
-            message: model.partialSettingsIssue.map(partialMessage) ?? text(model.settingsMessage ?? model.displayControlError ?? model.message))
+            message: text(model.isReturningControl ? SessionModel.returningControlMessage : model.priorityStopMessage)
+                ?? model.partialSettingsIssue.map(partialMessage)
+                ?? text(model.settingsMessage ?? model.displayControlError ?? model.message))
     }
 
     private func text(_ message: SessionMessage?) -> String? { message?.text(using: { $0 }) }

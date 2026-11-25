@@ -89,6 +89,8 @@ struct BacklightRestorer {
     let requestRestore: () -> Void
 }
 
+typealias BacklightDarkeningPermission = (() throws -> Void) throws -> Void
+
 // Construction is inert. Only begin() is allowed to darken the display.
 final class BacklightSession {
     struct Operations {
@@ -126,7 +128,7 @@ final class BacklightSession {
 
     init(operations: Operations? = nil) { self.operations = operations ?? .system() }
 
-    func begin() throws {
+    func begin(performDarkening: BacklightDarkeningPermission = { try $0() }) throws {
         if record != nil {
             guard isHealthy else { throw BacklightError(message: "Backlight restoration process stopped. Restore brightness before trying again.") }
             return
@@ -145,8 +147,10 @@ final class BacklightSession {
             guard child?.isRunning() == true else { throw BacklightError(message: "Backlight restoration process did not stay ready.") }
             // Revalidate session/display after launching the safety process.
             guard try operations.display() == display else { throw BacklightError(message: "The built-in display changed during preparation.") }
-            attemptedZero = true
-            try operations.write(display.id, 0)
+            try performDarkening {
+                attemptedZero = true
+                try operations.write(display.id, 0)
+            }
             let current = try operations.read(display.id)
             guard current.isFinite, abs(current) <= Self.darkBrightnessTolerance, child?.isRunning() == true else {
                 throw BacklightError(message: "macOS did not confirm backlight off with a live restoration process.")

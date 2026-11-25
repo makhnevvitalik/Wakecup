@@ -50,14 +50,15 @@ private struct SleepHelpView: View {
                         }
                         Text(section.text).font(Font(AppStyle.Font.body)).fixedSize(horizontal: false, vertical: true)
                         if let command = section.command {
-                            HStack(alignment: .top, spacing: 10) {
+                            HStack(alignment: .center, spacing: 10) {
                                 Text(command).font(Font(AppStyle.Font.monospacedBody))
                                     .fixedSize(horizontal: false, vertical: true)
                                 Spacer(minLength: 0)
-                                Button(localized("Copy")) {
+                                CompactCommandButton(title: localized("Copy"),
+                                    accessibilityTitle: localizedFormat("Copy: %@", command)) {
                                     NSPasteboard.general.clearContents()
                                     NSPasteboard.general.setString(command, forType: .string)
-                                }.accessibilityLabel(localizedFormat("Copy: %@", command))
+                                }
                             }
                             .padding(10).background(Color.primary.opacity(0.05), in: RoundedRectangle(cornerRadius: 7))
                         }

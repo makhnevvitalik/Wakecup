@@ -26,7 +26,7 @@ import SwiftUI
             loginItem: .init(readStatus: { .notRegistered }, register: {}, unregister: {}, openSettings: {}),
             scheduleTicks: { _ in {} })
         let model = SessionModel(defaults: defaults, operations: operations, helper: helper)
-        let host = NSHostingController(rootView: WakecupView(model: model, showAbout: {}))
+        let host = NSHostingController(rootView: WakecupLayoutFixture(model: model, updates: UpdateChecker(), showAbout: {}))
         let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: MenuLayout.width, height: 900),
             styleMask: [.borderless], backing: .buffered, defer: false)
         window.contentViewController = host
@@ -63,6 +63,7 @@ import SwiftUI
                 }
             }
         }
+        guard let baseline else { throw WakecupError(message: "Missing battery layout baseline") }
         let cases: [(String, Bool, PowerState?, Double, PowerRestriction?)] = [
             ("charger-required", false, .init(onAC: false, percent: 62), 50, .chargerRequired),
             ("battery-allowed", true, .init(onAC: false, percent: 62), 50, nil),
@@ -81,13 +82,15 @@ import SwiftUI
             model.tick()
             if model.startPowerRestriction != restriction { throw WakecupError(message: "Wrong Start availability: \(name)") }
             if restriction != nil { model.start() }
-            for _ in 0..<3 {
-                RunLoop.main.run(until: Date().addingTimeInterval(0.02))
+            for _ in 0..<5 {
+                RunLoop.main.run(until: Date().addingTimeInterval(0.04))
                 host.view.layoutSubtreeIfNeeded()
             }
             let size = host.view.fittingSize
-            if model.phase != .idle || model.message != nil || size != baseline {
-                throw WakecupError(message: "Power validation changed UI: \(name), phase=\(model.phase), message=\(model.message?.key ?? "nil"), size=\(size), baseline=\(String(describing: baseline))")
+            let noticeHeight = restriction == nil ? 0 : MenuLayout.feedbackRowHeight + AppStyle.Layout.cardSpacing
+            let expectedSize = NSSize(width: baseline.width, height: baseline.height + noticeHeight)
+            if model.phase != .idle || model.message != nil || size != expectedSize {
+                throw WakecupError(message: "Power validation changed UI: \(name), phase=\(model.phase), size=\(size), expected=\(expectedSize)")
             }
             host.view.setFrameSize(size); window.setContentSize(size)
             host.view.layoutSubtreeIfNeeded(); host.view.displayIfNeeded()
@@ -98,7 +101,7 @@ import SwiftUI
                 }
             }
         }
-        print("PASS: power, charge and option changes update Start availability without error cards or menu resizing (\(language))")
+        print("PASS: power limits update Start availability and use only one notice below the actions (\(language))")
         print("PASS: battery toggles preserve full menu geometry (\(language))")
     }
     private static func descendants(_ view: NSView) -> [NSView] { [view] + view.subviews.flatMap(descendants) }

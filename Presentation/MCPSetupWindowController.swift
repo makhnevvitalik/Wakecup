@@ -140,11 +140,11 @@ private struct MCPSetupView: View {
             Text(value).font(Font(AppStyle.Font.monospacedBody))
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .fixedSize(horizontal: false, vertical: true)
-            Button(localized("Copy")) {
+            CompactCommandButton(title: localized("Copy"),
+                accessibilityTitle: localizedFormat("Copy: %@", value)) {
                 NSPasteboard.general.clearContents()
                 NSPasteboard.general.setString(value, forType: .string)
             }
-            .accessibilityLabel(localizedFormat("Copy: %@", value))
         }
         .padding(10)
         .background(Color.primary.opacity(0.05), in: RoundedRectangle(cornerRadius: 7))

@@ -8,16 +8,25 @@ case "$#" in
 esac
 mkdir -p "$project_root/.build/module-cache"
 "$project_root/build.sh"
-swiftc "$project_root/Core/PowerPolicy.swift" "$project_root/Core/SessionCore.swift" "$project_root/Tests/CoreTests.swift" \
+swiftc "$project_root/Core/PowerPolicy.swift" "$project_root/Core/SessionCore.swift" "$project_root/System/ProcessInspection.swift" \
+  "$project_root/System/SystemPower.swift" "$project_root/Tests/CoreTests.swift" -framework IOKit \
   -o "$project_root/.build/core-tests" -module-cache-path "$project_root/.build/module-cache"
 "$project_root/.build/core-tests"
 swiftc "$project_root/Core/DisplaySettings.swift" "$project_root/Tests/DisplaySettingsTests.swift" \
   -o "$project_root/.build/display-settings-tests" -module-cache-path "$project_root/.build/module-cache"
 "$project_root/.build/display-settings-tests"
+swiftc "$project_root/Core/DisplaySettings.swift" "$project_root/Core/PowerPolicy.swift" "$project_root/Core/SessionCore.swift" \
+  "$project_root/Application/SettingsMigrator.swift" "$project_root/Tests/SettingsMigrationTests.swift" \
+  -o "$project_root/.build/settings-migration-tests" -module-cache-path "$project_root/.build/module-cache"
+"$project_root/.build/settings-migration-tests"
 swiftc "$project_root/Core/DisplaySettings.swift" "$project_root/Application/GlobalDisplayHotKey.swift" \
   "$project_root/Tests/GlobalDisplayHotKeyTests.swift" -o "$project_root/.build/display-hotkey-tests" \
   -module-cache-path "$project_root/.build/module-cache"
 "$project_root/.build/display-hotkey-tests"
+swiftc "$project_root/Core/DisplaySettings.swift" "$project_root/Application/GlobalDisplayHotKey.swift" \
+  "$project_root/Application/DisplayShortcutConflictDetector.swift" "$project_root/Tests/DisplayShortcutConflictTests.swift" \
+  -o "$project_root/.build/display-conflict-tests" -module-cache-path "$project_root/.build/module-cache" -framework Carbon
+"$project_root/.build/display-conflict-tests"
 swiftc "$project_root/System/BacklightSession.swift" "$project_root/Tests/BacklightSessionTests.swift" \
   -o "$project_root/.build/backlight-tests" -module-cache-path "$project_root/.build/module-cache" -framework IOKit
 "$project_root/.build/backlight-tests"
@@ -66,6 +75,10 @@ swiftc "$project_root"/Core/*.swift "$project_root"/System/*.swift "$project_roo
   "$project_root/Tests/DisplayModeModelTests.swift" -o "$project_root/.build/display-model-tests" \
   -module-cache-path "$project_root/.build/module-cache" -framework AppKit -framework IOKit -framework ServiceManagement
 "$project_root/.build/display-model-tests"
+swiftc "$project_root/Core/PowerPolicy.swift" "$project_root/Core/SessionCore.swift" "$project_root/System/SessionFiles.swift" \
+  "$project_root/System/BacklightSession.swift" "$project_root/Application/SessionPowerResources.swift" "$project_root/Tests/ThermalResourcesTests.swift" \
+  -o "$project_root/.build/thermal-resources-tests" -module-cache-path "$project_root/.build/module-cache" -framework IOKit
+"$project_root/.build/thermal-resources-tests"
 swiftc "$project_root"/Core/*.swift "$project_root"/System/*.swift "$project_root"/Application/*.swift "$project_root/.build/HelperBuildIdentity.swift" \
   "$project_root/Tests/HelperStateTests.swift" -o "$project_root/.build/helper-state-tests" \
   -module-cache-path "$project_root/.build/module-cache" -framework AppKit -framework IOKit -framework ServiceManagement
@@ -83,7 +96,8 @@ swiftc "$project_root/Core/AppVersion.swift" "$project_root/Application/UpdateCh
 "$project_root/.build/update-tests"
 python3 -m unittest discover -s "$project_root/Tests" -p 'test_*.py'
 swiftc "$project_root"/Core/*.swift "$project_root"/System/*.swift "$project_root"/Application/*.swift "$project_root/.build/HelperBuildIdentity.swift" \
-  "$project_root/Presentation/HelperInteraction.swift" "$project_root/Tests/HelperPresentationTests.swift" -o "$project_root/.build/helper-presentation-tests" \
+  "$project_root/Presentation/HelperInteraction.swift" "$project_root/Tests/HelperTestModel.swift" \
+  "$project_root/Tests/HelperPresentationTests.swift" -o "$project_root/.build/helper-presentation-tests" \
   -module-cache-path "$project_root/.build/module-cache" -framework AppKit -framework IOKit -framework ServiceManagement
 "$project_root/.build/helper-presentation-tests"
 "$project_root/Tests/BuildMetadataTests.sh"
@@ -105,6 +119,12 @@ swiftc "$project_root/Core/AppLanguage.swift" "$project_root/Core/SessionCore.sw
 swiftc "$project_root/Core/EndTimeSelection.swift" "$project_root/Presentation/StopTimeInput.swift" "$project_root/Tests/StopTimeTests.swift" \
   -o "$project_root/.build/stop-time-tests" -module-cache-path "$project_root/.build/module-cache"
 "$project_root/.build/stop-time-tests"
+"$project_root/.build/stop-time-tests" --system-formats -AppleLocale en_US \
+  -AppleICUDateFormatStrings '{2 = "yyyy/MM/dd";}' -AppleICUTimeFormatStrings '{1 = "HH-mm";}'
+"$project_root/.build/stop-time-tests" --system-quoted-hour -AppleLocale en_US \
+  -AppleICUTimeFormatStrings $'{1 = "\'kl.\' h:mm a";}'
+"$project_root/.build/stop-time-tests" --system-quoted-separator -AppleLocale en_US \
+  -AppleICUTimeFormatStrings $'{1 = "HH \'m\'\'in\' mm";}'
 swiftc "$project_root"/Core/*.swift "$project_root"/System/*.swift "$project_root"/Application/*.swift "$project_root/.build/HelperBuildIdentity.swift" \
   "$project_root/Tests/EndTimeModelTests.swift" -o "$project_root/.build/end-time-model-tests" \
   -module-cache-path "$project_root/.build/module-cache" -framework AppKit -framework IOKit -framework ServiceManagement

@@ -35,7 +35,7 @@ struct UpdateTests {
             UpdateChecker.evaluate(data: data, response: response(status), error: nil, currentVersion: current)
         }
         let releaseURL = URL(string: "https://github.com/makhnevvitalik/Wakecup/releases/tag/v1.0.0")!
-        expect(evaluate(payload("v1.0.0")) == .updateAvailable(tag: "v1.0.0", url: releaseURL), "new release")
+        expect(evaluate(payload("v1.0.0")) == .updateAvailable(AvailableRelease(tag: "v1.0.0", url: releaseURL)), "new release")
         expect(evaluate(payload("0.2.7")) == .upToDate, "same release")
         expect(evaluate(payload("0.1")) == .upToDate, "older release")
         expect(evaluate(status: 404) == .notPublished, "404 is not up-to-date")
@@ -61,7 +61,7 @@ struct UpdateTests {
         expect(UpdateChecker.evaluate(data: nil, response: nil, error: nil, currentVersion: "1")
                == .failure(.invalidResponse), "missing HTTP response")
         for url in ["http://github.com/makhnevvitalik/Wakecup/releases/tag/v1", "https://evil.example/release", "https://github.com/other/Wakecup/releases/tag/v1", "https://github.com/makhnevvitalik/Wakecup-evil/releases/tag/v1", "https://github.com@evil.example/makhnevvitalik/Wakecup/releases/tag/v1", "https://github.com/makhnevvitalik/Wakecup/releases/tag/v1?next=evil", "file:///tmp/test"] {
-            expect(evaluate(payload("1", url: url)) == .updateAvailable(tag: "1", url: UpdateChecker.latestReleaseURL),
+            expect(evaluate(payload("1", url: url)) == .updateAvailable(AvailableRelease(tag: "1", url: UpdateChecker.latestReleaseURL)),
                    "untrusted release URL falls back to expected repository: \(url)")
         }
         var requests: [FakeRequest] = []
@@ -81,20 +81,53 @@ struct UpdateTests {
         expect(requests.count == 1, "no overlapping requests")
         completions[0](payload("1", url: "https://example.org/release"), response(200), nil)
         drainMainQueue()
-        expect(checker.state == .finished(.updateAvailable(tag: "1", url: UpdateChecker.latestReleaseURL)),
+        let knownRelease = AvailableRelease(tag: "1", url: UpdateChecker.latestReleaseURL)
+        expect(checker.state == .finished(.updateAvailable(knownRelease)),
                "first request finishes")
+        expect(checker.availableRelease == knownRelease, "A newer release is available to the UI")
         checker.check()
+        expect(checker.availableRelease == knownRelease, "Refreshing must keep the known update visible")
         completions[0](nil, response(404), nil)
         drainMainQueue()
         expect(checker.state == .checking, "old callback cannot replace new request")
-        completions[1](payload("0.2.7"), response(200), nil)
+        completions[1](nil, response(500), nil)
+        drainMainQueue()
+        expect(checker.state == .finished(.failure(.http(500))) && checker.availableRelease == knownRelease,
+               "A temporary failure must leave a known update visible")
+        checker.check()
+        completions[2](payload("0.2.7"), response(200), nil)
         drainMainQueue()
         expect(checker.state == .finished(.upToDate), "current callback updates state")
-        completions[1](nil, response(404), nil)
+        completions[2](nil, response(404), nil)
         drainMainQueue()
         expect(checker.state == .finished(.upToDate), "duplicate completed callback ignored")
         checker.check()
-        expect(requests.count == 3, "check again after completion")
+        expect(requests.count == 4 && checker.availableRelease == nil,
+               "An up-to-date result clears the release and a later check can run")
+
+        expect(UpdateChecker.automaticCheckInterval == .seconds(86_400), "Automatic checks are 24 hours apart")
+        var automaticRequests = 0
+        var latestAutomaticRequest: FakeRequest?
+        var automaticCompletion: UpdateChecker.Completion?
+        var automaticChecker: UpdateChecker? = UpdateChecker(transport: { _, completion in
+            automaticRequests += 1
+            automaticCompletion = completion
+            let request = FakeRequest()
+            latestAutomaticRequest = request
+            return request
+        })
+        automaticChecker?.startAutomaticChecks(interval: .milliseconds(50))
+        automaticChecker?.startAutomaticChecks(interval: .milliseconds(50))
+        expect(automaticRequests == 1, "Automatic checks start immediately and are registered once")
+        RunLoop.main.run(until: Date().addingTimeInterval(0.15))
+        expect(automaticRequests == 1, "Automatic checks must not overlap an unfinished request")
+        automaticCompletion?(nil, response(404), nil)
+        let timeout = Date().addingTimeInterval(2)
+        while automaticRequests < 2 && Date() < timeout { drainMainQueue() }
+        expect(automaticRequests == 2, "The next automatic check must run without reopening the app")
+        automaticChecker = nil
+        RunLoop.main.run(until: Date().addingTimeInterval(0.15))
+        expect(latestAutomaticRequest?.cancelled == true && automaticRequests == 2, "Releasing the checker stops automatic checks")
         let cancelled = FakeRequest()
         var disposable: UpdateChecker? = UpdateChecker(transport: { _, _ in cancelled })
         disposable?.check()

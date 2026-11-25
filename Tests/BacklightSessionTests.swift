@@ -111,6 +111,18 @@ import Darwin
         let launch = Fixture(); launch.failLaunch = true
         do { try launch.session().begin() } catch {}
         try expect(launch.writes.isEmpty && launch.cleaned, "Launch failure must leave visible brightness and remove unused recovery")
+        let blocked = Fixture(), blockedSession = blocked.session()
+        let denied = NSError(domain: "darkening denied", code: 42)
+        do {
+            try blockedSession.begin(performDarkening: { _ in
+                try expect(blocked.ready, "Darkening permission must be checked after the restorer is ready")
+                throw denied
+            })
+        } catch {
+            try expect(error as NSError == denied, "Darkening rejection must reach the caller")
+        }
+        try expect(blocked.writes.isEmpty && blocked.level == 0.65 && blocked.disarmed && blocked.cleaned
+                   && !blockedSession.needsRestoration, "Rejected darkening must clean up the unused restorer without writing brightness")
         let rollback = Fixture(); rollback.zeroThrows = true
         do { try rollback.session().begin() } catch {}
         try expect(rollback.level == 0.65 && rollback.disarmed && rollback.cleaned, "Partial entry failure rolls back verified brightness")

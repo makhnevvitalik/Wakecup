@@ -32,6 +32,8 @@ struct GlobalDisplayHotKeyTests {
         expect(installed.isEmpty, "invalid shortcut never reaches native registration")
         do {
             try hotKey!.register(first) { expect(Thread.isMainThread, "callback runs on main thread"); calls += 1 }
+            try hotKey!.validate(first)
+            expect(installed.count == 1 && cancelled == 0, "Validating the current chord must not reserve it again")
             callbacks[0](); drain()
             expect(calls == 1, "registered handler receives the chord")
             try hotKey!.register(first) { calls += 2 }

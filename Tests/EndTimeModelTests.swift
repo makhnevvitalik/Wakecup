@@ -68,6 +68,25 @@ import Foundation
         model.selectEndDay(tomorrow, calendar: calendar)
         try expect(calendar.isDate(model.selectedEndDate!, inSameDayAs: tomorrow), "The model must preserve an explicitly selected day")
         wallAdvance = 0
+        let missingHourModel = SessionModel(defaults: defaults, operations: operations, helper: helper)
+        var eastern = Calendar(identifier: .gregorian)
+        eastern.timeZone = TimeZone(identifier: "America/New_York")!
+        let beforeGap = eastern.date(from: DateComponents(year: 2026, month: 3, day: 7, hour: 0))!
+        let clockBeforeGap = eastern.date(from: DateComponents(year: 2026, month: 3, day: 7, hour: 2, minute: 30))!
+        let gapDay = eastern.date(from: DateComponents(year: 2026, month: 3, day: 8))!
+        let correctedDate = eastern.date(from: DateComponents(year: 2026, month: 3, day: 8, hour: 3, minute: 30))!
+        wallAdvance = beforeGap.timeIntervalSince(base)
+        missingHourModel.selectEndDate(clockBeforeGap)
+        missingHourModel.selectEndDay(gapDay, calendar: eastern)
+        try expect(missingHourModel.endTimeIssue == .nonexistentTime
+            && eastern.isDate(missingHourModel.selectedEndDay, inSameDayAs: gapDay),
+            "A nonexistent local time must keep the selected calendar day available for correction")
+        let correction = EndTimeSelection.ClockTime(hour: 3, minute: 30)!
+            .date(on: missingHourModel.selectedEndDay, calendar: eastern)!
+        missingHourModel.selectEndDate(correction)
+        try expect(missingHourModel.durationInputIsValid && missingHourModel.selectedEndDate == correctedDate,
+                   "Correcting the clock must schedule it on the DST transition day")
+        wallAdvance = 0
         let presetDefaults = SessionModel(defaults: defaults, operations: operations, helper: helper)
         presetDefaults.selectEndTimePreset(60)
         let restoredPreset = SessionModel(defaults: defaults, operations: operations, helper: helper)

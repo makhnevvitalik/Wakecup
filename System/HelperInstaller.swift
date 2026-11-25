@@ -10,9 +10,7 @@ enum HelperInstaller {
         guard geteuid() == 0, ownerUID > 0, HelperPolicy.validHash(clientHash) else {
             throw WakecupError(message: "Invalid administrator installation request.")
         }
-        guard let ownPath = try recoveryProcess(getpid())?.executable,
-              PrivilegedExecution.isStagedPath(ownPath),
-              let ownBytes = try HelperTrust.read(ownPath, maximum: HelperConstants.maximumExecutableBytes, executable: true) else {
+        guard let ownBytes = try StagedHelper.readExecutable() else {
             throw WakecupError(message: "The installer must run from a verified system staging file.")
         }
         let ownHash = try HelperTrust.signingHash()

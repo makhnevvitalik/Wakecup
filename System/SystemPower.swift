@@ -22,53 +22,6 @@ func processExists(_ pid: Int32) -> Bool {
     pid > 1 && (kill(pid, 0) == 0 || errno == EPERM)
 }
 
-final class SleepAssertions {
-    private var systemID: IOPMAssertionID?
-    private var displayID: IOPMAssertionID?
-    private let createAssertion: (String) throws -> IOPMAssertionID
-    private let releaseAssertion: (IOPMAssertionID) -> Void
-    var ids: [IOPMAssertionID] { [systemID, displayID].compactMap { $0 } }
-
-    init(create: @escaping (String) throws -> IOPMAssertionID = { type in
-        var id: IOPMAssertionID = 0
-        let result = IOPMAssertionCreateWithName(type as CFString, IOPMAssertionLevel(kIOPMAssertionLevelOn),
-            "Wakecup: активный сеанс" as CFString, &id)
-        guard result == kIOReturnSuccess else {
-            throw WakecupError(message: "macOS не разрешила удержание сна (\(result)).")
-        }
-        return id
-    }, release: @escaping (IOPMAssertionID) -> Void = { _ = IOPMAssertionRelease($0) }) {
-        createAssertion = create
-        releaseAssertion = release
-    }
-
-    // Repeated starts update only display sleep. Keep the system assertion alive
-    // throughout a live change; an unsuccessful update retains the old state.
-    func start(display: Bool) throws {
-        let starting = systemID == nil
-        do {
-            if starting { systemID = try createAssertion(kIOPMAssertionTypePreventUserIdleSystemSleep) }
-            if display, displayID == nil {
-                displayID = try createAssertion(kIOPMAssertionTypePreventUserIdleDisplaySleep)
-            } else if !display, let id = displayID {
-                releaseAssertion(id)
-                displayID = nil
-            }
-        } catch {
-            if starting { stop() }
-            throw error
-        }
-    }
-
-    func stop() {
-        ids.forEach(releaseAssertion)
-        systemID = nil
-        displayID = nil
-    }
-
-    deinit { stop() }
-}
-
 struct CommandOutput {
     let status: Int32
     let text: String
@@ -232,10 +185,13 @@ func lidClosed() -> Bool? {
 }
 
 // Restoration is attempted even when enabling succeeds but its verification fails.
-func temporaryDisable(read: () throws -> Bool, write: (Bool) throws -> Void,
+func temporaryDisable(read: () throws -> Bool, preflight: () throws -> Void = {},
+                      write: (Bool) throws -> Void,
                       body: () throws -> Void) throws {
     let previous = try read()
     guard !previous else { throw WakecupError(message: "Сон уже отключён другой настройкой. Сеанс не запущен.") }
+    // A preflight veto has not taken ownership of a change to restore.
+    try preflight()
     var bodyError: Error?
     do {
         try write(true)

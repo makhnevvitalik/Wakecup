@@ -40,11 +40,14 @@ import AppKit
             try expect(selected.isEmpty, "Keyboard navigation must not close the calendar or apply a date before confirmation")
             view.update(date: day, now: day, calendar: calendar) { selected.append($0) }
             try expect(calendar.isDate(picker.dateValue, inSameDayAs: tomorrow), "A normal view refresh must not reset keyboard navigation or the browsed month")
-            let space = NSEvent.keyEvent(with: .keyDown, location: .zero, modifierFlags: [], timestamp: 0,
-                windowNumber: window.windowNumber, context: nil, characters: " ", charactersIgnoringModifiers: " ",
-                isARepeat: false, keyCode: 49)!
-            picker.keyDown(with: space)
-            try expect(selected == [tomorrow], "Confirming the enlarged native calendar must deliver the highlighted day")
+            for (characters, keyCode) in [(" ", UInt16(49)), ("\r", UInt16(36)), ("\u{3}", UInt16(76))] {
+                selected.removeAll()
+                let confirm = NSEvent.keyEvent(with: .keyDown, location: .zero, modifierFlags: [], timestamp: 0,
+                    windowNumber: window.windowNumber, context: nil, characters: characters,
+                    charactersIgnoringModifiers: characters, isARepeat: false, keyCode: keyCode)!
+                picker.keyDown(with: confirm)
+                try expect(selected == [tomorrow], "Confirming with key \(keyCode) must deliver the highlighted day")
+            }
             view.displayIfNeeded()
             if let bitmap = view.bitmapImageRepForCachingDisplay(in: view.bounds) {
                 view.cacheDisplay(in: view.bounds, to: bitmap)

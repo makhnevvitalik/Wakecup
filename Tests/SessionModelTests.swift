@@ -6,6 +6,105 @@ import Foundation
         do { try run() }
         catch { fputs("FAIL: \(error.localizedDescription)\n", stderr); exit(1) }
     }
+    private static func thermalStopCancelsLidRestart() throws {
+        let environment = try SessionTestEnvironment()
+        let model = environment.model()
+        model.editClosedLid(true)
+        model.start()
+        try environment.publish(.active)
+        model.tick()
+        model.editClosedLid(false)
+        model.applySettingsDraft()
+        try expect(model.isRestarting && model.phase == .stopping, "The guardian must be stopping for a lid-mode change")
+        model.setThermalStopLevel(.serious)
+        let control = try environment.sessions.last!.read("control.json", as: SessionControl.self)
+        try expect(model.thermalStopLevel == .serious && environment.defaults.string(forKey: "thermalStopLevel") == "serious"
+                   && control.stop && control.thermalStopLevel == nil,
+                   "A thermal preference chosen while stopping belongs to the next session and must preserve the existing stop")
+        let cancellations = environment.authorizationCancellations
+        environment.thermalState = .critical
+        environment.checkTemperature()
+        model.tick()
+        try expect(!model.isRestarting && model.phase == .stopping && model.closedLid,
+                   "A critical temperature must cancel the restart while waiting for the old guardian")
+        try expect(environment.authorizationCancellations == cancellations && !environment.assertionsActive,
+                   "Thermal cancellation releases local assertions while the guardian restores system sleep")
+        environment.thermalState = .nominal
+        try environment.publish(.stopped, restored: true)
+        model.tick()
+        try expect(model.phase == .idle && !environment.assertionsActive && model.message?.key == "Wakecup stopped because the Mac is too hot.",
+                   "Cooling before the guardian reply must not resume the timer or replace the thermal reason")
+    }
+
+    private static func thermalStopWhileMainIsBlocked() throws {
+        for closedLid in [false, true] {
+            let environment = try SessionTestEnvironment()
+            let hot = DispatchSemaphore(value: 0)
+            let released = DispatchSemaphore(value: 0)
+            let requestedBrightnessRestore = DispatchSemaphore(value: 0)
+            environment.onAssertionsStopped = { released.signal() }
+            var operations = environment.operations
+            operations.scheduleThermalChecks = SessionOperations.backgroundThermalChecks
+            operations.readThermalState = {
+                guard hot.wait(timeout: .now()) == .success else { return .nominal }
+                hot.signal()
+                return .critical
+            }
+            operations.restoreBacklightAfterThermalStop = { requestedBrightnessRestore.signal() }
+            let model = SessionModel(defaults: environment.defaults, operations: operations, helper: isolatedHelper(environment.defaults))
+            model.editClosedLid(closedLid)
+            model.start()
+            if closedLid {
+                try environment.publish(.active)
+                model.tick()
+            }
+            try expect(model.phase == .active && environment.assertionsActive, "The session must own its local assertions before heat")
+            hot.signal()
+            // Deliberately do not run the main event loop or call model.tick().
+            try expect(released.wait(timeout: .now() + 3) == .success
+                       && requestedBrightnessRestore.wait(timeout: .now() + 1) == .success
+                       && model.phase == .active && !environment.assertionsActive,
+                       "With the main thread blocked, polling must release assertions and queue brightness restoration")
+            if let files = environment.sessions.last {
+                let timeout = DispatchTime.now() + 2
+                while (try files.read("control.json", as: SessionControl.self)).thermalStopRequested != true {
+                    try expect(DispatchTime.now() < timeout, "The background worker must notify the guardian while main is blocked")
+                    Thread.sleep(forTimeInterval: 0.01)
+                }
+                try environment.publish(.stopped, restored: true)
+            }
+            model.tick()
+            try expect(model.phase == .idle && model.message?.key == SessionTermination.thermal.text,
+                       "The model must publish the cause once main can run")
+        }
+    }
+
+    private static func thermalStopReportsCurrentReason() throws {
+        let environment = try SessionTestEnvironment()
+        let model = environment.model()
+        let automation = AutomationController(model: model, defaults: environment.defaults)
+        automation.mcpEnabled = true
+        let handshake = automation.receive(.init(request: .init(action: .status), viaMCP: true))
+        model.editClosedLid(false)
+        model.start()
+        environment.lidIsClosed = true
+        model.editClosedLid(true)
+        model.applySettingsDraft()
+        try expect(model.settingsMessage?.key == "Open the lid before changing closed-lid mode.", "The old settings error must be present")
+
+        environment.thermalState = .critical
+        environment.checkTemperature()
+        environment.power = PowerState(onAC: false, percent: 10)
+        model.tick()
+        try expect(model.settingsMessage == nil && model.startPowerRestriction != nil,
+                   "The thermal stop must discard the old settings error even when the battery is low")
+        let cli = automation.receive(.init(request: .init(action: .status), viaMCP: false))
+        let mcp = automation.receive(.init(request: .init(action: .status), viaMCP: true, mcpSession: handshake.mcpSession))
+        let reason = "Wakecup stopped because the Mac is too hot."
+        try expect(cli.status?.message == reason && mcp.status?.message == reason,
+                   "Both automation clients must report the thermal stop reason")
+    }
+
     private static func run() throws {
         let suite = "WakecupModelTest-" + UUID().uuidString
         let defaults = UserDefaults(suiteName: suite)!
@@ -43,7 +142,7 @@ import Foundation
         let config = SessionConfiguration(id: UUID().uuidString, parentPID: getpid(), duration: 60,
             powerMode: .battery, threshold: 10, closedLid: true, keepDisplayOn: false)
         let files = try SessionFiles.create(at: directory, configuration: config)
-        var status = SessionStatus(phase: "active", helperPID: getpid(), phaseChangedAt: environment.time,
+        var status = SessionStatus(phase: .active, helperPID: getpid(), phaseChangedAt: environment.time,
             ownsSleepChange: true, sleepRestored: false)
         try files.write(status, to: "status.json")
         defaults.set(directory.path, forKey: "lastSession")
@@ -58,7 +157,7 @@ import Foundation
         guard model.canSelectHelperMode, !model.canChangeHelper else {
             throw WakecupError(message: "Recovery must allow selecting password mode while blocking helper installation/removal")
         }
-        status.phase = "stopped"
+        status.phase = .stopped
         status.sleepRestored = true
         status.reason = "остановлено"
         try files.write(status, to: "status.json")
@@ -69,6 +168,9 @@ import Foundation
         print("PASS: helper timeout followed by late restoration clears recovery without authorization")
         try helperReadinessGate()
         try helperStatusDoesNotRestartCheck()
+        try thermalStopCancelsLidRestart()
+        try thermalStopWhileMainIsBlocked()
+        try thermalStopReportsCurrentReason()
         try lifecycleTests()
         try automationUsesAppliedSettings()
         try automationReportsActualOutcomes()
@@ -89,10 +191,13 @@ private final class SessionTestEnvironment {
     var time: TimeInterval = 1_000
     private let wallStart = Date(timeIntervalSince1970: 1_794_309_600)
     var power: PowerState? = PowerState(onAC: true, percent: 80)
+    var thermalState: ProcessInfo.ThermalState = .nominal
+    var checkTemperature: () -> Void = {}
     var disabled = false
     var lidIsClosed: Bool? = false
     var guardianRunning = false
     var assertionStops = 0
+    var onAssertionsStopped: (() -> Void)?
     var assertionDisplays: [Bool] = []
     var assertionsActive = false
     var assertionFailure: Error?
@@ -123,7 +228,11 @@ private final class SessionTestEnvironment {
                 if let error = self.assertionFailure { throw error }
                 self.assertionDisplays.append(display)
                 self.assertionsActive = true
-            }, stopAssertions: { self.assertionsActive = false; self.assertionStops += 1 },
+            }, stopAssertions: {
+                self.assertionsActive = false
+                self.assertionStops += 1
+                self.onAssertionsStopped?()
+            },
             createFiles: { config in
                 let files = try SessionFiles.create(at: self.root.appendingPathComponent(config.id), configuration: config)
                 self.sessions.append(files)
@@ -142,15 +251,20 @@ private final class SessionTestEnvironment {
             }, loginItem: LoginItemController(readStatus: { .notRegistered }, register: {}, unregister: {}, openSettings: {}),
             scheduleTicks: { _ in {} }, readLidClosed: { self.lidIsClosed },
             guardianIsRunning: { _ in self.guardianRunning })
+        operations.readThermalState = { self.thermalState }
+        operations.scheduleThermalChecks = { [weak self] check in
+            self?.checkTemperature = check
+            return {}
+        }
         operations.wallNow = { self.wallStart.addingTimeInterval(self.time - 1_000) }
         return operations
     }
 
     func model() -> SessionModel { SessionModel(defaults: defaults, operations: operations, helper: isolatedHelper(defaults)) }
 
-    func publish(_ phase: String, restored: Bool = false, phaseChangedAt: TimeInterval? = nil, deadline: TimeInterval? = 4_600) throws {
+    func publish(_ phase: GuardianPhase, restored: Bool = false, phaseChangedAt: TimeInterval? = nil, deadline: TimeInterval? = 4_600) throws {
         try sessions.last!.write(SessionStatus(phase: phase, helperPID: 4242, phaseChangedAt: phaseChangedAt ?? time,
-            deadline: deadline, reason: phase == "stopped" ? "остановлено" : "",
+            deadline: deadline, reason: phase == .stopped ? "остановлено" : "",
             ownsSleepChange: true, sleepRestored: restored, bootID: "test-boot"), to: "status.json")
     }
 
@@ -158,7 +272,7 @@ private final class SessionTestEnvironment {
         let config = SessionConfiguration(id: UUID().uuidString, parentPID: getpid(), duration: 60,
             powerMode: .battery, threshold: 20, closedLid: true, keepDisplayOn: false)
         let files = try operations.createFiles(config)
-        try publish("active", phaseChangedAt: time - 20)
+        try publish(.active, phaseChangedAt: time - 20)
         defaults.set(files.url.path, forKey: "lastSession")
     }
 }
@@ -186,12 +300,12 @@ private extension SessionModelTests {
                    "Cancelled authorization must preserve the old settings")
         let closedLidStart = command(.init(action: .start, seconds: 90, threshold: 40, closedLid: true, display: .keepOn))
         try expect(closedLidStart.outcome == .pending && !model.closedLid, "Closed-lid settings must wait for activation")
-        try environment.publish("active", deadline: 1_090)
+        try environment.publish(.active, deadline: 1_090)
         model.tick()
         try expect(model.phase == .active && model.closedLid && model.threshold == 40 && model.displayMode == .keepOn
                    && environment.assertionDisplays == [true], "Activation must commit the pending settings exactly once")
         _ = command(.init(action: .stop))
-        try environment.publish("stopped", restored: true)
+        try environment.publish(.stopped, restored: true)
         model.tick()
 
         let accepted = command(.init(action: .start, seconds: 1800, threshold: 30, closedLid: false, display: .mayTurnOff))
@@ -220,7 +334,7 @@ private extension SessionModelTests {
         let interrupted = try SessionTestEnvironment()
         try interrupted.interruptedSession()
         let recovery = interrupted.model()
-        try interrupted.publish("active")
+        try interrupted.publish(.active)
         let recoveryControl = AutomationController(model: recovery, defaults: interrupted.defaults)
         let cannotStop = recoveryControl.receive(.init(request: .init(action: .stop), viaMCP: false))
         let cannotStart = recoveryControl.receive(.init(request: .init(action: .start, seconds: 90), viaMCP: false))
@@ -238,7 +352,7 @@ private extension SessionModelTests {
         recovery.tick()
         try expect(recovery.phase == .failed && recovery.needsRecovery && !recovery.busy,
                    "Recovery waiting for the guardian must time out and allow a manual retry")
-        try interrupted.publish("stopped", restored: true)
+        try interrupted.publish(.stopped, restored: true)
         let restored = recoveryControl.receive(.init(request: .init(action: .restoreSleep), viaMCP: false))
         try expect(restored.outcome == .completed && !recovery.needsRecovery, "Recovery is completed when sleep is confirmed")
 
@@ -259,7 +373,7 @@ private extension SessionModelTests {
             let environment = try SessionTestEnvironment()
             var operations = environment.operations
             var restore: ((Result<Bool, Error>) -> Void)?
-            operations.enterBacklight = { _, _, complete in complete(.success(()), true) }
+            operations.enterBacklight = { _, complete in complete(.success(()), true) }
             operations.restoreBacklight = { _, complete in restore = complete }
             let model = SessionModel(defaults: environment.defaults, operations: operations,
                                      helper: isolatedHelper(environment.defaults))
@@ -281,7 +395,12 @@ private extension SessionModelTests {
                        "Brightness restoration must still be pending after applying the new threshold")
             environment.time += 31
             model.tick()
-            try expect(model.phase == .idle, "The timer must expire before brightness restoration completes")
+            let stopping = command(.init(action: .status)).status
+            try expect(stopping?.phase == "stopping" && stopping?.message == "Returning control to macOS…"
+                       && model.busy && environment.assertionsActive,
+                       "An expired timer must report that it is returning control until brightness restoration completes")
+            try expect(command(.init(action: .stop)).outcome == .pending,
+                       "A repeated stop must wait for the restoration already in progress")
             if restorationSucceeds {
                 restore?(.success(true))
             } else {
@@ -291,9 +410,19 @@ private extension SessionModelTests {
             let expectedMessage = restorationSucceeds
                 ? "Wakecup stopped before the display setting could change."
                 : "Brightness restoration refused."
+            try expect(status?.phase == (restorationSucceeds ? "idle" : "failed") && !environment.assertionsActive,
+                       "Only successful restoration may report idle")
             try expect(status?.settingsPartiallyApplied == true && status?.threshold == 45
                        && status?.message == expectedMessage,
                        "After expiry, status must preserve the applied threshold and report the display outcome")
+            if !restorationSucceeds {
+                let retry = command(.init(action: .restoreBrightness))
+                try expect(retry.outcome == .pending && retry.status?.phase == "stopping",
+                           "Retrying failed brightness restoration must show progress again")
+                restore?(.success(true))
+                try expect(command(.init(action: .status)).status?.phase == "idle",
+                           "A successful retry must return the reported phase to idle")
+            }
         }
         print("PASS: automation reports a partial display change after timer expiry")
     }
@@ -302,7 +431,7 @@ private extension SessionModelTests {
         let environment = try SessionTestEnvironment()
         var operations = environment.operations
         var restore: ((Result<Bool, Error>) -> Void)?
-        operations.enterBacklight = { _, _, complete in complete(.success(()), true) }
+        operations.enterBacklight = { _, complete in complete(.success(()), true) }
         operations.restoreBacklight = { _, complete in restore = complete }
         let model = SessionModel(defaults: environment.defaults, operations: operations, helper: isolatedHelper(environment.defaults))
         let control = AutomationController(model: model, defaults: environment.defaults)
@@ -463,6 +592,7 @@ private extension SessionModelTests {
         try passwordRecoveryAndFailedRestoration()
         try missingStatusTimeout()
         try startupSafetyFailures()
+        try unknownGuardianPhaseRequiresRecovery()
         try liveSettingsTests()
     }
 
@@ -526,7 +656,7 @@ private extension SessionModelTests {
             model.editClosedLid(closedLid)
             model.selectEndTimePreset(180)
             model.start()
-            if closedLid { try environment.publish("active"); model.tick() }
+            if closedLid { try environment.publish(.active); model.tick() }
             try expect(model.phase == .active, "Display-change fixture must be active")
             let deadline = model.deadline
             let session = environment.sessions.last
@@ -626,7 +756,7 @@ private extension SessionModelTests {
         try expect(environment.authorizationRequests == [false] && !environment.assertionsActive, "Assertions must wait until the guardian confirms activation")
         environment.authorizationReplies[0](CommandOutput(status: 0, text: ""))
         try expect(model.phase == .authorizing, "Successful authorization alone must not claim an active session")
-        try environment.publish("active")
+        try environment.publish(.active)
         model.tick()
         model.tick()
         try expect(model.phase == .active && model.deadline == 4_600 && environment.assertionDisplays == [false], "Fresh guardian status must activate assertions exactly once")
@@ -634,12 +764,12 @@ private extension SessionModelTests {
         model.stop()
         let control = try environment.sessions.last!.read("control.json", as: SessionControl.self)
         try expect(model.phase == .stopping && control.stop && environment.assertionsActive, "Closed-lid stop must request restoration before finishing")
-        try environment.publish("restoring")
+        try environment.publish(.restoring)
         model.tick()
         let sessionPath = environment.sessions.last!.url.path
         try expect(model.phase == .stopping && FileManager.default.fileExists(atPath: sessionPath),
                    "Keep recovery files while sleep restoration is in progress")
-        try environment.publish("stopped", restored: true)
+        try environment.publish(.stopped, restored: true)
         model.tick()
         try expect(model.phase == .idle && !model.needsRecovery && !environment.assertionsActive, "Confirmed restoration must complete the stop")
         try expect(model.message == nil, "Confirmed manual closed-lid stop must not leave a redundant notice")
@@ -691,11 +821,11 @@ private extension SessionModelTests {
         try expect(model.phase == .stopping, "An unconfirmed stop must continue monitoring a guardian that holds the session lock")
         model.start()
         try expect(environment.sessions.count == 1, "A new session must not replace the unconfirmed one")
-        try environment.publish("arming")
+        try environment.publish(.arming)
         model.tick()
         try expect(model.phase == .stopping && !environment.assertionsActive,
                    "Late arming must not restart a stopped session")
-        try environment.publish("failed")
+        try environment.publish(.failed)
         model.tick()
         try expect(model.phase == .failed && model.needsRecovery
                    && environment.defaults.string(forKey: "lastSession") == files.url.path,
@@ -708,12 +838,12 @@ private extension SessionModelTests {
         model.start()
         environment.authorizationReplies[0](CommandOutput(status: 0, text: ""))
         environment.time += 6
-        try environment.publish("arming")
+        try environment.publish(.arming)
         model.tick()
         let control = try environment.sessions.last!.read("control.json", as: SessionControl.self)
         try expect(model.phase == .authorizing && !control.stop && !environment.assertionsActive,
                    "Fresh arming must not hit the timeout for a guardian that has yet to start")
-        try environment.publish("active")
+        try environment.publish(.active)
         model.tick()
         try expect(model.phase == .active && environment.assertionsActive,
                    "A delayed guardian must start normally after confirming activation")
@@ -739,7 +869,7 @@ private extension SessionModelTests {
         try expect(reopened.phase == .failed && reopened.needsRecovery
                    && reopened.message?.key == "Could not confirm that the guardian stopped.",
                    "An extended wait on the lock must offer recovery rather than spin indefinitely")
-        try environment.publish("failed")
+        try environment.publish(.failed)
         reopened.tick()
         try expect(reopened.needsRecovery && reopened.phase == .failed, "Relaunch must surface a delayed restoration failure")
     }
@@ -757,12 +887,12 @@ private extension SessionModelTests {
         try expect(model.phase == .failed && model.needsRecovery, "A missing startup status must leave recovery available")
         model.start()
         try expect(environment.sessions.count == 1, "Unconfirmed recovery must not lose the original session")
-        try files.write(SessionStatus(phase: "failed", reason: "Late restoration failed",
+        try files.write(SessionStatus(phase: .failed, reason: "Late restoration failed",
             ownsSleepChange: true, sleepRestored: false), to: "status.json")
         model.tick()
         try expect(model.message?.arguments == ["Late restoration failed"] && model.needsRecovery,
                    "Late restoration failure must replace the read error")
-        try environment.publish("stopped", restored: true)
+        try environment.publish(.stopped, restored: true)
         model.tick()
         try expect(model.phase == .idle && !model.needsRecovery, "Late successful restoration must re-enable Start")
     }
@@ -786,12 +916,12 @@ private extension SessionModelTests {
                        "A repeated I/O failure must not launch another authorization")
             try FileManager.default.removeItem(at: path)
             if guardianStarted {
-                try environment.publish("active")
+                try environment.publish(.active)
                 model.recover()
                 let control = try files.read("control.json", as: SessionControl.self)
                 try expect(control.stop && environment.authorizationRequests == [false] && model.needsRecovery,
                            "Retry must send Stop to the live guardian without a new authorization")
-                try environment.publish("stopped", restored: true)
+                try environment.publish(.stopped, restored: true)
                 model.tick()
             } else {
                 model.recover()
@@ -838,14 +968,14 @@ private extension SessionModelTests {
         let model = environment.model()
         model.start()
         try expect(model.phase == .authorizing && !model.waitingForPassword && environment.helperRequests.count == 1, "Installed mode must issue one helper request")
-        try environment.publish("active")
+        try environment.publish(.active)
         environment.helperReplies[0](.failure(WakecupError(message: "reply lost")))
         let control = try environment.sessions.last!.read("control.json", as: SessionControl.self)
         try expect(model.phase == .stopping && control.stop, "Lost helper reply must send stop even when the guardian started")
         model.tick()
         try expect(environment.helperRequests.count == 1 && environment.authorizationRequests.isEmpty, "Lost reply must never replay the helper request or fall back to a password")
         try expect(!environment.assertionsActive, "A stopped startup must not activate local assertions")
-        try environment.publish("stopped", restored: true)
+        try environment.publish(.stopped, restored: true)
         model.tick()
         try expect(model.phase == .idle && !model.needsRecovery && model.message?.key == "Helper request failed: %@", "Confirmed restoration after lost reply must retain the request failure explanation")
         print("PASS: lost helper reply sends durable stop and never replays start")
@@ -862,7 +992,7 @@ private extension SessionModelTests {
         model.recover()
         try expect(model.phase == .authorizing && environment.helperRequests.count == 1 && environment.helperRequests[0].restoreOnly, "Recovery must request restore-only for the existing session")
         environment.helperReplies[0](.success(4242))
-        try environment.publish("stopped", restored: true)
+        try environment.publish(.stopped, restored: true)
         model.tick()
         try expect(model.phase == .idle && !model.needsRecovery, "Restored terminal status must finish recovery")
 
@@ -877,7 +1007,7 @@ private extension SessionModelTests {
         timeout.time += 2
         waiting.tick()
         try expect(waiting.phase == .failed && waiting.needsRecovery, "Recovery timeout must retain the recovery requirement")
-        try timeout.publish("stopped", restored: true)
+        try timeout.publish(.stopped, restored: true)
         waiting.tick()
         try expect(waiting.phase == .idle && !waiting.needsRecovery && timeout.helperRequests.count == 1, "Late restoration must clear recovery without another root request")
         let failed = try SessionTestEnvironment()
@@ -888,7 +1018,7 @@ private extension SessionModelTests {
         failed.helperReplies[0](.failure(WakecupError(message: "Confirming sleep restoration timed out")))
         try expect(recovering.needsRecovery && recovering.message?.key == "Helper request failed: %@",
                    "Show the helper failure while normal sleep is unconfirmed")
-        try failed.publish("stopped", restored: true)
+        try failed.publish(.stopped, restored: true)
         recovering.tick()
         try expect(recovering.phase == .idle && !recovering.needsRecovery && recovering.message == nil,
                    "Confirmed sleep restoration must clear the old recovery error")
@@ -909,7 +1039,7 @@ private extension SessionModelTests {
         try expect(model.phase == .authorizing && environment.helperReplies.count == 2, "A timed-out recovery may be retried")
         oldReply(.failure(WakecupError(message: "old request timed out")))
         try expect(model.phase == .authorizing && model.needsRecovery, "An old reply must not fail a new recovery attempt")
-        try environment.publish("stopped", restored: true)
+        try environment.publish(.stopped, restored: true)
         model.tick()
         try expect(model.phase == .idle && !model.needsRecovery, "Late confirmed restoration must still be accepted")
         print("PASS: late helper replies cannot change a new recovery attempt")
@@ -952,6 +1082,36 @@ private extension SessionModelTests {
         try expect(model.phase == .failed && !environment.assertionsActive && model.deadline == nil, "Assertion failure must leave a failed session without an active timer")
         print("PASS: preflight and assertion failures do not start an unsafe session")
     }
+    static func unknownGuardianPhaseRequiresRecovery() throws {
+        let environment = try SessionTestEnvironment()
+        let model = environment.model()
+        model.start()
+        try environment.publish(.active)
+        model.tick()
+        try expect(model.phase == .active, "The fixture must be running before the guardian status changes")
+        let files = environment.sessions.last!
+        let path = files.url.appendingPathComponent("status.json")
+        let originalStatus = try Data(contentsOf: path)
+        guard var wireStatus = try JSONSerialization.jsonObject(with: originalStatus) as? [String: Any] else {
+            throw WakecupError(message: "The fixture status must be a JSON object")
+        }
+        wireStatus["phase"] = "future-guardian-phase"
+        try JSONSerialization.data(withJSONObject: wireStatus).write(to: path)
+        model.tick()
+        try expect(model.phase == .failed && model.needsRecovery && !model.busy,
+                   "An unknown guardian phase must result in explicit recovery instead of a busy session")
+        let control = try files.read("control.json", as: SessionControl.self)
+        try expect(control.stop, "Unknown guardian state must still request a safe stop")
+        let relaunched = environment.model()
+        try expect(relaunched.needsRecovery && relaunched.phase == .failed,
+                   "Reopening Wakecup must retain the recovery requirement for an unknown phase")
+        try environment.publish(.stopped, restored: true)
+        relaunched.tick()
+        try expect(!relaunched.needsRecovery && relaunched.phase == .idle,
+                   "A confirmed restoration must still clear the recovery requirement")
+        print("PASS: unknown guardian phase requires recovery and accepts later confirmed restoration")
+    }
+
     static func stopDuringAuthorizationAndIgnoreOldReply() throws {
         let environment = try SessionTestEnvironment()
         let model = environment.model()
@@ -961,7 +1121,7 @@ private extension SessionModelTests {
         let control = try previousFiles.read("control.json", as: SessionControl.self)
         try expect(model.phase == .stopping && control.stop && environment.authorizationCancellations == 1,
             "Stop while awaiting a password must cancel authorization and persist stop")
-        try previousFiles.write(SessionStatus(phase: "stopped"), to: "status.json")
+        try previousFiles.write(SessionStatus(phase: .stopped), to: "status.json")
         model.tick()
         model.start()
         try expect(model.phase == .authorizing && environment.authorizationRequests.count == 2, "A clean stop must permit a new request")
@@ -978,7 +1138,7 @@ private extension SessionModelTests {
         let model = environment.model()
         model.recover()
         try expect(model.waitingForPassword && environment.authorizationRequests == [true], "Password recovery must request restore-only authorization")
-        try environment.publish("stopped", restored: true)
+        try environment.publish(.stopped, restored: true)
         environment.authorizationReplies[0](CommandOutput(status: 0, text: ""))
         try expect(model.phase == .idle && !model.needsRecovery, "Password recovery must finish only after restored status")
 
@@ -988,7 +1148,7 @@ private extension SessionModelTests {
         failure.recover()
         failed.authorizationReplies[0](CommandOutput(status: 1, text: "-128"))
         try expect(failure.phase == .failed && failure.needsRecovery, "Cancelled recovery must preserve the recovery requirement")
-        try failed.publish("failed")
+        try failed.publish(.failed)
         failure.tick()
         try expect(failure.needsRecovery, "A failed status without restoration must not clear recovery")
         print("PASS: password recovery accepts confirmed restoration and preserves failed recovery")
@@ -999,14 +1159,14 @@ private extension SessionModelTests {
         environment.installedHelper = true
         let model = environment.model()
         model.start()
-        try environment.publish("active", deadline: nil)
+        try environment.publish(.active, deadline: nil)
         model.tick()
         let statusURL = environment.sessions.last!.url.appendingPathComponent("status.json")
         try FileManager.default.removeItem(at: statusURL)
         environment.time += 35 * 24 * 60 * 60
         model.tick()
         try expect(model.phase == .active && model.deadline == nil, "A single missing snapshot must not end a long-running indefinite session")
-        try environment.publish("active", deadline: nil)
+        try environment.publish(.active, deadline: nil)
         environment.time += 9
         model.tick()
         try FileManager.default.removeItem(at: statusURL)
@@ -1092,7 +1252,7 @@ private extension SessionModelTests {
 private extension SessionTestEnvironment {
     func publishSettings(revision: UInt64, mode: PowerMode, threshold: Int,
                          deadline: TimeInterval?, error: String? = nil) throws {
-        try sessions.last!.write(SessionStatus(phase: "active", helperPID: 4242, phaseChangedAt: time,
+        try sessions.last!.write(SessionStatus(phase: .active, helperPID: 4242, phaseChangedAt: time,
             deadline: deadline, ownsSleepChange: true, sleepRestored: false,
             bootID: "test-boot", settingsRevision: revision, settingsError: error, powerMode: mode,
             threshold: threshold), to: "status.json")
@@ -1202,7 +1362,7 @@ private extension SessionModelTests {
         let environment = try SessionTestEnvironment()
         let model = environment.model()
         model.start()
-        try environment.publish("active")
+        try environment.publish(.active)
         model.tick()
         let files = environment.sessions.last!
         let originalConfig = try files.read("configuration.json", as: SessionConfiguration.self)
@@ -1258,7 +1418,7 @@ private extension SessionModelTests {
         environment.installedHelper = true
         let model = environment.model()
         model.start()
-        try environment.publish("active")
+        try environment.publish(.active)
         model.tick()
         model.editThreshold(30)
         model.selectDisplayMode(.keepOn)
@@ -1267,7 +1427,7 @@ private extension SessionModelTests {
         if replyArrivedBeforeNextTick {
             try environment.publishSettings(revision: 1, mode: .battery, threshold: 30, deadline: 6_000)
         } else {
-            try environment.publish("active")
+            try environment.publish(.active)
         }
         model.tick()
         try expect(model.phase == .stopping && environment.assertionsActive
@@ -1282,7 +1442,7 @@ private extension SessionModelTests {
         try expect(model.phase == .stopping && model.threshold == 20
             && model.settingsMessage?.key == "Could not confirm the new settings.",
             "A late acknowledgement must not overwrite the settings or erase the error while stopping")
-        try environment.publish("stopped", restored: true)
+        try environment.publish(.stopped, restored: true)
         model.tick()
         try expect(model.phase == .idle && model.message == nil && !model.showsSettingsActions
             && model.settingsMessage?.key == "Could not confirm the new settings.",
@@ -1300,17 +1460,17 @@ private extension SessionModelTests {
             let model = environment.model()
             model.editClosedLid(closedLid)
             model.start()
-            if closedLid { try environment.publish("active"); model.tick() }
+            if closedLid { try environment.publish(.active); model.tick() }
             let files = environment.sessions.last
             environment.time = 1_061
-            if closedLid { try environment.publish("active") }
+            if closedLid { try environment.publish(.active) }
             model.tick()
             try expect(model.selectedEndDate == model.endDate && !model.durationEditDirty && model.deadline == 4_600,
                 "Untouched duration fields must follow the remaining time without changing the deadline")
             let draft = model.currentDate.addingTimeInterval(159)
             model.selectEndDate(draft)
             environment.time = 1_100
-            if closedLid { try environment.publish("active") }
+            if closedLid { try environment.publish(.active) }
             model.tick()
             try expect(model.durationEditDirty && model.selectedEndDate == draft && model.deadline == 4_600,
                 "Editing and ticks must preserve a dirty duration draft without applying it")
@@ -1360,7 +1520,7 @@ private extension SessionModelTests {
         let environment = try SessionTestEnvironment()
         let model = environment.model()
         model.start()
-        try environment.publish("active")
+        try environment.publish(.active)
         model.tick()
         model.selectEndTimePreset(180)
         model.editThreshold(35)
@@ -1394,7 +1554,7 @@ private extension SessionModelTests {
                 model.editClosedLid(sourceClosed)
                 model.selectEndTimePreset(infinite ? 0 : 60)
                 model.start()
-                if sourceClosed { try environment.publish("active", deadline: infinite ? nil : 4_600); model.tick() }
+                if sourceClosed { try environment.publish(.active, deadline: infinite ? nil : 4_600); model.tick() }
                 let oldFiles = environment.sessions.last
                 let originalDeadline = model.deadline
                 environment.time += 7
@@ -1407,14 +1567,14 @@ private extension SessionModelTests {
                         "Leaving closed-lid mode must await restoration before creating a replacement")
                     try expect(try oldFiles?.read("control.json", as: SessionControl.self).stop == true,
                         "Leaving closed-lid mode must persist stop for the old guardian")
-                    try environment.publish("stopped", restored: true, deadline: originalDeadline)
+                    try environment.publish(.stopped, restored: true, deadline: originalDeadline)
                     model.tick()
                 } else {
                     try expect(model.phase == .authorizing && model.waitingForPassword,
                         "Entering closed-lid mode must use one explicit authorization")
                     environment.time += 9
                     environment.authorizationReplies[0](CommandOutput(status: 0, text: ""))
-                    try environment.publish("active", deadline: originalDeadline)
+                    try environment.publish(.active, deadline: originalDeadline)
                     model.tick()
                 }
                 try expect(environment.sessions.count == 1 && model.closedLid == !sourceClosed
@@ -1457,7 +1617,7 @@ private extension SessionModelTests {
             "The replacement guardian must start with the proposed timer and power policy")
         try expect(model.isRestarting && model.deadline == originalDeadline && model.displayMode == .mayTurnOff
             && environment.assertionDisplays == [false], "Authorization must not apply the new timer or display mode")
-        try environment.publish("active", deadline: deadline)
+        try environment.publish(.active, deadline: deadline)
         model.tick()
         try expect(model.phase == .active && !model.isRestarting && model.closedLid && model.deadline == deadline
             && model.threshold == 26 && model.displayMode == .keepOn && !model.hasSettingsDraft
@@ -1471,12 +1631,12 @@ private extension SessionModelTests {
             environment.installedHelper = true
             let model = environment.model()
             model.start()
-            try environment.publish("active")
+            try environment.publish(.active)
             model.tick()
             environment.guardianRunning = true
             model.editClosedLid(false)
             model.applySettingsDraft()
-            try environment.publish("stopped", restored: true)
+            try environment.publish(.stopped, restored: true)
             model.tick()
             try expect(model.isRestarting && model.phase == .stopping && environment.sessions.count == 1
                 && environment.assertionsActive, "Restored status alone must not restart while the prior guardian still exists")
@@ -1525,7 +1685,7 @@ private extension SessionModelTests {
                 let model = environment.model()
                 model.editClosedLid(sourceClosed)
                 model.start()
-                if sourceClosed { try environment.publish("active"); model.tick() }
+                if sourceClosed { try environment.publish(.active); model.tick() }
                 model.editClosedLid(!sourceClosed)
                 model.applySettingsDraft()
                 try expect(model.phase == .active && model.closedLid == sourceClosed && !model.isRestarting
@@ -1540,7 +1700,7 @@ private extension SessionModelTests {
                 model.editClosedLid(!sourceClosed)
                 model.applySettingsDraft()
                 model.stop()
-                if sourceClosed { try environment.publish("stopped", restored: true); model.tick() }
+                if sourceClosed { try environment.publish(.stopped, restored: true); model.tick() }
                 try expect(!model.hasSettingsDraft && model.settingsMessage == nil,
                     "Stopping with an unapplied draft must clear its error")
 
@@ -1567,12 +1727,12 @@ private extension SessionModelTests {
             "Expiry during authorization must cancel restart and stop the pending guardian")
         try expect(try environment.sessions.last!.read("control.json", as: SessionControl.self).stop,
             "Expired restart must durably prevent guardian activation")
-        try environment.publish("active", deadline: 1_060)
+        try environment.publish(.active, deadline: 1_060)
         environment.authorizationReplies[0](CommandOutput(status: 1, text: "cancelled (-128)"))
         model.tick()
         try expect(model.phase == .stopping && environment.sessions.count == 1,
             "Late authorization or active status must never revive an expired restart")
-        try environment.publish("stopped", restored: true, deadline: 1_060)
+        try environment.publish(.stopped, restored: true, deadline: 1_060)
         model.tick()
         try expect(model.phase == .idle && !environment.assertionsActive
             && model.message?.key == "The Wakecup timer ended. “Keep awake with lid closed” was not changed." && environment.authorizationRequests == [false],
@@ -1585,13 +1745,13 @@ private extension SessionModelTests {
             let model = environment.model()
             model.editClosedLid(sourceClosed)
             model.start()
-            if sourceClosed { try environment.publish("active"); model.tick() }
+            if sourceClosed { try environment.publish(.active); model.tick() }
             model.editClosedLid(!sourceClosed)
             model.applySettingsDraft()
             model.stop()
             try expect(!model.isRestarting && model.closedLid == sourceClosed && model.phase == .stopping,
                 "Manual Stop must cancel either pending mode restart and restore the previous preference")
-            try environment.publish("stopped", restored: true)
+            try environment.publish(.stopped, restored: true)
             model.tick()
             if !sourceClosed { environment.authorizationReplies[0](CommandOutput(status: 0, text: "")) }
             try expect(model.phase == .idle && !environment.assertionsActive

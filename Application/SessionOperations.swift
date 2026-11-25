@@ -18,15 +18,32 @@ struct SessionOperations {
     var wallNow: () -> Date = Date.init
     var readLidClosed: () -> Bool? = { nil }
     var guardianIsRunning: (SessionStatus) -> Bool = { _ in false }
-    var enterBacklight: (DisplayShortcut, @escaping () -> Void, @escaping (Result<Void, Error>, Bool) -> Void) -> Void = { _, _, complete in
+    var enterBacklight: (@escaping BacklightDarkeningPermission, @escaping (Result<Void, Error>, Bool) -> Void) -> Void = { _, complete in
         complete(.failure(WakecupError(message: "Backlight control is unavailable.")), false)
     }
     var restoreBacklight: (DisplayModeController.RestorationPolicy, @escaping (Result<Bool, Error>) -> Void) -> Void = { _, complete in
         complete(.success(true))
     }
     var validateDisplayShortcut: (DisplayShortcut) throws -> Void = { _ in }
+    var checkDisplayShortcutConflict: (DisplayShortcut) -> DisplayShortcutConflict? = { _ in nil }
+    var registerDisplayShortcut: (DisplayShortcut, @escaping () -> Void) throws -> Void = { _, _ in }
+    var unregisterDisplayShortcut: () -> Void = {}
+    var readThermalState: () -> ProcessInfo.ThermalState = { .nominal }
+    var scheduleThermalChecks: (@escaping () -> Void) -> (() -> Void) = { _ in {} }
+    // Enqueue on the same brightness queue as regular display operations.
+    var restoreBacklightAfterThermalStop: () -> Void = {}
     var checkBacklight: (@escaping (DisplayModeController.BacklightState) -> Void) -> Void = { $0(.monitoring) }
 
+
+    var readGuardianStatus: (SessionFiles) throws -> SessionStatus = { try $0.read("status.json", as: SessionStatus.self) }
+
+    static func backgroundThermalChecks(_ sample: @escaping () -> Void) -> () -> Void {
+        let timer = DispatchSource.makeTimerSource(queue: DispatchQueue.global(qos: .userInitiated))
+        timer.schedule(deadline: .now(), repeating: .milliseconds(500), leeway: .milliseconds(50))
+        timer.setEventHandler(handler: sample)
+        timer.resume()
+        return { timer.cancel() }
+    }
 
     static func system(helper: PrivilegedHelperController) -> SessionOperations {
         let guardianStatus = GuardianStatusObserver()
@@ -61,17 +78,11 @@ struct SessionOperations {
                     return expected == actual
                 }
                 return true
-            }, enterBacklight: { shortcut, handler, complete in
-                do { try displayHotKey.register(shortcut, handler: handler) }
-                catch { complete(.failure(error), false); return }
+            }, enterBacklight: { performDarkening, complete in
                 backlightQueue.async {
-                    let result = Result { try backlight.begin() }
+                    let result = Result { try backlight.begin(performDarkening: performDarkening) }
                     let needsRestoration = backlight.needsRestoration
-                    DispatchQueue.main.async {
-                        // Keep the escape shortcut armed after an uncertain rollback.
-                        if !needsRestoration { displayHotKey.unregister() }
-                        complete(result, needsRestoration)
-                    }
+                    DispatchQueue.main.async { complete(result, needsRestoration) }
                 }
             }, restoreBacklight: { policy, complete in
                 backlightQueue.async {
@@ -86,12 +97,22 @@ struct SessionOperations {
                         }
                         return true
                     }
-                    DispatchQueue.main.async {
-                        if case .success(true) = result { displayHotKey.unregister() }
-                        complete(result)
-                    }
+                    DispatchQueue.main.async { complete(result) }
                 }
-            }, validateDisplayShortcut: GlobalDisplayHotKey.validate,
+            }, validateDisplayShortcut: displayHotKey.validate,
+               checkDisplayShortcutConflict: { shortcut in
+                   if Thread.isMainThread {
+                       return MainActor.assumeIsolated { DisplayShortcutConflictDetector.conflict(for: shortcut) }
+                   }
+                   return DispatchQueue.main.sync { DisplayShortcutConflictDetector.conflict(for: shortcut) }
+               },
+               registerDisplayShortcut: displayHotKey.register,
+               unregisterDisplayShortcut: displayHotKey.unregister,
+               readThermalState: { ProcessInfo.processInfo.thermalState },
+               scheduleThermalChecks: backgroundThermalChecks,
+               restoreBacklightAfterThermalStop: {
+                   backlightQueue.async { try? backlight.restore(preservingVisibleBrightness: true) }
+               },
                checkBacklight: { complete in
                    backlightQueue.async {
                        // The controller decides which request wins before recovery state is changed.

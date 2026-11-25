@@ -10,7 +10,7 @@ func runGuard(at url: URL, context: ManagedGuardContext) -> Int32 {
     defer { withExtendedLifetime(files) {} }
     var retainedLease: GuardLease?
     var mayWriteStatus = false
-    var status = SessionStatus(phase: "preparing")
+    var status = SessionStatus(phase: .preparing)
     do {
         let opened = try SessionFiles(url: url, expectedOwner: context.ownerUID)
         try context.validate(files: opened)
@@ -19,10 +19,9 @@ func runGuard(at url: URL, context: ManagedGuardContext) -> Int32 {
         }
         files = opened
         let configuration = context.configuration
-        let lease = try GuardLease()
-        retainedLease = lease
-        let bootID = try systemBootID()
         if context.restoreOnly {
+            let lease = try GuardLease()
+            let bootID = try systemBootID()
             let operations = RecoveryOperations(now: continuousNow, bootID: bootID,
                 readStatus: { try opened.read("status.json", as: SessionStatus.self) },
                 writeStatus: { try opened.write($0, to: "status.json") },
@@ -39,6 +38,16 @@ func runGuard(at url: URL, context: ManagedGuardContext) -> Int32 {
             _ = try recoverSession(opened.identity, using: operations)
             return 0
         }
+        // The per-session lock and pristine record establish exclusive access
+        // to this session's status before the system-wide lease is available.
+        let previousStatus = try opened.read("status.json", as: SessionStatus.self)
+        guard previousStatus.isPristine else {
+            throw WakecupError(message: "This session has already been started. Check its current status.")
+        }
+        mayWriteStatus = true
+        let lease = try GuardLease()
+        retainedLease = lease
+        let bootID = try systemBootID()
         guard try lease.tryAcquire() else {
             throw WakecupError(message: "Another guardian or recovery operation owns the sleep setting. Try again after it stops.")
         }
@@ -48,15 +57,13 @@ func runGuard(at url: URL, context: ManagedGuardContext) -> Int32 {
            previousOwner.process.matches(try recoveryProcess(previousOwner.process.pid)?.identity) {
             throw WakecupError(message: "Another guardian or recovery operation owns the sleep setting. Try again after it stops.")
         }
-        guard try !lease.hasLiveCommands(), try !readDisabled() else {
+        guard try !lease.hasLiveCommands() else {
+            throw WakecupError(message: "A previous system command has not stopped. Try recovery again.")
+        }
+        guard try !readDisabled() else {
             throw WakecupError(message: "Сон уже отключён другой настройкой. Сеанс не запущен.")
         }
-        let previousStatus = try opened.read("status.json", as: SessionStatus.self)
-        guard !previousStatus.ownsSleepChange || previousStatus.sleepRestored else {
-            throw WakecupError(message: "Automatic recovery could not establish exclusive ownership. Try recovery again; if it still fails, use the manual recovery guide.")
-        }
         try lease.claim(session: opened.identity, bootID: bootID, recovering: false)
-        mayWriteStatus = true
         status.bootID = bootID
         status.helperPID = getpid()
         status.helperIdentity = processIdentity(getpid())
@@ -67,19 +74,25 @@ func runGuard(at url: URL, context: ManagedGuardContext) -> Int32 {
         var monitor = try SessionMonitor(configuration: configuration, now: continuousNow())
         let control = try opened.read("control.json", as: SessionControl.self)
         let initialReason = monitor.step(now: continuousNow(), control: control, power: readPowerState(),
-                                         ownerAlive: configuration.parentIdentity?.matches(processIdentity(configuration.parentPID)) == true)
+                                         ownerAlive: configuration.parentIdentity?.matches(processIdentity(configuration.parentPID)) == true,
+                                         thermalState: ProcessInfo.processInfo.thermalState)
         _ = status.update(from: monitor)
-        if let initialReason { throw WakecupError(message: initialReason) }
+        if let initialReason { throw initialReason }
         guard lidClosed() != nil else { throw WakecupError(message: "Датчик крышки недоступен.") }
         let statusSocket = try GuardianStatusSocket.system(owner: opened.owner)
         defer { withExtendedLifetime(statusSocket) {} }
         signal(SIGTERM) { _ in interrupted = 1 }
         signal(SIGINT) { _ in interrupted = 1 }
         signal(SIGHUP) { _ in interrupted = 1 }
-        try temporaryDisable(read: { try readDisabled(using: lease.runCommand) }, write: { disabled in
+        try temporaryDisable(read: { try readDisabled(using: lease.runCommand) }, preflight: {
+            let control = try opened.read("control.json", as: SessionControl.self)
+            if let reason = monitor.thermalTermination(control: control, thermalState: ProcessInfo.processInfo.thermalState) {
+                throw reason
+            }
+        }, write: { disabled in
             if disabled {
                 try lease.armSleepChange()
-                status.phase = "arming"
+                status.phase = .arming
                 status.ownsSleepChange = true
                 status.sleepRestored = false
                 status.phaseChangedAt = continuousNow()
@@ -95,36 +108,45 @@ func runGuard(at url: URL, context: ManagedGuardContext) -> Int32 {
             if configuration.absoluteDeadline == nil, monitor.settingsRevision == 0 || monitor.settingsError != nil {
                 monitor.deadline = configuration.duration.map { start + $0 }
             }
-            status.phase = "active"
-            status.phaseChangedAt = start
-            _ = status.update(from: monitor)
-            try opened.write(status, to: "status.json")
             while true {
                 let control = try opened.read("control.json", as: SessionControl.self)
                 let reason = monitor.step(now: continuousNow(), control: control, power: readPowerState(),
-                                          ownerAlive: configuration.parentIdentity?.matches(processIdentity(configuration.parentPID)) == true, interrupted: interrupted != 0)
+                                          ownerAlive: configuration.parentIdentity?.matches(processIdentity(configuration.parentPID)) == true,
+                                          interrupted: interrupted != 0, thermalState: ProcessInfo.processInfo.thermalState)
                 let settingsChanged = status.update(from: monitor)
                 if let reason {
-                    status.reason = reason
+                    status.setTermination(reason)
                     break
                 }
-                if settingsChanged {
+                // The first valid observation after pmset confirms that we can go active.
+                if status.phase != .active {
+                    status.phase = .active
+                    status.phaseChangedAt = start
+                    try opened.write(status, to: "status.json")
+                } else if settingsChanged {
                     try opened.write(status, to: "status.json")
                 }
                 statusSocket.answerWaitingProbes()
                 Thread.sleep(forTimeInterval: 0.5)
             }
-            status.phase = "restoring"
+            status.phase = .restoring
             status.phaseChangedAt = continuousNow()
             try opened.write(status, to: "status.json")
         })
-        status.phase = "stopped"
+        status.phase = .stopped
         status.sleepRestored = true
         try opened.write(status, to: "status.json")
         return 0
     } catch {
-        status.phase = "failed"
-        status.reason = error.localizedDescription
+        status.phase = .failed
+        let diagnostic = error.localizedDescription
+        if let termination = error as? SessionTermination {
+            status.setTermination(termination)
+        } else {
+            // Keep the cause of the stop even if returning control failed.
+            if status.stopCode != .thermal { status.stopCode = nil }
+            status.reason = diagnostic
+        }
         if mayWriteStatus {
             if status.ownsSleepChange, let lease = retainedLease {
                 status.sleepRestored = (try? lease.hasLiveCommands()) == false
@@ -132,11 +154,7 @@ func runGuard(at url: URL, context: ManagedGuardContext) -> Int32 {
             }
             try? files?.write(status, to: "status.json")
         }
-        print(error.localizedDescription)
+        print(diagnostic)
         return 1
     }
-}
-
-func shellQuote(_ string: String) -> String {
-    "'" + string.replacingOccurrences(of: "'", with: "'\\''") + "'"
 }

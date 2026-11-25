@@ -1,6 +1,11 @@
 import Foundation
 import Darwin
 
+struct SessionDirectoryIdentity: Codable, Equatable {
+    let device: UInt64
+    let inode: UInt64
+}
+
 // The privileged process only accesses these three JSON names through a retained
 // directory descriptor. No root writes follow paths or symlinks supplied by UI.
 final class SessionFiles {
@@ -83,14 +88,14 @@ final class SessionFiles {
 
     func removeIfFinished() -> Bool {
         guard let status = try? read("status.json", as: SessionStatus.self),
-              status.sleepRestored, status.phase == "stopped" || status.phase == "failed" else { return false }
+              status.sleepRestored, status.phase.isTerminal else { return false }
         return removeSessionFiles()
     }
 
     // Call only when no guardian can start or be running for these files.
     func removeIfUnstarted() -> Bool {
         guard let status = try? read("status.json", as: SessionStatus.self),
-              status.phase == "preparing", status.helperPID == 0, !status.ownsSleepChange, status.sleepRestored else { return false }
+              status.isPristine else { return false }
         return removeSessionFiles()
     }
 
@@ -112,7 +117,7 @@ final class SessionFiles {
         let files = try SessionFiles(url: url)
         try files.write(configuration, to: "configuration.json")
         try files.write(SessionControl(), to: "control.json")
-        try files.write(SessionStatus(phase: "preparing"), to: "status.json")
+        try files.write(SessionStatus(phase: .preparing), to: "status.json")
         return files
     }
 }

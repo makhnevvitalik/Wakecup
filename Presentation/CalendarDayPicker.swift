@@ -16,10 +16,9 @@ struct CalendarDayPicker: NSViewRepresentable {
     }
 }
 
-// Magnify the native fixed-size grid using AppKit coordinates, rather than
-// stretching a bitmap or replacing its date selection and keyboard handling.
+// Magnify the native fixed-size calendar grid using AppKit coordinates.
 final class CalendarDayPickerView: NSView {
-    private let picker = NSDatePicker()
+    private let picker = ConfirmingDatePicker()
     private var select: (Date) -> Void = { _ in }
     private var configuredCalendar: Calendar?
     private var sourceDay: Date?
@@ -71,5 +70,22 @@ final class CalendarDayPickerView: NSView {
     }
     @objc private func changed(_ sender: NSDatePicker) {
         select(sender.dateValue)
+    }
+}
+
+private final class ConfirmingDatePicker: NSDatePicker {
+    override func keyDown(with event: NSEvent) {
+        let modifiers = event.modifierFlags.intersection([.command, .control, .option, .shift])
+        guard isEnabled, window?.firstResponder === self, modifiers.isEmpty else {
+            super.keyDown(with: event)
+            return
+        }
+        switch event.charactersIgnoringModifiers {
+        case " ", "\r", "\u{3}":
+            // A highlighted day can change without AppKit sending the control action.
+            if !event.isARepeat { sendAction(action, to: target) }
+        default:
+            super.keyDown(with: event)
+        }
     }
 }

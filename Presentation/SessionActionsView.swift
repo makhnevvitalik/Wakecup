@@ -4,106 +4,231 @@ import SwiftUI
 struct SessionActionsView: View {
     @ObservedObject var model: SessionModel
     @ObservedObject private var localization = AppLocalization.shared
+
     var body: some View {
-        primaryButton
-        .controlSize(.large)
-        .frame(minHeight: MenuLayout.primaryActionHeight)
-        .disabled(model.isRestarting || model.helper.working || model.phase.showsProgress || (model.needsRecovery && model.busy)
-            || (!model.busy && !model.needsRecovery && (model.startPowerRestriction != nil || model.display.transitioning || !model.durationInputIsValid
-                || (model.closedLid && model.helper.selected && model.helper.checking))))
+        controls
+            // Keep the native button chrome while letting the custom label set the height.
+            .controlSize(.mini)
+            .buttonBorderShape(.capsule)
+            .frame(height: AppStyle.Layout.sessionActionAreaHeight)
     }
 
-    @ViewBuilder private var primaryButton: some View {
-        if model.phase == .active && model.hasSettingsDraft {
-            actionButton.buttonStyle(.bordered)
+    @ViewBuilder private var controls: some View {
+        if model.isReturningControl || model.needsBrightnessRecovery || model.needsRecovery {
+            primaryButton.prominentSessionAction()
+        } else if model.showsSettingsActions {
+            HStack(spacing: AppStyle.Layout.cardSpacing) {
+                button(localized("Cancel edits")) {
+                    AppStyle.commitActiveFieldEditor(in: NSApp.keyWindow)
+                    model.discardSettingsDraft()
+                }
+                .neutralSessionAction()
+                .disabled(!model.canEditSettingsDraft)
+                .accessibilityIdentifier("WakecupCancelSettings")
+
+                button(localized("Apply")) {
+                    AppStyle.commitActiveFieldEditor(in: NSApp.keyWindow)
+                    model.applySettingsDraft()
+                }
+                .prominentSessionAction()
+                .disabled(!model.canApplySettingsDraft)
+                .accessibilityIdentifier("WakecupApplySettings")
+            }
+        } else if let seconds = model.backlightCountdown {
+            countdownButton(seconds)
+        } else if model.phase == .active {
+            primaryButton
+                .neutralSessionAction()
         } else {
-            actionButton.buttonStyle(.borderedProminent)
+            primaryButton.prominentSessionAction()
         }
     }
 
-    private var actionButton: some View {
-        Button(action: performPrimaryAction) {
-            Text(actionTitle)
-                .font(Font(AppStyle.Font.primaryAction))
-                .frame(maxWidth: .infinity)
+    private var primaryButton: some View {
+        let helper = model.helperStatus
+        return button(actionTitle, action: performPrimaryAction)
+            .disabled(model.isRestarting || helper.working || model.statusPhase.showsProgress
+                || (model.needsRecovery && model.busy)
+                || (!model.busy && !model.needsRecovery && !model.needsBrightnessRecovery
+                    && (model.startPowerRestriction != nil || model.isDisplayTransitioning || !model.durationInputIsValid
+                    || (model.closedLid && helper.selected && helper.checking))))
+        .accessibilityIdentifier("WakecupPrimaryAction")
+    }
+
+    private func button(_ title: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            actionLabel {
+                Text(title).font(Font(AppStyle.Font.primaryAction))
+            }
         }
     }
 
-    private var actionTitle: String {
+    private func countdownButton(_ seconds: Int) -> some View {
+        let remaining = localizedFormat("%ld s", seconds)
+        let message = localizedFormat("Backlight turns off in %@", remaining)
+        var caption = AttributedString(message)
+        if let range = caption.range(of: remaining) {
+            caption[range].inlinePresentationIntent = .stronglyEmphasized
+        }
+
+        return Button {
+            model.cancelBacklightCountdown()
+        } label: {
+            actionLabel {
+                VStack(spacing: AppStyle.Layout.sessionCountdownLineSpacing) {
+                    Text(localized("Cancel backlight countdown")).font(Font(AppStyle.Font.primaryAction))
+                    Text(caption)
+                        .font(Font(AppStyle.Font.supportingText))
+                        .monospacedDigit()
+                }
+            }
+        }
+        .neutralSessionAction()
+        .accessibilityLabel(localized("Cancel turning off the backlight"))
+        .accessibilityValue(message)
+        .accessibilityIdentifier("WakecupCancelBacklightCountdown")
+    }
+
+    private func actionLabel(@ViewBuilder content: () -> some View) -> some View {
+        content()
+            .lineLimit(1)
+            .frame(maxWidth: .infinity)
+            .frame(height: AppStyle.Layout.sessionActionLabelHeight)
+    }
+
+    var actionTitle: String {
+        if model.isReturningControl && !model.phase.isBusy && model.isBacklightOff {
+            return localized("Restoring brightness…")
+        }
+        if model.needsBrightnessRecovery { return localized("Restore brightness") }
         if model.needsRecovery { return localized("Restore Normal Sleep") }
-        if model.isRestarting || model.phase == .active || model.phase == .stopping { return localized("Stop") }
+        if model.isRestarting || model.phase == .active || model.statusPhase == .stopping { return localized("Stop") }
         return localized("Start")
     }
 
     private func performPrimaryAction() {
         AppStyle.commitActiveFieldEditor(in: NSApp.keyWindow)
-        if model.needsRecovery { model.recover() }
-        else if model.busy { model.stop() }
-        else { model.start() }
+        if model.needsBrightnessRecovery { model.restoreBrightness() }
+        else if model.needsRecovery { model.recover() }
+        else if model.busy {
+            if !model.showsSettingsActions && model.backlightCountdown == nil { model.stop() }
+        } else { model.start() }
+    }
+}
+
+private extension View {
+    func prominentSessionAction() -> some View {
+        buttonStyle(.borderedProminent)
+            .tint(Color(nsColor: AppStyle.Color.prominentAction))
+    }
+
+    func neutralSessionAction() -> some View {
+        buttonStyle(.bordered)
+            .tint(Color(nsColor: AppStyle.Color.neutralAction))
+            .overlay {
+                Capsule(style: .circular)
+                    .strokeBorder(Color(nsColor: AppStyle.Color.neutralActionBorder), lineWidth: 1)
+                    .allowsHitTesting(false)
+                    .accessibilityHidden(true)
+            }
     }
 }
 
 struct SessionSettingsFooter: View {
-    @ObservedObject var model: SessionModel
     let showHelp: () -> Void
     @ObservedObject private var localization = AppLocalization.shared
 
-    private enum FeedbackStyle {
-        case notice, progress, error, backlightCountdown
+    var body: some View {
+        Button(action: showHelp) {
+            Text(localized("Mac won’t sleep with Wakecup off?"))
+                .font(Font(AppStyle.Font.emphasizedBody))
+                .frame(maxWidth: .infinity, minHeight: MenuLayout.helpLinkHeight, alignment: .leading)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.link)
+        .padding(.horizontal, AppStyle.Layout.cardInset + AppStyle.Layout.panelInset)
+        .padding(.bottom, AppStyle.Layout.panelInset)
+    }
+}
+
+struct SessionFeedback: Equatable {
+    enum Style { case notice, progress, error }
+    enum Placement { case primaryAction, footer }
+
+    let text: String
+    let style: Style
+    let placement: Placement
+
+    init(_ text: String, _ style: Style = .notice, placement: Placement = .footer) {
+        self.text = text
+        self.style = style
+        self.placement = placement
     }
 
-    private struct Feedback {
-        let text: String
-        let style: FeedbackStyle
-
-        init(_ text: String, _ style: FeedbackStyle = .notice) {
-            self.text = text
-            self.style = style
+    static func current(for model: SessionModel, placement: Placement) -> Self? {
+        switch placement {
+        case .primaryAction: actionFeedback(for: model)
+        case .footer: operationFeedback(for: model)
         }
     }
 
-    private var feedback: Feedback? {
+    private static func actionFeedback(for model: SessionModel) -> Self? {
         if model.waitingForPassword {
-            return Feedback(localized("Confirm the macOS prompt"))
+            return SessionFeedback(localized("Confirm the macOS prompt"), placement: .primaryAction)
         }
-        if let error = model.displayControlError, model.isBacklightOff {
-            return Feedback(error.text(using: localized), .error)
+        if model.needsBrightnessRecovery {
+            let error = model.displayControlError?.text(using: localized) ?? localized("Could not restore brightness.")
+            let shortcutHint = model.displayShortcut.map { localizedFormat("Press %@ to restore brightness.", $0.displayName) }
+            return SessionFeedback([error, shortcutHint].compactMap { $0 }.joined(separator: " "), .error, placement: .primaryAction)
         }
-        if model.isRestarting || (model.settingsApplying && model.phase == .active) {
-            return Feedback(localized("Applying settings…"), .progress)
+        if let error = model.displayControlError, model.isBacklightOff, !model.isReturningControl {
+            return SessionFeedback(error.text(using: localized), .error, placement: .primaryAction)
         }
-        if model.recoveryInProgress {
-            return Feedback(localized("Restoring normal sleep…"), .progress)
-        }
-        if model.needsRecovery, !model.busy, let message = model.message {
-            return Feedback(message.text(using: localized), .error)
+        if model.needsRecovery, !model.recoveryInProgress, let message = model.message {
+            return sessionMessage(message, for: model, placement: .primaryAction)
         }
         if let restriction = model.startPowerRestriction {
-            return Feedback(powerNotice(restriction))
+            return SessionFeedback(powerNotice(restriction), placement: .primaryAction)
         }
-        if let error = model.settingsMessage {
-            return Feedback(error.text(using: localized), .error)
-        }
-        if let seconds = model.backlightCountdown {
-            return Feedback(localizedFormat("Backlight turns off in %ld s", seconds), .backlightCountdown)
-        }
-        if model.phase == .authorizing {
-            return Feedback(localized("Starting session"), .progress)
-        }
-        if model.phase == .stopping {
-            return Feedback(localized("Stopping…"), .progress)
-        }
-        if let error = model.displayControlError {
-            return Feedback(error.text(using: localized), .error)
-        }
-        if model.phase != .active, let message = model.message {
-            let style: FeedbackStyle = model.phase == .failed ? .error : .notice
-            return Feedback(message.text(using: localized), style)
+        if let error = model.settingsMessage, !model.settingsApplying {
+            return SessionFeedback(error.text(using: localized), .error, placement: .primaryAction)
         }
         return nil
     }
 
-    private func powerNotice(_ restriction: PowerRestriction) -> String {
+    private static func operationFeedback(for model: SessionModel) -> Self? {
+        if model.isReturningControl {
+            return SessionFeedback(SessionModel.returningControlMessage.text(using: localized), .progress)
+        }
+        // The authorization notice already explains this operation above the settings.
+        if model.waitingForPassword { return nil }
+        if model.isRestarting || (model.settingsApplying && model.phase == .active) {
+            return SessionFeedback(localized("Applying settings…"), .progress)
+        }
+        if model.recoveryInProgress {
+            return SessionFeedback(localized("Restoring normal sleep…"), .progress)
+        }
+        if !model.needsRecovery, let message = model.priorityStopMessage,
+           !model.isBacklightOff || model.displayControlError == nil {
+            return sessionMessage(message, for: model, placement: .footer)
+        }
+        if model.phase == .authorizing {
+            return SessionFeedback(localized("Starting session"), .progress)
+        }
+        if let error = model.displayControlError, !model.isBacklightOff, model.settingsMessage == nil {
+            return SessionFeedback(error.text(using: localized), .error)
+        }
+        if !model.needsRecovery, model.phase != .active, let message = model.message {
+            return sessionMessage(message, for: model, placement: .footer)
+        }
+        return nil
+    }
+
+    private static func sessionMessage(_ message: SessionMessage, for model: SessionModel, placement: Placement) -> Self {
+        SessionFeedback(message.text(using: localized), model.phase == .failed ? .error : .notice, placement: placement)
+    }
+
+    private static func powerNotice(_ restriction: PowerRestriction) -> String {
         switch restriction {
         case .chargerRequired:
             localized("Connect power or enable Keep awake on battery.")
@@ -116,45 +241,16 @@ struct SessionSettingsFooter: View {
         }
     }
 
-    var preferredHeight: CGFloat {
-        let feedbackHeight = feedback.map(feedbackHeight(for:)) ?? 0
-        let actionsHeight = model.showsSettingsActions ? MenuLayout.settingsActionsHeight : 0
-        let cardHeight = feedbackHeight + actionsHeight
-        let helpHeight = MenuLayout.helpLinkHeight + AppStyle.Layout.panelInset
-        return cardHeight == 0 ? helpHeight : helpHeight + AppStyle.Layout.cardSpacing + cardHeight
-    }
+    var topInset: CGFloat { placement == .footer ? AppStyle.Layout.cardSpacing : 0 }
+    var height: CGFloat { topInset + rowHeight + AppStyle.Layout.cardSpacing }
 
-    var body: some View {
-        let notice = feedback
-        VStack(spacing: AppStyle.Layout.cardSpacing) {
-            if notice != nil || model.showsSettingsActions {
-                MenuCard {
-                    if let notice { feedbackRow(notice) }
-                    if model.showsSettingsActions { actions.modifier(SettingsActionsFade()) }
-                }
-            }
-            Button(action: showHelp) {
-                Label(localized("Mac won’t sleep with Wakecup off?"), systemImage: "questionmark.circle")
-                    .font(Font(AppStyle.Font.emphasizedBody))
-                    .frame(maxWidth: .infinity, minHeight: MenuLayout.helpLinkHeight, alignment: .leading)
-                    .contentShape(Rectangle())
-            }
-            .buttonStyle(.link)
-            .padding(.horizontal, AppStyle.Layout.cardInset)
-        }
-        .tint(Color(AppStyle.Color.accent))
-        .padding([.horizontal, .bottom], AppStyle.Layout.panelInset)
-    }
+    var rowHeight: CGFloat { min(naturalRowHeight, MenuLayout.maximumFeedbackHeight) }
 
-    private func feedbackHeight(for feedback: Feedback) -> CGFloat {
-        min(naturalFeedbackHeight(for: feedback), MenuLayout.maximumFeedbackHeight)
-    }
-
-    private func naturalFeedbackHeight(for feedback: Feedback) -> CGFloat {
-        guard feedback.style == .error || feedback.style == .notice else { return MenuLayout.feedbackRowHeight }
-        let iconWidth = feedback.style == .error ? MenuLayout.iconSize + MenuLayout.headingSpacing : 0
+    var naturalRowHeight: CGFloat {
+        guard style != .progress else { return MenuLayout.feedbackRowHeight }
+        let iconWidth = style == .error ? MenuLayout.iconSize + MenuLayout.headingSpacing : 0
         let width = MenuLayout.width - 2 * (AppStyle.Layout.panelInset + AppStyle.Layout.cardInset) - iconWidth
-        let bounds = (feedback.text as NSString).boundingRect(
+        let bounds = (text as NSString).boundingRect(
             with: NSSize(width: width, height: .greatestFiniteMagnitude),
             options: [.usesLineFragmentOrigin, .usesFontLeading],
             attributes: [.font: AppStyle.Font.supportingText]
@@ -162,9 +258,28 @@ struct SessionSettingsFooter: View {
         return max(MenuLayout.feedbackRowHeight, ceil(bounds.height) + 8)
     }
 
-    private func feedbackRow(_ feedback: Feedback) -> some View {
+}
+
+struct SessionFeedbackView: View {
+    let feedback: SessionFeedback?
+    var outgoing = false
+
+    var body: some View {
+        if let feedback {
+            MenuCard {
+                feedbackRow(feedback)
+            }
+            .padding(.horizontal, AppStyle.Layout.panelInset)
+            .padding(.top, feedback.topInset)
+            .padding(.bottom, AppStyle.Layout.cardSpacing)
+            .allowsHitTesting(!outgoing)
+            .accessibilityHidden(outgoing)
+        }
+    }
+
+    private func feedbackRow(_ feedback: SessionFeedback) -> some View {
         HStack(spacing: MenuLayout.headingSpacing) {
-            if naturalFeedbackHeight(for: feedback) > MenuLayout.maximumFeedbackHeight {
+            if feedback.naturalRowHeight > MenuLayout.maximumFeedbackHeight {
                 ScrollView {
                     feedbackLabel(feedback)
                         .frame(maxWidth: .infinity, alignment: .leading)
@@ -173,20 +288,13 @@ struct SessionSettingsFooter: View {
             } else {
                 feedbackLabel(feedback)
             }
-            if feedback.style == .backlightCountdown {
-                Spacer(minLength: 0)
-                Button(localized("Cancel backlight countdown"), action: model.cancelBacklightCountdown)
-                    .buttonStyle(.link)
-                    .font(Font(AppStyle.Font.controlLabel))
-                    .accessibilityIdentifier("WakecupCancelBacklightCountdown")
-            }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .frame(height: feedbackHeight(for: feedback))
+        .frame(height: feedback.rowHeight)
         .padding(.horizontal, AppStyle.Layout.cardInset)
     }
 
-    private func feedbackLabel(_ feedback: Feedback) -> some View {
+    private func feedbackLabel(_ feedback: SessionFeedback) -> some View {
         HStack(spacing: MenuLayout.headingSpacing) {
             switch feedback.style {
             case .progress:
@@ -195,7 +303,7 @@ struct SessionSettingsFooter: View {
                 Image(systemName: "exclamationmark.circle")
                     .frame(width: MenuLayout.iconSize)
                     .accessibilityHidden(true)
-            case .notice, .backlightCountdown:
+            case .notice:
                 EmptyView()
             }
             if feedback.style == .error || feedback.style == .notice {
@@ -205,48 +313,10 @@ struct SessionSettingsFooter: View {
             }
         }
         .font(Font(AppStyle.Font.supportingText))
-        .foregroundStyle(feedback.style == .error ? Color.red : Color.secondary)
+        .foregroundStyle(feedback.style == .error ? Color.red : Color(nsColor: AppStyle.Color.stateDetailText))
         .accessibilityElement(children: .combine)
         .accessibilityIdentifier("WakecupSessionNotice")
         .help(feedback.text)
     }
 
-    private var actions: some View {
-        HStack(spacing: AppStyle.Layout.cardSpacing) {
-            Button(localized("Cancel edits")) {
-                AppStyle.commitActiveFieldEditor(in: NSApp.keyWindow)
-                model.discardSettingsDraft()
-            }
-            .buttonStyle(.bordered)
-            .tint(Color(nsColor: .systemRed))
-            .disabled(!model.canEditSettingsDraft)
-            .accessibilityIdentifier("WakecupCancelSettings")
-
-            Button(localized("Apply")) {
-                AppStyle.commitActiveFieldEditor(in: NSApp.keyWindow)
-                model.applySettingsDraft()
-            }
-            .buttonStyle(.borderedProminent)
-            .disabled(!model.canApplySettingsDraft)
-            .accessibilityIdentifier("WakecupApplySettings")
-        }
-        .font(Font(AppStyle.Font.controlLabel))
-        .controlSize(.regular)
-        .padding(.horizontal, AppStyle.Layout.cardInset)
-        .frame(maxWidth: .infinity)
-        .frame(height: MenuLayout.settingsActionsHeight)
-    }
-}
-
-private struct SettingsActionsFade: ViewModifier {
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @State private var isVisible = false
-
-    func body(content: Content) -> some View {
-        content
-            .animation(reduceMotion ? nil : .easeOut(duration: MenuLayout.settingsActionsFadeDuration)) {
-                $0.opacity(reduceMotion || isVisible ? 1 : 0)
-            }
-            .onAppear { isVisible = true }
-    }
 }

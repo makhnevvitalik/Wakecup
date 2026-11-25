@@ -88,10 +88,30 @@ cp "$project_root/Info.plist" "$staged_app/Contents/Info.plist"
 cp -R "$project_root/Resources/." "$staged_app/Contents/Resources/"
 cp "$project_root/LICENSE" "$staged_app/Contents/Resources/LICENSE.txt"
 helper_path="$staged_app/Contents/Resources/Helper/local.wakecup.helper"
+# Both executables share the wire contract and the OS adapters they call.
+# The root binary includes only the service, installer and guardian implementations.
+shared_sources=(
+  "$project_root/Core/HelperProtocol.swift" "$project_root/Core/PowerPolicy.swift" "$project_root/Core/SessionCore.swift"
+  "$project_root/System/GuardianStatusSocket.swift" "$project_root/System/HelperClient.swift"
+  "$project_root/System/HelperTrust.swift" "$project_root/System/ManagedGuardContext.swift"
+  "$project_root/System/ProcessInspection.swift" "$project_root/System/SessionFiles.swift" "$project_root/System/SystemPower.swift"
+)
+helper_sources=(
+  "${shared_sources[@]}" "$project_root/Helper/main.swift"
+  "$project_root/System/Guard.swift" "$project_root/System/GuardLease.swift" "$project_root/System/HelperChildren.swift"
+  "$project_root/System/HelperInstaller.swift" "$project_root/System/HelperRecoveryCompletion.swift"
+  "$project_root/System/HelperService.swift" "$project_root/System/SessionRecovery.swift" "$project_root/System/StagedHelper.swift"
+)
+app_sources=(
+  "${shared_sources[@]}" "$project_root"/App/*.swift "$project_root"/Application/*.swift "$project_root"/Presentation/*.swift
+  "$project_root/Core/AppLanguage.swift" "$project_root/Core/AppVersion.swift" "$project_root/Core/DisplaySettings.swift"
+  "$project_root/Core/EndTimeSelection.swift" "$project_root/Core/SessionMessage.swift"
+  "$project_root/System/BacklightSession.swift" "$project_root/System/PrivilegedExecution.swift" "$project_root/System/SleepAssertions.swift"
+)
 helper_slices=()
 for architecture in "${architectures[@]}"; do
   slice="$stage/helper-$architecture"
-  swiftc "$project_root"/Core/*.swift "$project_root"/System/*.swift "$project_root/Helper/main.swift" \
+  swiftc "${helper_sources[@]}" \
     -o "$slice" -target "$architecture-apple-macos$deployment_target" \
     -module-cache-path "$project_root/.build/module-cache" -framework IOKit
   helper_slices+=("$slice")
@@ -118,8 +138,7 @@ IDENTITY
   if [[ "$architecture" == "$host_arch" ]]; then
     /bin/cp "$stage/HelperBuildIdentity.swift" "$stage/HostHelperBuildIdentity.swift"
   fi
-  sources=("$stage/HelperBuildIdentity.swift" "$project_root"/App/*.swift "$project_root"/Application/*.swift
-           "$project_root"/Core/*.swift "$project_root"/System/*.swift "$project_root"/Presentation/*.swift)
+  sources=("$stage/HelperBuildIdentity.swift" "${app_sources[@]}")
   slice="$stage/app-$architecture"
   swiftc "${sources[@]}" -o "$slice" \
     -target "$architecture-apple-macos$deployment_target" \

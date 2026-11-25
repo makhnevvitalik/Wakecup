@@ -48,12 +48,23 @@ import SwiftUI
         defer { model.stop(); window.orderOut(nil) }
         var baseline: NSSize?
         @discardableResult
-        @MainActor func render(_ state: String) throws -> Data {
-            for _ in 0..<3 { RunLoop.main.run(until: Date().addingTimeInterval(0.03)); hosting.view.layoutSubtreeIfNeeded() }
+        @MainActor func render(_ state: String, notice: SessionFeedback.Placement? = nil) throws -> Data {
+            for _ in 0..<5 { RunLoop.main.run(until: Date().addingTimeInterval(0.04)); hosting.view.layoutSubtreeIfNeeded() }
             let size = hosting.view.fittingSize
             try expect(abs(size.width - MenuLayout.width) < 1, "Status widened the panel: " + state)
-            if let baseline { try expect(abs(size.height - baseline.height) < 1, "Status changed panel height: " + state) }
-            else { baseline = size }
+            if let baseline {
+                let noticeHeight = notice.map { placement in
+                    MenuLayout.feedbackRowHeight + (placement == .footer ? 2 : 1) * AppStyle.Layout.cardSpacing
+                } ?? 0
+                let actionPlacement = notice == .primaryAction ? notice : nil
+                let footerPlacement = notice == .footer ? notice : nil
+                try expect(SessionFeedback.current(for: model, placement: .primaryAction)?.placement == actionPlacement
+                           && SessionFeedback.current(for: model, placement: .footer)?.placement == footerPlacement
+                           && abs(size.height - baseline.height - noticeHeight) < 1,
+                           "Only the expected feedback region may change the panel height: " + state)
+            } else {
+                baseline = size
+            }
             hosting.view.setFrameSize(size); window.setContentSize(size)
             hosting.view.layoutSubtreeIfNeeded(); hosting.view.displayIfNeeded()
             guard let bitmap = hosting.view.bitmapImageRepForCachingDisplay(in: hosting.view.bounds) else {
@@ -89,6 +100,11 @@ import SwiftUI
         model.stop()
         let idleWithUpdate = try render("update")
         try expect(idleWithUpdate != idleWithoutUpdate, "Update link must be visible when idle")
+        model.phase = .failed
+        let failedWithUpdate = try render("failed-with-update")
+        try expect(failedWithUpdate == idleWithUpdate,
+                   "A failed start with no recovery must keep the update link available")
+        model.phase = .idle
         for (minutes, name) in [(1, "minute"), (72, "hour"), (-1, "maximum"), (0, "unlimited")] {
             model.stop(); clock.now = 1_000
             if minutes == 0 { model.selectEndTimePreset(0) }
@@ -105,15 +121,15 @@ import SwiftUI
             model.applySettingsDraft()
         }
         model.stop(); try render("stopped")
-        model.phase = .stopping; try render("stopping")
-        model.phase = .authorizing; try render("password")
-        model.phase = .failed; model.message = "Could not read guardian state."; try render("failed")
+        model.phase = .stopping; try render("stopping", notice: .footer)
+        model.phase = .authorizing; try render("password", notice: .primaryAction)
+        model.phase = .failed; model.message = "Could not read guardian state."; try render("failed", notice: .footer)
         model.phase = .idle; model.message = SessionMessage("Session ended: %@.", arguments: ["зарядка отключена"])
-        try render("automatic-stop")
+        try render("automatic-stop", notice: .footer)
         model.message = nil; model.editClosedLid(true); clock.useHelper = true
         model.start()
         try expect(model.phase == .authorizing && !model.waitingForPassword, "Fake helper startup must be pending")
-        try render("helper-start")
+        try render("helper-start", notice: .footer)
         print("PASS: header update visibility, status priority and panel geometry for off, active, final selectable day, infinity, transitions, errors and automatic stop (\(language))")
     }
     private final class Clock { var now: TimeInterval = 1_000; var useHelper = false }
@@ -127,7 +143,7 @@ private struct StatusFixture: View {
     @ObservedObject var model: SessionModel
     let updates: UpdateChecker
     var body: some View {
-        WakecupView(model: model, updates: updates, showAbout: {})
+        WakecupLayoutFixture(model: model, updates: updates, showAbout: {})
             .background(Color(nsColor: NSColor(calibratedWhite: 0.91, alpha: 1)))
     }
 }

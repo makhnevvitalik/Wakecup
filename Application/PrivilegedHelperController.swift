@@ -2,16 +2,23 @@ import Combine
 import Foundation
 
 final class PrivilegedHelperController: ObservableObject {
-    enum State: String { case missing, ready, updateRequired, unavailable }
-    @Published private(set) var state: State = .missing
+    @Published private(set) var state: HelperStatus.State = .missing {
+        didSet {
+            // Keep an outstanding update visible until the replacement has
+            // authenticated, even if an intermediate check reports unavailable.
+            if state == .updateRequired, !updatePending { updatePending = true }
+            if (state == .ready || state == .missing), updatePending { updatePending = false }
+        }
+    }
+    private(set) var updatePending = false
     @Published private(set) var working = false
     @Published private(set) var checking = false
     @Published private(set) var selected: Bool
     struct Inspection {
-        let state: State
+        let state: HelperStatus.State
         let detail: String
         let manifest: HelperManifest?
-        init(state: State, detail: String = "", manifest: HelperManifest? = nil) {
+        init(state: HelperStatus.State, detail: String = "", manifest: HelperManifest? = nil) {
             self.state = state; self.detail = detail; self.manifest = manifest
         }
     }
@@ -21,6 +28,7 @@ final class PrivilegedHelperController: ObservableObject {
     private let requestInformation: (@escaping (Result<HelperInformation, Error>) -> Void) -> Void
     private let requestStart: (String, Bool, @escaping (Result<Int32, Error>) -> Void) -> Void
     private var availabilityCheck: (id: UUID, manifest: HelperManifest)?
+    private var availabilityGeneration = UUID()
     private var confirmedManifest: HelperManifest?
     private(set) var detail = ""
     private(set) var installationError: String?
@@ -82,6 +90,7 @@ final class PrivilegedHelperController: ObservableObject {
         // Coalesce refreshes, but invalidate replies when the installation changes.
         if availabilityCheck?.manifest == manifest { return }
         let check = UUID()
+        availabilityGeneration = check
         availabilityCheck = (check, manifest)
         checking = true
         if confirmedManifest != manifest { state = .unavailable }
@@ -91,8 +100,11 @@ final class PrivilegedHelperController: ObservableObject {
         requestInformation { [weak self] result in
             guard let self, self.availabilityCheck?.id == check,
                   !self.working || confirmInstallation else { return }
-            self.invalidateAvailabilityCheck()
+            self.availabilityCheck = nil
+            self.checking = false
             if confirmInstallation { self.working = false }
+            // This reply may finish after a newer recovery request has started.
+            guard self.availabilityGeneration == check else { return }
             switch result {
             case .success(let information) where information.manifest == manifest && information.clientConfirmed:
                 self.confirmedManifest = manifest
@@ -108,6 +120,7 @@ final class PrivilegedHelperController: ObservableObject {
         }
     }
     private func invalidateAvailabilityCheck() {
+        availabilityGeneration = UUID()
         availabilityCheck = nil
         checking = false
     }
@@ -125,9 +138,13 @@ final class PrivilegedHelperController: ObservableObject {
         rememberSelection(enabled)
     }
     func start(path: String, restoreOnly: Bool, completion: @escaping (Result<Int32, Error>) -> Void) {
+        let generation = UUID()
+        availabilityGeneration = generation
         requestStart(path, restoreOnly) { [weak self] result in
-            if case .failure(let error) = result, !(error is HelperOperationRejection) {
-                self?.applyUnavailable(error.localizedDescription)
+            // An earlier transport failure cannot supersede a fresh request or health check.
+            if let self, self.availabilityGeneration == generation,
+               case .failure(let error) = result, !(error is HelperOperationRejection) {
+                self.applyUnavailable(error.localizedDescription)
             }
             completion(result)
         }

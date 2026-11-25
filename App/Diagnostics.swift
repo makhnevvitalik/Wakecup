@@ -51,13 +51,13 @@ func nativeSmokeTest() throws {
         powerMode: .battery, threshold: 10, closedLid: false, keepDisplayOn: true)
     let start = continuousNow()
     var monitor = try SessionMonitor(configuration: config, now: start)
-    var reason: String?
+    var reason: SessionTermination?
     repeat {
         reason = monitor.step(now: continuousNow(), control: SessionControl(), power: readPowerState(), ownerAlive: true)
         if reason == nil { Thread.sleep(forTimeInterval: 0.1) }
     } while reason == nil && continuousNow() - start < 5
     assertions.stop()
-    guard reason == "время истекло", ids.allSatisfy({ IOPMAssertionCopyProperties($0)?.takeRetainedValue() == nil }) else {
+    guard reason?.code == .expired, ids.allSatisfy({ IOPMAssertionCopyProperties($0)?.takeRetainedValue() == nil }) else {
         throw WakecupError(message: "Нативный сеанс не завершился по таймеру или удержания не освобождены.")
     }
     print("PASS: actual native idle/display assertions created; 2-second timer expired; both assertions released")
@@ -71,7 +71,7 @@ func guardSmokeTest() throws {
     let files = try SessionFiles.create(at: root, configuration: config)
     defer {
         try? files.write(SessionControl(stop: true), to: "control.json")
-        if let status = try? files.read("status.json", as: SessionStatus.self), status.phase == "stopped", status.sleepRestored {
+        if let status = try? files.read("status.json", as: SessionStatus.self), status.phase == .stopped, status.sleepRestored {
             try? FileManager.default.removeItem(at: root)
         } else { print("State retained for recovery: \(root.path)") }
     }
@@ -89,21 +89,21 @@ func guardSmokeTest() throws {
     var observedActive = false
     while continuousNow() < timeout {
         let status = try files.read("status.json", as: SessionStatus.self)
-        if status.phase == "active", !observedActive {
+        if status.phase == .active, !observedActive {
             guard GuardianStatusSocket.probe(pid: status.helperPID) == .responsive,
                   try readDisabled() else {
                 throw WakecupError(message: "Не удалось подтвердить ответ защитного процесса и включённый режим.")
             }
             observedActive = true
         }
-        if status.phase == "stopped" {
-            guard observedActive, status.reason == "время истекло", status.sleepRestored, try !readDisabled() else {
+        if status.phase == .stopped {
+            guard observedActive, status.reasonCode == .expired, status.sleepRestored, try !readDisabled() else {
                 throw WakecupError(message: "Режим не прошёл проверку автоматического восстановления.")
             }
             print("PASS: real closed-lid flag enabled; guard answered over the local socket; 2-second timer expired; original sleep flag restored")
             return
         }
-        if status.phase == "failed" { throw WakecupError(message: status.reason) }
+        if status.phase == .failed { throw WakecupError(message: status.reason) }
         Thread.sleep(forTimeInterval: 0.1)
     }
     throw WakecupError(message: "Истекло время ожидания защитного процесса.")

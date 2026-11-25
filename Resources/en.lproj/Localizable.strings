@@ -4,8 +4,8 @@
 <dict>
 	<key>%@ Restore normal sleep to continue.</key>
 	<string>%@ Restore normal sleep to continue.</string>
-	<key>%@ is available.</key>
-	<string>%@ is available.</string>
+	<key>%@ is available</key>
+	<string>%@ is available</string>
 	<key>%d percent</key>
 	<string>%d percent</string>
 	<key>%dh</key>
@@ -32,8 +32,12 @@
 	<string>Allow login item in macOS…</string>
 	<key>Keep awake on battery</key>
 	<string>Keep awake on battery</string>
-	<key>About this setting</key>
-	<string>About this setting</string>
+	<key>Help about closed-lid mode</key>
+	<string>Help about closed-lid mode</string>
+	<key>Help about battery power</key>
+	<string>Help about battery power</string>
+	<key>Help about the helper</key>
+	<string>Help about the helper</string>
 	<key>closed.lid.help</key>
 	<string>Keeps your Mac awake when the lid is closed. Use the helper to avoid repeated password prompts.</string>
 	<key>battery.power.help</key>
@@ -152,8 +156,16 @@ When this is off, Wakecup only works while external power is connected. Unpluggi
 	<string>Stop</string>
 	<key>Stop at battery level</key>
 	<string>Stop at battery level:</string>
-	<key>Stopping…</key>
-	<string>Stopping…</string>
+	<key>Returning control to macOS…</key>
+	<string>Returning control to macOS…</string>
+	<key>Restore brightness</key>
+	<string>Restore brightness</string>
+	<key>Could not restore brightness.</key>
+	<string>Could not restore brightness.</string>
+	<key>Press %@ to restore brightness.</key>
+	<string>Press %@ to restore brightness.</string>
+	<key>Wakecup — restore brightness</key>
+	<string>Wakecup — restore brightness</string>
 	<key>The guardian did not start. Sleep settings were not confirmed.</key>
 	<string>The guardian did not start. Sleep settings were not confirmed.</string>
 	<key>The guardian is not responding. Restore normal sleep to continue.</key>
@@ -168,8 +180,6 @@ When this is off, Wakecup only works while external power is connected. Unpluggi
 	<string>No public release yet.</string>
 	<key>There is no interrupted session to recover.</key>
 	<string>There is no interrupted session to recover.</string>
-	<key>Try Again</key>
-	<string>Try Again</string>
 	<key>Unknown SleepDisabled value.</key>
 	<string>Unknown SleepDisabled value.</string>
 	<key>Unknown session file.</key>
@@ -477,6 +487,16 @@ You can switch back to password requests or remove the helper in Wakecup Setting
 	<string>Helper</string>
 	<key>Configure…</key>
 	<string>Configure…</string>
+	<key>Change…</key>
+	<string>Change…</string>
+	<key>Not assigned</key>
+	<string>Not assigned</string>
+	<key>Current shortcut: %@</key>
+	<string>Current shortcut: %@</string>
+	<key>Configure backlight shortcut</key>
+	<string>Configure backlight shortcut</string>
+	<key>Change backlight shortcut</key>
+	<string>Change backlight shortcut</string>
 	<key>Install</key>
 	<string>Install</string>
 	<key>Update</key>
@@ -570,37 +590,35 @@ You can switch back to password requests or remove the helper in Wakecup Setting
 
 “Keep on” keeps the screen on while Wakecup is active.
 
-“Backlight off” turns off the built-in screen’s backlight after a 10-second countdown. The Mac and display stay awake. The “Restore brightness” shortcut brings back the previous brightness. If you turn the backlight on with the macOS brightness controls, Wakecup keeps the new brightness. Both actions return to the previous display mode.</string>
-	<key>Backlight turns off in %ld s</key>
-	<string>Backlight turns off in %ld s</string>
+“Backlight off” turns off the built-in screen’s backlight after a 10-second countdown. The Mac and display stay awake. During a session, the backlight shortcut immediately turns it off or restores its previous brightness. If you turn the backlight on with the macOS brightness controls, Wakecup keeps the new brightness. Both actions return to the previous display mode.</string>
+	<key>%ld s</key>
+	<string>%ld s</string>
+	<key>Backlight turns off in %@</key>
+	<string>Backlight turns off in %@</string>
 	<key>Cancel backlight countdown</key>
 	<string>Cancel</string>
-	<key>Only in Backlight off mode</key>
-	<string>Only in Backlight off mode</string>
-	<key>Restore brightness</key>
-	<string>Restore brightness</string>
+	<key>Cancel turning off the backlight</key>
+	<string>Cancel turning off the backlight</string>
 	<key>Not configured</key>
 	<string>Not configured</string>
-	<key>Restore brightness shortcut</key>
-	<string>Restore brightness shortcut</string>
 	<key>Click here to record</key>
 	<string>Click here to record</string>
-	<key>Hold a modifier, then press F1–F20.</key>
-	<string>Hold a modifier, then press F1–F20.</string>
+	<key>Hold a modifier, then press a key.</key>
+	<string>Hold a modifier, then press a key.</string>
 	<key>display.shortcut.explanation</key>
-	<string>Use F1–F20 with Shift, Control, Option or Command to restore brightness and return to the previous display mode. Only in “Backlight off” mode.</string>
+	<string>The shortcut toggles the built-in display’s backlight while Wakecup is active.</string>
 	<key>display.shortcut.invalid</key>
-	<string>Use F1–F20 with Shift, Control, Option or Command. Letters and modifier-only gestures are unavailable.</string>
+	<string>Use a letter or number with Control, Option or Command, or F1–F20 with Shift, Control, Option or Command.</string>
 	<key>display.shortcut.locked</key>
 	<string>Restore brightness before changing this shortcut.</string>
 	<key>display.shortcut.conflict</key>
 	<string>This shortcut is already in use. Choose another.</string>
 	<key>display.shortcut.unavailable</key>
-	<string>Could not register this shortcut. Choose another and try again.</string>
-	<key>Current shortcut: %@</key>
-	<string>Current shortcut: %@</string>
-	<key>Recording shortcut</key>
-	<string>Recording shortcut</string>
+	<string>Could not register this shortcut. Try again.</string>
+	<key>Shortcut</key>
+	<string>Shortcut</string>
+	<key>Letters and digits need Control, Option, or Command.</key>
+	<string>Letters and digits need Control, Option, or Command.</string>
 	<key>Save</key>
 	<string>Save</string>
 	<key>Clear</key>
@@ -678,7 +696,7 @@ You can switch back to password requests or remove the helper in Wakecup Setting
 	<key>Backlight restoration process is still finishing. Try restoring brightness again.</key>
 	<string>Backlight restoration process is still finishing. Try restoring brightness again.</string>
 	<key>display.shortcut.firstUse</key>
-	<string>Choose F1–F20 with Shift, Control, Option or Command to restore brightness. Backlight off will be selected after you save.</string>
+	<string>Saving selects “Backlight off”.</string>
 	<key>helper.help</key>
 	<string>The helper lets you enable “Keep awake with lid closed” without entering your password each time.
 
@@ -687,8 +705,8 @@ During installation, macOS asks for administrator permission. Your password is n
 	<string>Active until %@</string>
 	<key>battery.threshold.scale.help</key>
 	<string>The scale shows current charge from 1% to 100%. Drag the stop threshold between 10% and 90%.</string>
-	<key>When to stop</key>
-	<string>When to stop</string>
+	<key>Run time</key>
+	<string>Run time</string>
 	<key>Stop at</key>
 	<string>Stop at</string>
 	<key>Today</key>
@@ -703,8 +721,14 @@ During installation, macOS asks for administrator permission. Your password is n
 	<string>End day</string>
 	<key>Enter a time such as 18:30.</key>
 	<string>Enter a time such as 18:30.</string>
-	<key>Stops in %@</key>
-	<string>Stops in %@</string>
+	<key>%@ tomorrow</key>
+	<string>%@ tomorrow</string>
+	<key>Until %@ (%@)</key>
+	<string>Until %@ (%@)</string>
+	<key>New stop time</key>
+	<string>New stop time</string>
+	<key>This time does not exist on the selected day.</key>
+	<string>This time does not exist on the selected day.</string>
 	<key>This time has already passed.</key>
 	<string>This time has already passed.</string>
 	<key>Choose a duration of at least 10 seconds.</key>
@@ -717,10 +741,14 @@ During installation, macOS asks for administrator permission. Your password is n
 	<string>Hold a modifier</string>
 	<key>Press F1–F20.</key>
 	<string>Press F1–F20.</string>
-	<key>Then press F1–F20.</key>
-	<string>Then press F1–F20.</string>
+	<key>Press a letter, number or F1–F20.</key>
+	<string>Press a letter, number or F1–F20.</string>
 	<key>Cancel edits</key>
 	<string>Cancel</string>
+	<key>Wakecup — update available</key>
+	<string>Wakecup — update available</string>
+	<key>Wakecup — helper update required</key>
+	<string>Wakecup — helper update required</string>
 	<key>Update available</key>
 	<string>Update available</string>
 	<key>Enable MCP</key>
@@ -751,5 +779,270 @@ During installation, macOS asks for administrator permission. Your password is n
 	<string>Run this command in Terminal to add Wakecup for your macOS user account. Then open Claude Code and use /mcp to check the connection.</string>
 	<key>Settings</key>
 	<string>Settings</string>
+	<key>Backlight shortcut</key>
+	<string>Toggle backlight</string>
+	<key>display.shortcut.summary</key>
+	<string>Turns off the built-in backlight during a session. Press again to restore brightness.</string>
+	<key>thermal.stop.help</key>
+	<string>Wakecup ends the session when macOS reports the selected heat level. A critical thermal state ends the session at either setting. Wakecup restores brightness and lets macOS manage sleep again.</string>
+	<key>Stop when hot</key>
+	<string>Stop when hot</string>
+	<key>Serious</key>
+	<string>Serious</string>
+	<key>Critical</key>
+	<string>Critical</string>
+	<key>Wakecup stopped because the Mac is too hot.</key>
+	<string>Wakecup stopped because the Mac is too hot.</string>
+	<key>Wakecup cannot start because the Mac is too hot.</key>
+	<string>Wakecup cannot start because the Mac is too hot.</string>
+	<key>Enter a time such as %@.</key>
+	<string>Enter a time such as %@.</string>
+	<key>Time of day</key>
+	<string>AM or PM</string>
+	<key>Restoring brightness…</key>
+	<string>Restoring brightness…</string>
+	<key>Help about display mode</key>
+	<string>Help about display mode</string>
+	<key>Help about the backlight shortcut</key>
+	<string>Help about the backlight shortcut</string>
+	<key>Help about the thermal threshold</key>
+	<string>Help about the thermal threshold</string>
+	<!-- Keyboard shortcut conflict messages and system command names. -->
+	<key>Assign Anyway</key>
+	<string>Assign Anyway</string>
+	<key>display.shortcut.systemConflict</key>
+	<string>This shortcut is already used by macOS. Choose another.</string>
+	<key>display.shortcut.systemWarningTitle</key>
+	<string>A macOS shortcut may take precedence</string>
+	<key>display.shortcut.commonWarningTitle</key>
+	<string>Common keyboard shortcut</string>
+	<key>display.shortcut.commonWarning</key>
+	<string>May override “%@” in other apps.</string>
+	<key>display.shortcut.typingWarningTitle</key>
+	<string>This shortcut intercepts typing</string>
+	<key>display.shortcut.typingWarningText</key>
+	<string>In %1$@, it types “%2$@”.</string>
+	<key>display.shortcut.typingWarningComposition</key>
+	<string>In %@, it starts composing a character.</string>
+	<key>Add Finder Item to Dock</key>
+	<string>Add Finder Item to Dock</string>
+	<key>Add to Finder Sidebar</key>
+	<string>Add to Finder Sidebar</string>
+	<key>Align Center</key>
+	<string>Align Center</string>
+	<key>Align Left</key>
+	<string>Align Left</string>
+	<key>Align Right</key>
+	<string>Align Right</string>
+	<key>Ask Siri About Screen Area</key>
+	<string>Ask Siri About Screen Area</string>
+	<key>Bold</key>
+	<string>Bold</string>
+	<key>Capture Entire Screen</key>
+	<string>Capture Entire Screen</string>
+	<key>Capture Screen Area</key>
+	<string>Capture Screen Area</string>
+	<key>Center Cursor or Selection in View</key>
+	<string>Center Cursor or Selection in View</string>
+	<key>Close All Windows</key>
+	<string>Close All Windows</string>
+	<key>Close Window</key>
+	<string>Close Window</string>
+	<key>Copy Style</key>
+	<string>Copy Style</string>
+	<key>Create Finder Alias</key>
+	<string>Create Finder Alias</string>
+	<key>Cut</key>
+	<string>Cut</string>
+	<key>Cut Selection or Text to End of Paragraph</key>
+	<string>Cut Selection or Text to End of Paragraph</string>
+	<key>Decrease Size</key>
+	<string>Decrease Size</string>
+	<key>Delete Backward</key>
+	<string>Delete Backward</string>
+	<key>Delete Forward</key>
+	<string>Delete Forward</string>
+	<key>Duplicate Files or Go to Desktop</key>
+	<string>Duplicate Files or Go to Desktop</string>
+	<key>Eject Disk</key>
+	<string>Eject Disk</string>
+	<key>Find</key>
+	<string>Find</string>
+	<key>Find Misspelled Words</key>
+	<string>Find Misspelled Words</string>
+	<key>Find Next</key>
+	<string>Find Next</string>
+	<key>Find Previous or Go to Folder</key>
+	<string>Find Previous or Go to Folder</string>
+	<key>Finder Column View</key>
+	<string>Finder Column View</string>
+	<key>Finder Gallery View</key>
+	<string>Finder Gallery View</string>
+	<key>Finder Icon View</key>
+	<string>Finder Icon View</string>
+	<key>Finder List View</key>
+	<string>Finder List View</string>
+	<key>Focus Dock</key>
+	<string>Focus Dock</string>
+	<key>Focus Floating Window</key>
+	<string>Focus Floating Window</string>
+	<key>Focus Menu Bar</key>
+	<string>Focus Menu Bar</string>
+	<key>Focus Previous Panel</key>
+	<string>Focus Previous Panel</string>
+	<key>Focus Search</key>
+	<string>Focus Search</string>
+	<key>Focus Status Menus</key>
+	<string>Focus Status Menus</string>
+	<key>Focus Window</key>
+	<string>Focus Window</string>
+	<key>Focus Window Drawer</key>
+	<string>Focus Window Drawer</string>
+	<key>Focus Window Toolbar</key>
+	<string>Focus Window Toolbar</string>
+	<key>Hide App</key>
+	<string>Hide App</string>
+	<key>Hide Other Apps</key>
+	<string>Hide Other Apps</string>
+	<key>Increase Display Contrast</key>
+	<string>Increase Display Contrast</string>
+	<key>Increase Size</key>
+	<string>Increase Size</string>
+	<key>Insert Line After Cursor</key>
+	<string>Insert Line After Cursor</string>
+	<key>Insert Link or Connect to Server</key>
+	<string>Insert Link or Connect to Server</string>
+	<key>Invert Display Colors</key>
+	<string>Invert Display Colors</string>
+	<key>Italic or Show File Info</key>
+	<string>Italic or Show File Info</string>
+	<key>Lock Screen</key>
+	<string>Lock Screen</string>
+	<key>Log Out</key>
+	<string>Log Out</string>
+	<key>Log Out Without Confirmation</key>
+	<string>Log Out Without Confirmation</string>
+	<key>Look Up Word</key>
+	<string>Look Up Word</string>
+	<key>Minimize All Windows</key>
+	<string>Minimize All Windows</string>
+	<key>Minimize Window</key>
+	<string>Minimize Window</string>
+	<key>Move Down One Line</key>
+	<string>Move Down One Line</string>
+	<key>Move One Character Backward</key>
+	<string>Move One Character Backward</string>
+	<key>Move One Character Forward</key>
+	<string>Move One Character Forward</string>
+	<key>Move Up One Line</key>
+	<string>Move Up One Line</string>
+	<key>Move to Beginning of Line or Paragraph</key>
+	<string>Move to Beginning of Line or Paragraph</string>
+	<key>Move to End of Line or Paragraph</key>
+	<string>Move to End of Line or Paragraph</string>
+	<key>New Folder</key>
+	<string>New Folder</string>
+	<key>New Folder With Selection</key>
+	<string>New Folder With Selection</string>
+	<key>New Smart Folder</key>
+	<string>New Smart Folder</string>
+	<key>New Tab, Fonts or Finder Tab Bar</key>
+	<string>New Tab, Fonts or Finder Tab Bar</string>
+	<key>New Window or Document</key>
+	<string>New Window or Document</string>
+	<key>Next App Window</key>
+	<string>Next App Window</string>
+	<key>Next Finder Folder</key>
+	<string>Next Finder Folder</string>
+	<key>Open</key>
+	<string>Open</string>
+	<key>Open Accessibility Shortcuts</key>
+	<string>Open Accessibility Shortcuts</string>
+	<key>Open AirDrop</key>
+	<string>Open AirDrop</string>
+	<key>Open App Settings</key>
+	<string>Open App Settings</string>
+	<key>Open Computer in Finder</key>
+	<string>Open Computer in Finder</string>
+	<key>Open Desktop</key>
+	<string>Open Desktop</string>
+	<key>Open Documents</key>
+	<string>Open Documents</string>
+	<key>Open Downloads</key>
+	<string>Open Downloads</string>
+	<key>Open Help</key>
+	<string>Open Help</string>
+	<key>Open Home Folder</key>
+	<string>Open Home Folder</string>
+	<key>Open Network</key>
+	<string>Open Network</string>
+	<key>Open Recents</key>
+	<string>Open Recents</string>
+	<key>Open Screenshot Controls</key>
+	<string>Open Screenshot Controls</string>
+	<key>Open Utilities</key>
+	<string>Open Utilities</string>
+	<key>Open iCloud Drive</key>
+	<string>Open iCloud Drive</string>
+	<key>Page Setup or Finder Preview</key>
+	<string>Page Setup or Finder Preview</string>
+	<key>Paste</key>
+	<string>Paste</string>
+	<key>Paste Style or Move Files</key>
+	<string>Paste Style or Move Files</string>
+	<key>Paste Text Cut With Control-K</key>
+	<string>Paste Text Cut With Control-K</string>
+	<key>Paste and Match Style</key>
+	<string>Paste and Match Style</string>
+	<key>Previous App Window</key>
+	<string>Previous App Window</string>
+	<key>Previous Finder Folder</key>
+	<string>Previous Finder Folder</string>
+	<key>Print</key>
+	<string>Print</string>
+	<key>Quick Look</key>
+	<string>Quick Look</string>
+	<key>Quick Look Slideshow</key>
+	<string>Quick Look Slideshow</string>
+	<key>Quit App</key>
+	<string>Quit App</string>
+	<key>Redo</key>
+	<string>Redo</string>
+	<key>Reduce Display Contrast</key>
+	<string>Reduce Display Contrast</string>
+	<key>Refresh or Show Original</key>
+	<string>Refresh or Show Original</string>
+	<key>Save As or Duplicate</key>
+	<string>Save As or Duplicate</string>
+	<key>Select All</key>
+	<string>Select All</string>
+	<key>Show Finder View Options</key>
+	<string>Show Finder View Options</string>
+	<key>Spelling and Grammar</key>
+	<string>Spelling and Grammar</string>
+	<key>Toggle Dock</key>
+	<string>Toggle Dock</string>
+	<key>Toggle Finder Path Bar</key>
+	<string>Toggle Finder Path Bar</string>
+	<key>Toggle Finder Sidebar</key>
+	<string>Toggle Finder Sidebar</string>
+	<key>Toggle Finder Status Bar</key>
+	<string>Toggle Finder Status Bar</string>
+	<key>Toggle Finder Tab Bar</key>
+	<string>Toggle Finder Tab Bar</string>
+	<key>Toggle Full Keyboard Focus</key>
+	<string>Toggle Full Keyboard Focus</string>
+	<key>Toggle Full Screen</key>
+	<string>Toggle Full Screen</string>
+	<key>Toggle Inspector</key>
+	<string>Toggle Inspector</string>
+	<key>Toggle Toolbar</key>
+	<string>Toggle Toolbar</string>
+	<key>Transpose Characters</key>
+	<string>Transpose Characters</string>
+	<key>Underline</key>
+	<string>Underline</string>
+	<key>Undo</key>
+	<string>Undo</string>
 </dict>
 </plist>

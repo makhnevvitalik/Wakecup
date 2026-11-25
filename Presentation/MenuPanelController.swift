@@ -48,7 +48,7 @@ final class WakecupPanel: NSPanel {
     }
 }
 
-private final class MenuHostingController: NSHostingController<WakecupView> {
+private final class MenuHostingController<Content: View>: NSHostingController<Content> {
     var contentDidLayout: (() -> Void)?
 
     override func viewDidLayout() {
@@ -62,12 +62,21 @@ final class MenuPanelController: NSObject, NSWindowDelegate {
         styleMask: [.borderless, .nonactivatingPanel, .fullSizeContentView], backing: .buffered, defer: false)
     private let container = NSViewController()
     private var settingsWindow: WakecupPanel?
+    private var standaloneShortcutEditor: DisplayShortcutEditor?
     private let model: SessionModel
-    private let hosting: MenuHostingController
+    private let hosting: MenuHostingController<WakecupOptionsView>
+    private let header: MenuHostingController<WakecupHeaderView>
+    private let actionFeedback = FeedbackRegion(.primaryAction)
+    private let footerFeedback = FeedbackRegion(.footer)
+    private var feedbackRegions: [FeedbackRegion] { [actionFeedback, footerFeedback] }
+    private var headerHeight: NSLayoutConstraint!
+    private var feedbackTimer: Timer?
+    private let reduceMotion: () -> Bool
+    private var layoutUpdateScheduled = false
+    private var modelObservation: AnyCancellable?
     private let scrollView = NSScrollView()
     private let footer: NSHostingController<SessionSettingsFooter>
-    private var footerHeight: NSLayoutConstraint!
-    private var settingsObservation: AnyCancellable?
+    private let footerHeight = MenuLayout.helpLinkHeight + AppStyle.Layout.panelInset
     private var languageObservation: AnyCancellable?
     private let statusButton: () -> NSStatusBarButton?
     private var naturalSize = NSSize(width: MenuLayout.width, height: 500)
@@ -78,18 +87,23 @@ final class MenuPanelController: NSObject, NSWindowDelegate {
 
     var isVisible: Bool { panel.isVisible }
 
-    @MainActor init(model: SessionModel, updates: UpdateChecker? = nil,
+    @MainActor init(model: SessionModel, updates: UpdateChecker,
          statusButton: @escaping () -> NSStatusBarButton?, showHelp: @escaping () -> Void = {},
          showAbout: @escaping () -> Void = {}, showMCPSetup: @escaping () -> Void = {},
          configureDisplayShortcut: @escaping (Bool, @escaping (Bool) -> Void) -> Void = { _, complete in complete(false) }, helperInteraction: HelperInteraction = .init(),
-         isMCPEnabled: @escaping () -> Bool = { false }, setMCPEnabled: @escaping (Bool) -> Void = { _ in }) {
+         isMCPEnabled: @escaping () -> Bool = { false }, setMCPEnabled: @escaping (Bool) -> Void = { _ in },
+         reduceMotion: @escaping () -> Bool = { NSWorkspace.shared.accessibilityDisplayShouldReduceMotion }) {
         self.model = model
         self.statusButton = statusButton
-        hosting = MenuHostingController(rootView: WakecupView(model: model, updates: updates, showAbout: showAbout,
-            configureDisplayShortcut: configureDisplayShortcut, showMCPSetup: showMCPSetup,
-            helperInteraction: helperInteraction, isMCPEnabled: isMCPEnabled, setMCPEnabled: setMCPEnabled))
+        self.reduceMotion = reduceMotion
+        header = MenuHostingController(rootView: WakecupHeaderView(model: model, updates: updates, showAbout: showAbout,
+            showMCPSetup: showMCPSetup, helperInteraction: helperInteraction,
+            isMCPEnabled: isMCPEnabled, setMCPEnabled: setMCPEnabled))
+        hosting = MenuHostingController(rootView: WakecupOptionsView(model: model,
+            configureDisplayShortcut: configureDisplayShortcut, helperInteraction: helperInteraction))
+        header.sizingOptions = [.preferredContentSize]
         hosting.sizingOptions = [.preferredContentSize]
-        footer = NSHostingController(rootView: SessionSettingsFooter(model: model, showHelp: showHelp))
+        footer = NSHostingController(rootView: SessionSettingsFooter(showHelp: showHelp))
         super.init()
         footer.sizingOptions = []
         panel.title = "Wakecup"
@@ -112,6 +126,8 @@ final class MenuPanelController: NSObject, NSWindowDelegate {
         background.layer?.cornerRadius = MenuLayout.panelCornerRadius
         background.layer?.masksToBounds = true
         container.view = background
+        container.addChild(header)
+        for region in feedbackRegions { region.attach(to: container) }
         container.addChild(hosting)
         container.addChild(footer)
         panel.contentViewController = container
@@ -123,45 +139,57 @@ final class MenuPanelController: NSObject, NSWindowDelegate {
         scrollView.documentView = hosting.view
         scrollView.translatesAutoresizingMaskIntoConstraints = false
         background.addSubview(scrollView)
+        let headerView = header.view
         let footerView = footer.view
-        footerView.translatesAutoresizingMaskIntoConstraints = false
-        background.addSubview(footerView)
-        footerHeight = footerView.heightAnchor.constraint(equalToConstant: footer.rootView.preferredHeight)
+        for area in [headerView, footerView] {
+            area.translatesAutoresizingMaskIntoConstraints = false
+            background.addSubview(area)
+        }
+        let actionFeedbackArea = actionFeedback.view
+        let footerFeedbackArea = footerFeedback.view
+        headerHeight = headerView.heightAnchor.constraint(equalToConstant: ceil(headerView.fittingSize.height))
         NSLayoutConstraint.activate([
-            footerHeight,
+            headerHeight, actionFeedback.height, footerFeedback.height,
+            headerView.leadingAnchor.constraint(equalTo: background.leadingAnchor),
+            headerView.trailingAnchor.constraint(equalTo: background.trailingAnchor),
+            headerView.topAnchor.constraint(equalTo: background.topAnchor),
+            actionFeedbackArea.leadingAnchor.constraint(equalTo: background.leadingAnchor),
+            actionFeedbackArea.trailingAnchor.constraint(equalTo: background.trailingAnchor),
+            actionFeedbackArea.topAnchor.constraint(equalTo: headerView.bottomAnchor),
+            footerFeedbackArea.leadingAnchor.constraint(equalTo: background.leadingAnchor),
+            footerFeedbackArea.trailingAnchor.constraint(equalTo: background.trailingAnchor),
+            footerFeedbackArea.bottomAnchor.constraint(equalTo: footerView.topAnchor),
+            footerView.heightAnchor.constraint(equalToConstant: footerHeight),
             footerView.leadingAnchor.constraint(equalTo: background.leadingAnchor),
             footerView.trailingAnchor.constraint(equalTo: background.trailingAnchor),
             footerView.bottomAnchor.constraint(equalTo: background.bottomAnchor),
             scrollView.leadingAnchor.constraint(equalTo: background.leadingAnchor),
             scrollView.trailingAnchor.constraint(equalTo: background.trailingAnchor),
-            scrollView.topAnchor.constraint(equalTo: background.topAnchor),
-            scrollView.bottomAnchor.constraint(equalTo: footerView.topAnchor)
+            scrollView.topAnchor.constraint(equalTo: actionFeedbackArea.bottomAnchor),
+            scrollView.bottomAnchor.constraint(equalTo: footerFeedbackArea.topAnchor)
         ])
         hosting.view.autoresizingMask = []
         hosting.view.setFrameSize(naturalSize)
-        hosting.contentDidLayout = { [weak self] in
-            DispatchQueue.main.async { [weak self] in
-                guard let self else { return }
-                self.updateSize(self.hosting.view.fittingSize)
-            }
-        }
-        settingsObservation = model.objectWillChange.sink { [weak self] _ in
-            DispatchQueue.main.async { [weak self] in self?.updateFooter() }
-        }
+        hosting.contentDidLayout = { [weak self] in self?.scheduleLayoutUpdate() }
+        header.contentDidLayout = { [weak self] in self?.scheduleLayoutUpdate() }
+        modelObservation = model.objectWillChange.sink { [weak self] in self?.scheduleLayoutUpdate() }
         languageObservation = AppLocalization.shared.$language.sink { [weak self] _ in
             self?.settingsWindow?.title = localized("Wakecup Settings")
-            DispatchQueue.main.async { [weak self] in self?.updateFooter() }
+            self?.scheduleLayoutUpdate()
         }
-        NotificationCenter.default.addObserver(self, selector: #selector(resizeVisibleSurface),
+        updateFeedback(animate: false)
+        NotificationCenter.default.addObserver(self, selector: #selector(screenParametersDidChange),
             name: NSApplication.didChangeScreenParametersNotification, object: nil)
     }
 
     deinit {
+        feedbackTimer?.invalidate()
         removeMonitors()
         NotificationCenter.default.removeObserver(self)
     }
 
-    func show() {
+    @MainActor func show(restoringScrollOffset: CGFloat? = nil) {
+        if raiseShortcutEditor() { return }
         if settingsWindow?.attachedSheet != nil {
             showWindow()
             return
@@ -172,9 +200,9 @@ final class MenuPanelController: NSObject, NSWindowDelegate {
         }
         moveContent(to: panel)
         let wasVisible = panel.isVisible
-        let scrollOffset = wasVisible ? scrollDistanceFromTop : 0
-        hosting.view.layoutSubtreeIfNeeded()
-        updateSize(hosting.view.fittingSize)
+        let scrollOffset = restoringScrollOffset ?? (wasVisible ? scrollDistanceFromTop : 0)
+        updateContentSize()
+        updateFeedback(animate: false)
         let button = statusButton()
         let iconFrame = button.flatMap { button in button.window?.convertToScreen(button.convert(button.bounds, to: nil)) }
         placementScreen = button?.window?.screen
@@ -188,6 +216,16 @@ final class MenuPanelController: NSObject, NSWindowDelegate {
         updateDocumentSize(scrollOffset: scrollOffset)
         installMonitors()
         AppStyle.showWithoutInitialControlFocus(panel)
+    }
+
+    @MainActor func reopen() {
+        if !raiseShortcutEditor() { showWindow() }
+    }
+
+    @MainActor private func raiseShortcutEditor() -> Bool {
+        guard let editor = standaloneShortcutEditor else { return false }
+        editor.showWindow()
+        return true
     }
 
     func showWindow() {
@@ -204,8 +242,8 @@ final class MenuPanelController: NSObject, NSWindowDelegate {
         let scrollOffset = window.isVisible || panel.isVisible ? scrollDistanceFromTop : 0
         hidePanel()
         moveContent(to: window)
-        hosting.view.layoutSubtreeIfNeeded()
-        updateSize(hosting.view.fittingSize)
+        updateContentSize()
+        updateFeedback(animate: false)
         resizeSettingsWindow(window, center: firstPresentation, scrollOffset: scrollOffset)
         NSApp.activate(ignoringOtherApps: true)
         AppStyle.showWithoutInitialControlFocus(window)
@@ -240,6 +278,7 @@ final class MenuPanelController: NSObject, NSWindowDelegate {
         guard panel.isVisible else { return }
         panel.makeFirstResponder(nil)
         panel.orderOut(nil)
+        updateFeedback(animate: false)
         removeMonitors()
     }
 
@@ -249,17 +288,56 @@ final class MenuPanelController: NSObject, NSWindowDelegate {
         // AppKit can reposition the panel while one of its popovers is open.
         DispatchQueue.main.async { [weak self] in
             guard let self, self.panel.frame != self.positionedPanelFrame else { return }
-            self.resizeVisiblePanel()
+            self.resizeVisiblePanel(scrollOffset: self.scrollDistanceFromTop)
         }
     }
 
     func windowWillClose(_ notification: Notification) {
         settingsWindow?.makeFirstResponder(nil)
+        updateFeedback(animate: false)
         discardSettingsDraft()
     }
 
     private func discardSettingsDraft() {
         if model.hasSettingsDraft || model.endTimeInputInvalid { model.discardSettingsDraft() }
+    }
+
+    @MainActor func leaveForAuxiliaryWindow(restoreFocusMatching identifier: String? = nil) -> (() -> Void)? {
+        guard let source = panel.isVisible ? panel : settingsWindow.flatMap({ $0.isVisible ? $0 : nil }) else { return nil }
+        let isPanel = source === panel
+        let scrollOffset = scrollDistanceFromTop
+        let responder = AppStyle.restorableControl(in: source)
+        let trigger = identifier == nil || responder?.identifier?.rawValue == identifier ? responder : nil
+        hidePanel()
+        return { [weak self, weak source, weak trigger] in
+            guard let self, let source else { return }
+            if isPanel {
+                guard self.settingsWindow?.isVisible != true, self.model.showInMenuBar else { return }
+                self.show(restoringScrollOffset: scrollOffset)
+            } else if source.isVisible, source.attachedSheet == nil {
+                source.makeKeyAndOrderFront(nil)
+            }
+            if let trigger, trigger.window === source, source.isVisible, trigger.isEnabled {
+                source.makeFirstResponder(trigger)
+            }
+        }
+    }
+
+    @MainActor func configureDisplayShortcut(requiresShortcut: Bool, completion: @escaping (Bool) -> Void) {
+        if raiseShortcutEditor() {
+            completion(false)
+            return
+        }
+        let owner = settingsWindow.flatMap { $0.isVisible ? $0 : nil }
+        guard model.canChangeDisplayShortcut, owner?.attachedSheet == nil else { completion(false); return }
+        let triggerID = requiresShortcut ? "WakecupDisplayMode" : "WakecupConfigureDisplayShortcut"
+        let returnToSource = leaveForAuxiliaryWindow(restoreFocusMatching: triggerID)
+        let editor = DisplayShortcutEditor.present(model: model, owner: owner, requiresShortcut: requiresShortcut) { [weak self] saved in
+            self?.standaloneShortcutEditor = nil
+            completion(saved)
+            returnToSource?()
+        }
+        if owner == nil { standaloneShortcutEditor = editor }
     }
 
     func settingsSheetOwner() -> NSWindow? {
@@ -268,37 +346,93 @@ final class MenuPanelController: NSObject, NSWindowDelegate {
         return settingsWindow
     }
 
-    private func updateSize(_ size: NSSize) {
-        guard size.width > 0, size.height > 0, size.width.isFinite, size.height.isFinite else { return }
+    private func scheduleLayoutUpdate() {
+        guard !layoutUpdateScheduled else { return }
+        layoutUpdateScheduled = true
+        DispatchQueue.main.async { [weak self] in
+            guard let self else { return }
+            self.layoutUpdateScheduled = false
+            self.updateContentSize()
+            self.updateFeedback()
+        }
+    }
+
+    private func updateContentSize() {
+        let size = hosting.view.fittingSize
+        let topHeight = ceil(header.view.fittingSize.height)
+        guard size.width > 0, size.height > 0, size.width.isFinite, size.height.isFinite,
+              topHeight > 0, topHeight.isFinite else { return }
         let next = NSSize(width: ceil(size.width), height: ceil(size.height))
-        guard next != naturalSize else { return }
+        guard next != naturalSize || topHeight != headerHeight.constant else { return }
+        let offset = scrollDistanceFromTop
         naturalSize = next
-        resizeVisibleSurface()
+        headerHeight.constant = topHeight
+        resizeVisibleSurface(scrollOffset: offset)
+    }
+
+    private func updateFeedback(animate: Bool = true) {
+        let animated = animate && !reduceMotion() && (panel.isVisible || settingsWindow?.isVisible == true)
+        if animated && feedbackTimer != nil { return }
+        let regions = feedbackRegions
+        let messages = regions.map { SessionFeedback.current(for: model, placement: $0.placement) }
+        guard feedbackTimer != nil || zip(regions, messages).contains(where: { $0.current != $1 }) else { return }
+
+        feedbackTimer?.invalidate()
+        feedbackTimer = nil
+        let transitions = zip(regions, messages).map { $0.transition(to: $1, animated: animated) }
+        let offset = scrollDistanceFromTop
+        if !animated {
+            transitions.forEach { $0(1) }
+            resizeVisibleSurface(scrollOffset: offset)
+            return
+        }
+
+        let start = ProcessInfo.processInfo.systemUptime
+        let timer = Timer(timeInterval: 1.0 / 60, repeats: true) { [weak self] timer in
+            guard let self else { timer.invalidate(); return }
+            if self.reduceMotion() {
+                self.updateFeedback(animate: false)
+                return
+            }
+            let fraction = min((ProcessInfo.processInfo.systemUptime - start) / AppStyle.FeedbackTransition.duration, 1)
+            let progress = AppStyle.FeedbackTransition.progress(fraction)
+            let scrollOffset = self.scrollDistanceFromTop
+            transitions.forEach { $0(progress) }
+            self.resizeVisibleSurface(scrollOffset: scrollOffset)
+            if fraction == 1 {
+                timer.invalidate()
+                self.feedbackTimer = nil
+                self.updateFeedback()
+            }
+        }
+        feedbackTimer = timer
+        RunLoop.main.add(timer, forMode: .common)
     }
 
     private var panelContentSize: NSSize {
-        NSSize(width: naturalSize.width, height: naturalSize.height + footerHeight.constant)
+        NSSize(width: naturalSize.width, height: headerHeight.constant + naturalSize.height + footerHeight
+               + actionFeedback.height.constant + footerFeedback.height.constant)
     }
 
-    private func updateFooter() {
-        let height = footer.rootView.preferredHeight
-        guard height != footerHeight.constant else { return }
-        footerHeight.constant = height
-        resizeVisibleSurface()
+    @objc private func screenParametersDidChange() {
+        resizeVisibleSurface(scrollOffset: scrollDistanceFromTop)
     }
 
-    @objc private func resizeVisibleSurface() {
+    private func resizeVisibleSurface(scrollOffset: CGFloat) {
         if panel.isVisible {
-            resizeVisiblePanel()
+            resizeVisiblePanel(scrollOffset: scrollOffset)
         } else if let window = settingsWindow, window.isVisible {
-            resizeSettingsWindow(window, center: false, scrollOffset: scrollDistanceFromTop)
+            resizeSettingsWindow(window, center: false, scrollOffset: scrollOffset)
         }
     }
 
     private func resizeSettingsWindow(_ window: NSWindow, center: Bool, scrollOffset: CGFloat) {
         let screen = window.screen ?? NSScreen.main
         let frameSize = window.frameRect(forContentRect: NSRect(origin: .zero, size: panelContentSize)).size
-        let height = min(frameSize.height, screen.map { max(1, $0.visibleFrame.height - 16) } ?? frameSize.height)
+        let limit = screen.map { screen in
+            center ? screen.visibleFrame.height - 16 : window.frame.maxY - screen.visibleFrame.minY
+        } ?? frameSize.height
+        let height = min(frameSize.height, max(1, limit))
         let frame = NSRect(x: window.frame.minX, y: window.frame.maxY - height, width: frameSize.width, height: height)
         window.setFrame(window.constrainFrameRect(frame, to: screen), display: false)
         if center { window.center() }
@@ -306,12 +440,10 @@ final class MenuPanelController: NSObject, NSWindowDelegate {
         window.displayIfNeeded()
     }
 
-    private func resizeVisiblePanel() {
+    private func resizeVisiblePanel(scrollOffset: CGFloat) {
         guard panel.isVisible, let screen = panel.screen ?? placementScreen ?? NSScreen.main else { return }
         let frame = detachedPanelFrame(contentSize: panelContentSize, screenFrame: screen.frame,
             visibleFrame: panelVisibleFrame(on: screen), statusItemFrame: nil, previousFrame: positionedPanelFrame)
-        let scrollOffset = scrollDistanceFromTop
-        // Resize the window and its scroll viewport before drawing the new footer.
         positionedPanelFrame = frame
         if panel.frame != frame { panel.setFrame(frame, display: false) }
         updateDocumentSize(scrollOffset: scrollOffset)
@@ -373,5 +505,54 @@ final class MenuPanelController: NSObject, NSWindowDelegate {
     private func removeMonitors() {
         if let globalMonitor { NSEvent.removeMonitor(globalMonitor); self.globalMonitor = nil }
         if let localMonitor { NSEvent.removeMonitor(localMonitor); self.localMonitor = nil }
+    }
+}
+
+// Each area keeps its hosting views in place while both heights animate together.
+private final class FeedbackRegion {
+    let placement: SessionFeedback.Placement
+    let view = NSView()
+    lazy var height = view.heightAnchor.constraint(equalToConstant: 0)
+
+    private let incoming = NSHostingController(rootView: SessionFeedbackView(feedback: nil))
+    private let outgoing = NSHostingController(rootView: SessionFeedbackView(feedback: nil, outgoing: true))
+
+    var current: SessionFeedback? { incoming.rootView.feedback }
+
+    init(_ placement: SessionFeedback.Placement) { self.placement = placement }
+
+    func attach(to container: NSViewController) {
+        view.wantsLayer = true
+        view.layer?.masksToBounds = true
+        view.translatesAutoresizingMaskIntoConstraints = false
+        container.view.addSubview(view)
+        for host in [outgoing, incoming] {
+            container.addChild(host)
+            host.sizingOptions = []
+            host.view.autoresizingMask = [.minYMargin]
+            view.addSubview(host.view)
+        }
+    }
+
+    func transition(to next: SessionFeedback?, animated: Bool) -> (CGFloat) -> Void {
+        let targetHeight = next?.height ?? 0
+        if animated && next == current { return { _ in } }
+        let startHeight = height.constant
+        setFeedback(animated ? current : nil, in: outgoing)
+        setFeedback(next, in: incoming)
+        incoming.view.alphaValue = animated ? 0 : 1
+        outgoing.view.alphaValue = animated ? 1 : 0
+        return { [self] progress in
+            incoming.view.alphaValue = progress
+            outgoing.view.alphaValue = 1 - progress
+            height.constant = (startHeight + (targetHeight - startHeight) * progress).rounded()
+            if progress == 1 { setFeedback(nil, in: outgoing) }
+        }
+    }
+
+    private func setFeedback(_ feedback: SessionFeedback?, in host: NSHostingController<SessionFeedbackView>) {
+        host.rootView = SessionFeedbackView(feedback: feedback, outgoing: host === outgoing)
+        let height = feedback?.height ?? 0
+        host.view.frame = NSRect(x: 0, y: view.bounds.height - height, width: MenuLayout.width, height: height)
     }
 }

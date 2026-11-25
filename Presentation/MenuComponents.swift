@@ -6,7 +6,7 @@ struct MenuCard<Content: View>: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 0) { content }
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background(Color(nsColor: AppStyle.Color.cardBackground).opacity(AppStyle.Color.cardBackgroundOpacity),
+            .background(Color(nsColor: AppStyle.Color.cardBackground),
                 in: RoundedRectangle(cornerRadius: AppStyle.Layout.cardCornerRadius))
     }
 }
@@ -54,6 +54,43 @@ struct MenuSectionHeading: NSViewRepresentable {
     }
 }
 
+struct CompactCommandButton: NSViewRepresentable {
+    let title: String
+    let accessibilityTitle: String
+    var value: String? = nil
+    var help: String? = nil
+    var identifier: String? = nil
+    var isEnabled: Bool = true
+    let action: () -> Void
+
+    func makeCoordinator() -> Coordinator { Coordinator() }
+
+    func makeNSView(context: Context) -> NSButton {
+        let button = NSButton(title: title, target: context.coordinator, action: #selector(Coordinator.press))
+        AppStyle.configureCompactButton(button)
+        button.identifier = identifier.map { NSUserInterfaceItemIdentifier($0) }
+        return button
+    }
+
+    func updateNSView(_ button: NSButton, context: Context) {
+        context.coordinator.action = action
+        button.title = title
+        button.isEnabled = isEnabled && context.environment.isEnabled
+        button.toolTip = help
+        button.setAccessibilityLabel(accessibilityTitle)
+        button.setAccessibilityValue(value)
+    }
+
+    func sizeThatFits(_ proposal: ProposedViewSize, nsView: NSButton, context: Context) -> CGSize? {
+        nsView.fittingSize
+    }
+
+    final class Coordinator: NSObject {
+        var action: (() -> Void)?
+        @objc func press() { action?() }
+    }
+}
+
 struct MenuDetailRow<Heading: View, Detail: View, Action: View>: View {
     @ViewBuilder var heading: Heading
     @ViewBuilder var detail: Detail
@@ -66,9 +103,6 @@ struct MenuDetailRow<Heading: View, Detail: View, Action: View>: View {
                 detail.font(Font(AppStyle.Font.supportingText)).foregroundStyle(.secondary)
             }.frame(maxWidth: .infinity, alignment: .leading)
             action
-                .font(Font(AppStyle.Font.controlLabel))
-                .controlSize(.small)
-                .buttonStyle(.link)
         }.frame(minHeight: AppStyle.Layout.rowHeight)
     }
 }
@@ -76,27 +110,42 @@ struct MenuDetailRow<Heading: View, Detail: View, Action: View>: View {
 struct MenuToggleRow: View {
     let title: String
     @Binding var isOn: Bool
-    var hint: String? = nil
-    @State private var showingHint = false
+    var help: (text: String, accessibilityLabel: String, identifier: String)? = nil
     var body: some View {
         HStack(spacing: AppStyle.Layout.rowItemSpacing) {
             HStack(spacing: AppStyle.Layout.rowItemSpacing) {
                 Text(title).font(Font(AppStyle.Font.body))
-                if let hint {
-                    Button { showingHint.toggle() } label: {
-                        Image(systemName: "info.circle").font(Font(AppStyle.Font.supportingText)).foregroundStyle(.secondary)
-                    }.buttonStyle(.plain).help(hint)
-                        .accessibilityLabel(localized("About this setting"))
-                        .popover(isPresented: $showingHint) {
-                            Text(hint).font(Font(AppStyle.Font.supportingText)).fixedSize(horizontal: false, vertical: true)
-                                .padding(MenuLayout.tooltipPadding).frame(width: MenuLayout.tooltipWidth, alignment: .leading)
-                        }
+                if let help {
+                    MenuInfoButton(text: help.text, accessibilityTitle: help.accessibilityLabel, identifier: help.identifier)
                 }
             }
             Spacer(minLength: 10)
             Toggle(title, isOn: $isOn).labelsHidden().toggleStyle(.switch).controlSize(.small).fixedSize()
-                .accessibilityHint(hint ?? "")
+                .frame(height: MenuLayout.compactControlHeight)
+                .accessibilityHint(help?.text ?? "")
         }.padding(.horizontal, AppStyle.Layout.cardInset).frame(height: AppStyle.Layout.rowHeight)
+    }
+}
+
+struct MenuInfoButton: View {
+    let text: String
+    let accessibilityTitle: String
+    let identifier: String
+    @State private var showingHint = false
+
+    var body: some View {
+        Button { showingHint.toggle() } label: {
+            Image(systemName: "info.circle")
+                .font(Font(AppStyle.Font.supportingText))
+                .foregroundStyle(.secondary)
+                .frame(width: 20, height: 20)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .help(text)
+        .accessibilityLabel(accessibilityTitle)
+        .accessibilityIdentifier(identifier)
+        .popover(isPresented: $showingHint) { MenuFeedbackPopover(text: text) }
     }
 }
 

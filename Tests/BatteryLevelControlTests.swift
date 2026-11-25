@@ -47,7 +47,8 @@ import AppKit
             let event = NSEvent.keyEvent(with: .keyDown, location: .zero, modifierFlags: [.function], timestamp: 0,
                 windowNumber: window.windowNumber, context: nil, characters: arrow, charactersIgnoringModifiers: arrow,
                 isARepeat: false, keyCode: code)!
-            slider.keyDown(with: event)
+            // Route the synthetic arrow through AppKit key bindings in the offscreen window.
+            slider.interpretKeyEvents([event])
             try expect(changes.last == expected && slider.doubleValue == expected,
                        "Keyboard arrows must change the threshold by one percent")
         }

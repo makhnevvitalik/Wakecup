@@ -12,9 +12,14 @@ enum UpdateCheckFailure: Equatable {
     case http(Int)
 }
 
+struct AvailableRelease: Equatable {
+    let tag: String
+    let url: URL
+}
+
 enum UpdateCheckResult: Equatable {
     case upToDate
-    case updateAvailable(tag: String, url: URL)
+    case updateAvailable(AvailableRelease)
     case notPublished
     case failure(UpdateCheckFailure)
 }
@@ -32,7 +37,11 @@ final class UpdateChecker: ObservableObject {
     nonisolated static let latestReleaseURL = URL(string: "https://github.com/makhnevvitalik/Wakecup/releases/latest")!
     nonisolated static let latestReleaseAPIURL = URL(string: "https://api.github.com/repos/makhnevvitalik/Wakecup/releases/latest")!
 
+    nonisolated static let automaticCheckInterval: Duration = .seconds(24 * 60 * 60)
+
     @Published private(set) var state = State.idle
+    @Published private(set) var availableRelease: AvailableRelease?
+    private var automaticChecks: Task<Void, Never>?
     private let currentVersion: () -> String?
     private let transport: Transport
     private var task: UpdateRequestTask?
@@ -45,6 +54,19 @@ final class UpdateChecker: ObservableObject {
     }) {
         self.currentVersion = currentVersion
         self.transport = transport
+    }
+
+    func startAutomaticChecks(interval: Duration = automaticCheckInterval) {
+        guard automaticChecks == nil else { return }
+        check()
+        automaticChecks = Task { [weak self] in
+            let clock = ContinuousClock()
+            while !Task.isCancelled {
+                do { try await clock.sleep(for: interval) }
+                catch { return }
+                self?.check()
+            }
+        }
     }
 
     func check() {
@@ -63,14 +85,22 @@ final class UpdateChecker: ObservableObject {
                 guard let self, self.requestID == id else { return }
                 self.requestID = nil
                 self.task = nil
-                self.state = .finished(Self.evaluate(data: data, response: response,
-                                                     error: error, currentVersion: version))
+                let result = Self.evaluate(data: data, response: response, error: error, currentVersion: version)
+                switch result {
+                case let .updateAvailable(release): self.availableRelease = release
+                case .upToDate, .notPublished: self.availableRelease = nil
+                case .failure: break
+                }
+                self.state = .finished(result)
             }
         }
         task?.resume()
     }
 
-    deinit { task?.cancel() }
+    deinit {
+        automaticChecks?.cancel()
+        task?.cancel()
+    }
 
     nonisolated static func evaluate(data: Data?, response: URLResponse?, error: Error?,
                                      currentVersion: String?) -> UpdateCheckResult {
@@ -91,7 +121,7 @@ final class UpdateChecker: ObservableObject {
         guard let currentVersion, let current = AppVersion(currentVersion) else { return .failure(.currentVersion) }
         guard latest > current else { return .upToDate }
         let url = release.htmlURL.flatMap(trustedReleaseURL) ?? latestReleaseURL
-        return .updateAvailable(tag: release.tagName, url: url)
+        return .updateAvailable(AvailableRelease(tag: release.tagName, url: url))
     }
 
     private struct Release: Decodable {

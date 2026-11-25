@@ -116,9 +116,9 @@ import Darwin
         }
         try expect((try? String(contentsOf: marker, encoding: .utf8)) == "DONE", "Detached stage must survive until its child executes")
         try expect(try FileManager.default.contentsOfDirectory(atPath: protected).isEmpty, "Detached supervisor must clean up after child exit")
-        try expect(PrivilegedExecution.isStagedPath("/Library/PrivilegedHelperTools/.wakecup-stage-aB12cD34"), "Canonical stage accepted")
+        try expect(StagedHelper.isPath("/Library/PrivilegedHelperTools/.wakecup-stage-aB12cD34"), "Canonical stage accepted")
         for path in ["/Library/PrivilegedHelperTools/.wakecup-stage-x/../other", "/Library/PrivilegedHelperTools/.wakecup-stage-12345678/child", "/tmp/.wakecup-stage-12345678", "/Library/PrivilegedHelperTools/.wakecup-stage-12345678/", "/Library/PrivilegedHelperTools/.wakecup-stage-123456789"] {
-            try expect(!PrivilegedExecution.isStagedPath(path), "Noncanonical stage rejected")
+            try expect(!StagedHelper.isPath(path), "Noncanonical stage rejected")
         }
         var rejected = false
         do { _ = try PrivilegedExecution.stagingScript(source: source, sha256: "invalid", arguments: [], detached: false) }

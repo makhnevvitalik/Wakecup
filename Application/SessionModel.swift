@@ -3,30 +3,46 @@ import ServiceManagement
 import Combine
 
 final class SessionModel: ObservableObject {
-    @Published var phase: AppSessionPhase = .idle
+    @Published var phase: AppSessionPhase = .idle {
+        didSet {
+            if phase != oldValue { pendingDisplayModeSelection = nil }
+            display.setShortcutSessionActive(phase == .active)
+        }
+    }
     @Published var message: SessionMessage?
     @Published var now: TimeInterval
     @Published var power: PowerState?
     @Published private(set) var closedLid = true { didSet { saveOptions() } }
-    let display: DisplayModeController
+    private let display: DisplayModeController
     var displayMode: DisplayMode { display.mode }
+    var isDisplayTransitioning: Bool { display.transitioning }
     @Published private(set) var displayModeDraft: DisplayMode?
     var displayShortcut: DisplayShortcut? { display.shortcut }
     var isBacklightOff: Bool { display.isBacklightOff }
     var keepDisplayOn: Bool { display.mode.keepsDisplayOn }
-    var displayControlError: SessionMessage? { display.error }
+    var displayControlError: SessionMessage? { display.error ?? display.shortcutRegistrationError }
+    var priorityStopMessage: SessionMessage? {
+        if needsRecovery && !busy { return message }
+        guard let message, message.key == Self.thermalStopNotice.key else { return nil }
+        return isBacklightOff ? display.error ?? message : message
+    }
     var backlightCountdown: Int? {
         guard phase == .active, !isRestarting, !settingsApplying, settingsMessage == nil else { return nil }
         return display.countdownSeconds(at: operations.now())
     }
     private var editingDisplayShortcut = false
+    private var pendingDisplayModeSelection: UUID?
     var canChangeDisplayMode: Bool { canEditSessionSettings && !settingsApplying && !display.transitioning }
     var canChangeDisplayShortcut: Bool { canChangeDisplayMode && !isBacklightOff }
 
     @Published private var endTimeChoice: EndTimeSelection.Choice = .oneHour
     @Published private(set) var endTimeInputInvalid = false
+    @Published private(set) var endTimeReplacementID: UUID?
+    private var unresolvedEndDay: (day: Date, clockTime: EndTimeSelection.ClockTime)?
     @Published private(set) var durationEditDirty = false
-    @Published private(set) var settingsApplying = false
+    @Published private var liveSettingsApplying = false
+    @Published private var displaySettingsApplying = false
+    var settingsApplying: Bool { liveSettingsApplying || displaySettingsApplying }
     @Published private var powerDraft: PowerDraft?
     @Published private var closedLidDraft: Bool?
     var selectedClosedLid: Bool { closedLidDraft ?? closedLid }
@@ -44,6 +60,7 @@ final class SessionModel: ObservableObject {
     @Published private(set) var isRestarting = false
     @Published private(set) var allowBattery = true { didSet { saveOptions() } }
     @Published private(set) var threshold = 20.0 { didSet { saveOptions() } }
+    @Published private(set) var thermalStopLevel: ThermalStopLevel = .critical
     @Published var showRemaining = true { didSet { saveOptions() } }
     @Published var showInMenuBar = true { didSet { saveOptions() } }
     @Published private(set) var loginEnabled = false
@@ -51,19 +68,106 @@ final class SessionModel: ObservableObject {
     @Published private(set) var needsRecovery = false
     @Published private(set) var deadline: TimeInterval?
 
-    let helper: PrivilegedHelperController
+    private let helper: PrivilegedHelperController
     private var helperObservation: AnyCancellable?
     private var displayObservation: AnyCancellable?
     private var usingInstalledHelper = false
     var waitingForPassword: Bool { phase == .authorizing && !usingInstalledHelper }
-    var canSelectHelperMode: Bool { !phase.showsProgress && !isRestarting && !helper.working }
-    var canEditSessionSettings: Bool { !phase.showsProgress && !isRestarting && !needsRecovery && !helper.working }
+    var canSelectHelperMode: Bool { !statusPhase.showsProgress && !isRestarting && !helper.working }
+    var canEditSessionSettings: Bool { !statusPhase.showsProgress && !isRestarting && !needsRecovery && !helper.working }
     var canChangeClosedLid: Bool { canEditSessionSettings && !settingsApplying && !display.transitioning }
     var canChangeHelper: Bool { !busy && canSelectHelperMode && !needsRecovery }
 
+    enum HelperInstallationAction { case install, update, remove }
+
+    var helperStatus: HelperStatus {
+        HelperStatus(state: helper.state, selected: helper.selected, working: helper.working,
+                     checking: helper.checking, detail: helper.detail, installationError: helper.installationError,
+                     updateRequired: helper.selected && helper.updatePending)
+    }
+
+    var helperStatuses: AnyPublisher<HelperStatus, Never> {
+        // The controller sends will-change notifications. Read the full status
+        // after its synchronous transition has completed.
+        helper.objectWillChange
+            .receive(on: DispatchQueue.main)
+            .compactMap { [weak self] in self?.helperStatus }
+            .prepend(helperStatus)
+            .removeDuplicates()
+            .eraseToAnyPublisher()
+    }
+
+    func refreshHelperStatus() { helper.refresh() }
+
+    func prepareHelperSettings() -> HelperStatus? {
+        guard canSelectHelperMode else { return nil }
+        refreshHelperStatus()
+        return helperStatus
+    }
+
+    func prepareHelperRemoval() -> Bool {
+        guard canChangeHelper else { return false }
+        refreshHelperStatus()
+        return helper.installed
+    }
+
+    // An absent helper needs the setup dialog. An installed helper can update directly.
+    func updateHelperOrPrepareSetup(beforeAuthorization: () -> Void,
+                                    onFailure: @escaping (String) -> Void) -> HelperStatus? {
+        guard canChangeHelper else { return nil }
+        refreshHelperStatus()
+        guard helper.installed else { return helperStatus }
+        _ = beginHelperInstallation(.update, beforeAuthorization: beforeAuthorization, onFailure: onFailure)
+        return nil
+    }
+
+    func canSetHelperMode(_ enabled: Bool) -> Bool { canSelectHelperMode && (!enabled || helper.state == .ready) }
+
+    @discardableResult
+    func setHelperMode(_ enabled: Bool) -> SessionOperationResult {
+        guard canSetHelperMode(enabled) else { return .rejected("The requested helper mode is unavailable.") }
+        helper.select(enabled)
+        return .completed
+    }
+
+    func applyHelperSettings(expected: HelperStatus, allowInstallationChanges: Bool,
+                             beforeAuthorization: () -> Void, onFailure: @escaping (String) -> Void) {
+        guard canSelectHelperMode else { return }
+        refreshHelperStatus()
+        guard helper.state == expected.state else { return }
+        if helper.state == .ready {
+            guard helper.selected == expected.selected else { return }
+            setHelperMode(!expected.selected)
+        } else if allowInstallationChanges {
+            let action: HelperInstallationAction = expected.installed ? .update : .install
+            _ = beginHelperInstallation(action, beforeAuthorization: beforeAuthorization, onFailure: onFailure)
+        }
+    }
+
+    @discardableResult
+    func changeHelperInstallation(_ action: HelperInstallationAction,
+                                  beforeAuthorization: () -> Void = {},
+                                  onFailure: ((String) -> Void)? = nil) -> SessionOperationResult {
+        guard canChangeHelper else { return .rejected("Stop Wakecup and restore sleep before changing the helper.") }
+        refreshHelperStatus()
+        return beginHelperInstallation(action, beforeAuthorization: beforeAuthorization, onFailure: onFailure)
+    }
+
+    private func beginHelperInstallation(_ action: HelperInstallationAction, beforeAuthorization: () -> Void,
+                                         onFailure: ((String) -> Void)?) -> SessionOperationResult {
+        guard canChangeHelper else { return .rejected("Stop Wakecup and restore sleep before changing the helper.") }
+        guard helper.installed == (action != .install) else {
+            return .rejected(helper.installed ? "The helper is already installed. Use update." : "The helper is not installed.")
+        }
+        beforeAuthorization()
+        return helper.requestInstallation(remove: action == .remove, onFailure: onFailure)
+    }
+
     private let defaults: UserDefaults
     private let operations: SessionOperations
+    private let resources: SessionPowerResources
     private var cancelTicks: (() -> Void)?
+    private var cancelThermalChecks: (() -> Void)?
     private var files: SessionFiles?
     private var configuration: SessionConfiguration?
     private var monitor: SessionMonitor?
@@ -75,6 +179,7 @@ final class SessionModel: ObservableObject {
     private var authorizationFinishedAt: TimeInterval?
     private var pendingError: SessionMessage?
     private static let displayChangeInterrupted: SessionMessage = "Wakecup stopped before the display setting could change."
+    private static let thermalStopNotice = SessionMessage(SessionTermination.thermal.text)
     private static let restartExpired: SessionMessage = "The Wakecup timer ended. “Keep awake with lid closed” was not changed."
     private var recovering = false
     var recoveryInProgress: Bool { recovering && busy }
@@ -120,7 +225,20 @@ final class SessionModel: ObservableObject {
     var showRequested: (() -> Void)?
     var quitRequested: (() -> Void)?
 
-    var busy: Bool { phase.isBusy || isRestarting }
+    static let returningControlMessage: SessionMessage = "Returning control to macOS…"
+
+    private var hasRunningSession: Bool { phase.isBusy || isRestarting }
+    var isReturningControl: Bool {
+        !recovering && !isRestarting && (phase == .stopping || display.isReturningControl)
+    }
+    var needsBrightnessRecovery: Bool { !hasRunningSession && isBacklightOff && !display.transitioning }
+    // The guardian can finish before the display worker releases the last system resources.
+    var statusPhase: AppSessionPhase {
+        if isReturningControl { return .stopping }
+        if needsBrightnessRecovery { return .failed }
+        return phase
+    }
+    var busy: Bool { hasRunningSession || display.isReturningControl }
     var startPowerRestriction: PowerRestriction? {
         guard !busy, !needsRecovery else { return nil }
         return powerRestriction(power, mode: allowBattery ? .battery : .ac, threshold: Int(threshold))
@@ -136,21 +254,61 @@ final class SessionModel: ObservableObject {
         return endTimeChoice.date(from: currentDate)
     }
 
+    var selectedEndTimePreset: EndTimeSelection.Preset? {
+        guard !endTimeInputInvalid else { return nil }
+        if phase == .active && !durationEditDirty {
+            return deadline == nil ? .indefinitely : nil
+        }
+        guard case .preset(let preset, _) = endTimeChoice else { return nil }
+        return preset
+    }
+
+    var selectedEndCalendarDate: Date? { unresolvedEndDay?.day ?? selectedEndDate }
+    var unresolvedEndClockTime: EndTimeSelection.ClockTime? { unresolvedEndDay?.clockTime }
+
     // Starting to type from infinity chooses today, even near midnight.
-    var selectedEndDay: Date { selectedEndDate ?? currentDate }
+    var selectedEndDay: Date { selectedEndCalendarDate ?? currentDate }
 
     func selectEndDay(_ day: Date, calendar: Calendar) {
         guard canEditSettingsDraft else { return }
-        let selectedDate = selectedEndDate
-        if let selectedDate, calendar.isDate(selectedDate, inSameDayAs: day) { return }
+        if let currentDay = selectedEndCalendarDate, calendar.isDate(currentDay, inSameDayAs: day) { return }
         let now = currentDate
-        var clock = selectedDate ?? now.addingTimeInterval(3600)
-        if selectedDate == nil, calendar.isDate(day, inSameDayAs: now),
-           let today = calendar.dateInterval(of: .day, for: now), clock >= today.end {
-            clock = today.end.addingTimeInterval(-60)
+        let clock: EndTimeSelection.ClockTime
+        if let unresolvedEndClockTime {
+            clock = unresolvedEndClockTime
+        } else {
+            let selected = selectedEndDate
+            var seed = selected ?? now.addingTimeInterval(3600)
+            if selected == nil, calendar.isDate(day, inSameDayAs: now),
+               let today = calendar.dateInterval(of: .day, for: now), seed >= today.end {
+                seed = today.end.addingTimeInterval(-60)
+            }
+            clock = EndTimeSelection.ClockTime(seed, calendar: calendar)
         }
-        if let date = EndTimeSelection.replacingDay(of: clock, with: day, calendar: calendar) { selectEndDate(date) }
-        else { setEndTimeInputInvalid(true) }
+        if let date = clock.date(on: day, calendar: calendar, from: now) {
+            selectEndDate(date)
+        } else {
+            editEndClock(.nonexistent(clock, on: day))
+        }
+    }
+
+    func editEndClock(_ edit: EndTimeSelection.ClockEdit) {
+        guard canEditSettingsDraft else { return }
+        switch edit {
+        case .resolved(let date):
+            selectEndDate(date)
+        case .nonexistent(let clock, let day):
+            unresolvedEndDay = (day, clock)
+            setEndTimeInputInvalid(true)
+        case .incomplete:
+            setEndTimeInputInvalid(true)
+        case .empty:
+            if phase == .active && deadline == nil {
+                selectEndTime(.preset(.indefinitely, date: nil))
+            } else {
+                setEndTimeInputInvalid(selectedEndDate != nil || unresolvedEndDay != nil)
+            }
+        }
     }
 
     func selectEndTimePreset(_ minutes: Int) {
@@ -167,8 +325,9 @@ final class SessionModel: ObservableObject {
 
     private func selectEndTime(_ choice: EndTimeSelection.Choice) {
         guard canEditSettingsDraft else { return }
+        defer { syncBacklightCountdown() }
         settingsMessage = nil
-        endTimeInputInvalid = false
+        clearEndTimeInputError()
         if phase == .active && matchesAppliedEndTime(choice) {
             durationEditDirty = false
             return
@@ -194,6 +353,8 @@ final class SessionModel: ObservableObject {
 
     func setEndTimeInputInvalid(_ invalid: Bool) {
         guard canEditSettingsDraft else { return }
+        defer { syncBacklightCountdown() }
+        let invalid = invalid || unresolvedEndDay != nil
         if invalid != endTimeInputInvalid { settingsMessage = nil }
         if invalid && phase == .active {
             if !durationEditDirty {
@@ -204,6 +365,11 @@ final class SessionModel: ObservableObject {
         endTimeInputInvalid = invalid
     }
 
+    private func clearEndTimeInputError() {
+        unresolvedEndDay = nil
+        endTimeInputInvalid = false
+    }
+
     init(defaults: UserDefaults = .standard, operations: SessionOperations? = nil,
          helper: PrivilegedHelperController? = nil) {
         self.defaults = defaults
@@ -211,9 +377,14 @@ final class SessionModel: ObservableObject {
         self.helper = helper
         let operations = operations ?? .system(helper: helper)
         self.operations = operations
+        let resources = SessionPowerResources(startAssertions: operations.startAssertions, stopAssertions: operations.stopAssertions,
+            readThermalState: operations.readThermalState, restoreAfterThermalStop: operations.restoreBacklightAfterThermalStop)
+        self.resources = resources
         display = DisplayModeController(defaults: defaults, operations: .init(
-            assertions: operations.startAssertions, enter: operations.enterBacklight,
+            assertions: resources.holdAssertions,
+            enter: { complete in operations.enterBacklight(resources.darkeningPermission(), complete) },
             restore: operations.restoreBacklight, validate: operations.validateDisplayShortcut,
+            register: operations.registerDisplayShortcut, unregister: operations.unregisterDisplayShortcut,
             checkBacklight: operations.checkBacklight))
         now = operations.now()
         power = operations.readPower()
@@ -223,19 +394,39 @@ final class SessionModel: ObservableObject {
         allowBattery = defaults.object(forKey: "allowBattery") as? Bool ?? true
         threshold = min(Double(BatteryThreshold.range.upperBound),
             max(Double(BatteryThreshold.range.lowerBound), defaults.object(forKey: "threshold") as? Double ?? 20))
+        thermalStopLevel = defaults.string(forKey: "thermalStopLevel").flatMap(ThermalStopLevel.init(rawValue:)) ?? .critical
         showRemaining = defaults.object(forKey: "showRemaining") as? Bool ?? true
         showInMenuBar = defaults.object(forKey: "showInMenuBar") as? Bool ?? true
-        helperObservation = helper.objectWillChange.sink { [weak self] _ in self?.objectWillChange.send() }
+        helperObservation = helperStatuses.dropFirst().sink { [weak self] _ in self?.objectWillChange.send() }
         displayObservation = display.objectWillChange.sink { [weak self] _ in self?.objectWillChange.send() }
         refreshLoginState()
         canPersist = true
+        display.shortcutPressed = { [weak self] in self?.handleDisplayShortcut() }
         inspectPreviousSession()
         cancelTicks = operations.scheduleTicks { [weak self] in self?.tick() }
+        cancelThermalChecks = operations.scheduleThermalChecks { [weak resources] in resources?.checkTemperature() }
     }
 
-    deinit { cancelTicks?() }
+    deinit {
+        cancelThermalChecks?()
+        cancelTicks?()
+    }
+
+    func setThermalStopLevel(_ level: ThermalStopLevel) {
+        guard level != thermalStopLevel else { return }
+        do {
+            if !recovering && (phase == .active || phase == .authorizing) {
+                try resources.setThermalLevel(level)
+            }
+            thermalStopLevel = level
+            defaults.set(level.rawValue, forKey: "thermalStopLevel")
+        } catch {
+            settingsMessage = Self.settingsFailure
+        }
+    }
 
     var endTimeIssue: EndTimeSelection.Issue? {
+        if unresolvedEndDay != nil { return .nonexistentTime }
         if endTimeInputInvalid { return .incomplete }
         if phase == .active && !durationEditDirty { return nil }
         let now = currentDate
@@ -245,6 +436,7 @@ final class SessionModel: ObservableObject {
     var durationInputIsValid: Bool { endTimeIssue == nil }
 
     func selectedDuration() throws -> TimeInterval? {
+        if unresolvedEndDay != nil { throw EndTimeSelection.Issue.nonexistentTime }
         guard !endTimeInputInvalid else { throw EndTimeSelection.Issue.incomplete }
         return try endTimeChoice.validatedDuration(from: currentDate)
     }
@@ -268,7 +460,7 @@ final class SessionModel: ObservableObject {
         } else {
             endTimeChoice = choice
         }
-        endTimeInputInvalid = false
+        clearEndTimeInputError()
         durationEditDirty = false
     }
 
@@ -284,6 +476,7 @@ final class SessionModel: ObservableObject {
 
     func editClosedLid(_ enabled: Bool) {
         guard canChangeClosedLid, enabled != selectedClosedLid else { return }
+        defer { syncBacklightCountdown() }
         settingsMessage = nil
         if phase == .active { closedLidDraft = enabled == closedLid ? nil : enabled }
         else { closedLid = enabled }
@@ -295,6 +488,7 @@ final class SessionModel: ObservableObject {
 
     func editAllowBattery(_ enabled: Bool) {
         guard canEditSettingsDraft, enabled != selectedAllowBattery else { return }
+        defer { syncBacklightCountdown() }
         settingsMessage = nil
         guard phase == .active else { allowBattery = enabled; return }
         var value = powerDraft ?? currentPowerSettings
@@ -304,6 +498,7 @@ final class SessionModel: ObservableObject {
 
     func editThreshold(_ threshold: Double) {
         guard canEditSettingsDraft else { return }
+        defer { syncBacklightCountdown() }
         guard Self.validThreshold(threshold) else {
             settingsMessage = "Choose a battery stop threshold between 10% and 90%."
             return
@@ -323,7 +518,7 @@ final class SessionModel: ObservableObject {
 
     func discardSettingsDraft() {
         guard !settingsApplying, !isRestarting else { return }
-        endTimeInputInvalid = false
+        clearEndTimeInputError()
         durationEditDirty = false
         discardDisplayModeDraft()
         powerDraft = nil
@@ -401,8 +596,8 @@ final class SessionModel: ObservableObject {
                 display: targetMode == self.displayMode ? nil : targetMode)
         } else {
             if let endTime {
-                endTimeChoice = endTime
-                saveEndTimeChoice(endTime)
+                selectEndTime(endTime)
+                endTimeReplacementID = UUID()
             }
             if nextLid != self.closedLid { self.closedLid = nextLid }
             if power.allowBattery != self.allowBattery { self.allowBattery = power.allowBattery }
@@ -439,13 +634,13 @@ final class SessionModel: ObservableObject {
         do {
             if config.closedLid {
                 guard let files else { return rejectSettings(Self.settingsFailure) }
-                try files.write(candidate, to: "control.json")
+                try resources.updateGuardianSettings(update, files: files)
             }
             control = candidate
             nextSettingsRevision = revision
             pendingSettings = PendingSettings(update: update, sentAt: time, duration: duration,
                                               display: display, appliesPanelDraft: appliesPanelDraft)
-            settingsApplying = true
+            liveSettingsApplying = true
             settingsResult = .pending()
             if !config.closedLid { tick() }
             return settingsResult ?? rejectSettings(Self.settingsFailure)
@@ -458,7 +653,7 @@ final class SessionModel: ObservableObject {
         guard let revision = status.settingsRevision, let mode = status.powerMode, let threshold = status.threshold,
               let pending = pendingSettings, revision >= pending.update.revision else { return }
         pendingSettings = nil
-        settingsApplying = false
+        liveSettingsApplying = false
         let previousPower = currentPowerSettings
         allowBattery = mode == .battery
         self.threshold = Double(threshold)
@@ -474,7 +669,7 @@ final class SessionModel: ObservableObject {
             }
             saveOptions()
             if let mode = pending.display {
-                if phase == .active, status.phase == "active" {
+                if phase == .active, status.phase == .active {
                     _ = applySettingsDisplay(mode, afterOtherChanges: true, appliesPanelDraft: pending.appliesPanelDraft)
                 } else {
                     settingsResult = .partiallyApplied(Self.displayChangeInterrupted)
@@ -556,30 +751,55 @@ final class SessionModel: ObservableObject {
         }
         saveOptions()
         if !wasRestarting {
-            endTimeInputInvalid = false
+            clearEndTimeInputError()
             durationEditDirty = false
         }
     }
 
     private func applySettingsDisplay(_ mode: DisplayMode, afterOtherChanges: Bool = false,
                                       appliesPanelDraft: Bool) -> SessionOperationResult {
-        if appliesPanelDraft { discardDisplayModeDraft() }
-        func outcome(_ result: SessionOperationResult) -> SessionOperationResult {
-            if case .rejected(let issue) = result, afterOtherChanges { return .partiallyApplied(issue) }
+        let result = setDisplayMode(mode) { [weak self] result in
+            // Synchronous completions are handled through the return value below.
+            guard let self, self.displaySettingsApplying else { return }
+            self.displaySettingsApplying = false
+            self.finishDisplaySettings(result, mode: mode, afterOtherChanges: afterOtherChanges,
+                                       appliesPanelDraft: appliesPanelDraft)
+            self.statusDidChange?()
+        }
+        if case .pending = result {
+            displaySettingsApplying = true
+            settingsResult = result
             return result
         }
-        let result = setDisplayMode(mode) { [weak self] result in
-            guard let self, case .pending = self.settingsResult else { return }
-            if case .completed = result, self.displayMode != mode {
-                self.settingsResult = outcome(.rejected(Self.displayChangeInterrupted))
-            } else {
-                self.settingsResult = outcome(result)
-            }
-            if case .completed = result, self.displayModeDraft == self.displayMode { self.discardDisplayModeDraft() }
+        return finishDisplaySettings(result, mode: mode, afterOtherChanges: afterOtherChanges,
+                                     appliesPanelDraft: appliesPanelDraft)
+    }
+
+    @discardableResult
+    private func finishDisplaySettings(_ result: SessionOperationResult, mode: DisplayMode, afterOtherChanges: Bool,
+                                       appliesPanelDraft: Bool) -> SessionOperationResult {
+        let outcome: SessionOperationResult
+        if case .completed = result, displayMode != mode {
+            outcome = .rejected(Self.displayChangeInterrupted)
+        } else {
+            outcome = result
         }
-        let recorded = outcome(result)
+
+        let recorded: SessionOperationResult
+        switch outcome {
+        case .completed:
+            if displayModeDraft == displayMode { discardDisplayModeDraft() }
+            recorded = outcome
+        case .rejected(let issue):
+            if appliesPanelDraft {
+                settingsMessage = issue
+                syncBacklightCountdown()
+            }
+            recorded = afterOtherChanges ? .partiallyApplied(issue) : outcome
+        default:
+            recorded = outcome
+        }
         settingsResult = recorded
-        if case .completed = result, displayModeDraft == displayMode { discardDisplayModeDraft() }
         return recorded
     }
 
@@ -591,13 +811,26 @@ final class SessionModel: ObservableObject {
         return result
     }
 
-    func selectDisplayMode(_ mode: DisplayMode) {
-        guard canChangeDisplayMode, mode != (displayModeDraft ?? displayMode) else { return }
+    func selectDisplayMode(_ mode: DisplayMode, configureShortcut: ((@escaping (Bool) -> Void) -> Void)? = nil) {
+        guard canChangeDisplayMode else { return }
+        pendingDisplayModeSelection = nil
+        guard mode != (displayModeDraft ?? displayMode) else { return }
         settingsMessage = nil
+        if mode == .backlightOff && displayShortcut == nil {
+            guard let configureShortcut else { setDisplayMode(mode); return }
+            let request = UUID()
+            pendingDisplayModeSelection = request
+            configureShortcut { [weak self] saved in
+                guard let self, self.pendingDisplayModeSelection == request else { return }
+                self.pendingDisplayModeSelection = nil
+                if saved, self.displayShortcut != nil { self.selectDisplayMode(mode) }
+            }
+            return
+        }
         guard phase == .active else { setDisplayMode(mode); return }
         if mode == displayMode { discardDisplayModeDraft(); return }
         displayModeDraft = mode
-        display.pauseCountdown()
+        syncBacklightCountdown()
     }
 
     private func discardDisplayModeDraft() {
@@ -606,9 +839,13 @@ final class SessionModel: ObservableObject {
         syncBacklightCountdown()
     }
 
-    func cancelBacklightCountdown() {
-        guard backlightCountdown != nil else { return }
-        display.cancelBlackout()
+    @discardableResult
+    func cancelBacklightCountdown() -> SessionOperationResult {
+        guard display.hasCountdown else { return .completed }
+        let result = display.cancelBlackout()
+        if displayModeDraft == displayMode { discardDisplayModeDraft() }
+        statusDidChange?()
+        return result
     }
 
     func beginDisplayShortcutEditing() {
@@ -627,23 +864,49 @@ final class SessionModel: ObservableObject {
             // A failed Apply must not leave an already armed blackout behind.
             display.cancelBlackout()
             if displayModeDraft == displayMode { displayModeDraft = nil }
-        } else if editingDisplayShortcut || displayModeDraft != nil || settingsApplying {
+        } else if editingDisplayShortcut || hasSettingsDraft || settingsApplying {
             display.pauseCountdown()
         } else {
             display.resumeCountdown(at: operations.now())
         }
     }
 
-    func validateDisplayShortcut(_ shortcut: DisplayShortcut) throws {
-        try display.validateShortcut(shortcut)
+    func displayShortcutConflict(for shortcut: DisplayShortcut) -> DisplayShortcutConflict? {
+        operations.checkDisplayShortcutConflict(shortcut)
     }
 
     @discardableResult
-    func setDisplayShortcut(_ shortcut: DisplayShortcut?) throws -> SessionOperationResult {
+    func setDisplayShortcut(_ shortcut: DisplayShortcut?, reviewedConflict: DisplayShortcutConflict? = nil) throws -> SessionOperationResult {
         guard canChangeDisplayShortcut else { throw WakecupError(message: "display.shortcut.locked") }
+        if let shortcut {
+            guard shortcut.isValid else { throw DisplayHotKeyError.invalid }
+            let conflict = displayShortcutConflict(for: shortcut)
+            guard conflict != .system, conflict == reviewedConflict else { throw DisplayShortcutReviewRequired(conflict: conflict) }
+        }
         let result = try display.setShortcut(shortcut, running: phase == .active)
         if shortcut == nil, displayModeDraft == .backlightOff { discardDisplayModeDraft() }
         return result
+    }
+
+    @discardableResult
+    func restoreBrightness() -> SessionOperationResult {
+        let result = display.restoreForUser(running: phase == .active && !isRestarting)
+        statusDidChange?()
+        return result
+    }
+
+    private func handleDisplayShortcut() {
+        let running = phase == .active && !isRestarting
+        if display.isBacklightOff || display.transitioning {
+            // The same chord is still an escape if an earlier restoration failed.
+            restoreBrightness()
+            return
+        } else if running, canChangeDisplayMode, !editingDisplayShortcut, statusReadFailedAt == nil,
+                  deadline.map({ operations.now() < $0 }) ?? true {
+            display.darkenImmediately()
+            if displayModeDraft == displayMode { discardDisplayModeDraft() }
+        } else { return }
+        statusDidChange?()
     }
 
     func start() { _ = try? start(with: nil) }
@@ -679,7 +942,9 @@ final class SessionModel: ObservableObject {
 
     private func beginStart(restart: RestartRequest?, candidate: StartSettings? = nil) {
         settingsMessage = nil
+        let continuing = restart != nil
         do {
+            try resources.checkStart(level: thermalStopLevel, continuing: continuing)
             let duration: TimeInterval?
             if let restart { duration = restart.deadline.map { max(1, $0 - operations.now()) } }
             else if let choice = candidate?.endTime {
@@ -693,12 +958,21 @@ final class SessionModel: ObservableObject {
             let config = SessionConfiguration(id: UUID().uuidString, parentPID: getpid(), duration: duration,
                 powerMode: targetPower.mode, threshold: Int(targetPower.threshold),
                 closedLid: candidate?.closedLid ?? closedLid, keepDisplayOn: candidate?.display.keepsDisplayOn ?? keepDisplayOn,
-                parentIdentity: processIdentity(getpid()), absoluteDeadline: absoluteDeadline)
+                parentIdentity: processIdentity(getpid()), absoluteDeadline: absoluteDeadline,
+                thermalStopLevel: thermalStopLevel)
             _ = try SessionMonitor(configuration: config, now: operations.now())
             if config.closedLid, try operations.readSleepDisabled() {
                 throw WakecupError(message: "Sleep is already disabled by a system setting. Wakecup will not change an existing setting.")
             }
             let newFiles = try config.closedLid ? operations.createFiles(config) : nil
+            do {
+                try resources.begin(id: config.id, level: thermalStopLevel, files: newFiles, continuing: continuing) { [weak self] id in
+                    self?.thermalStopDetected(in: id)
+                }
+            } catch {
+                if let newFiles { _ = resources.discardUnstarted(newFiles) }
+                throw error
+            }
             pendingStart = candidate
             configuration = config
             files = newFiles
@@ -708,7 +982,7 @@ final class SessionModel: ObservableObject {
             statusReadFailedAt = nil
             pendingError = nil
             pendingSettings = nil
-            settingsApplying = false
+            liveSettingsApplying = false
             nextSettingsRevision = 0
             display.clearError()
             message = nil
@@ -725,7 +999,7 @@ final class SessionModel: ObservableObject {
                     runAuthorization(task)
                 }
             } else {
-                try operations.startAssertions(config.keepDisplayOn)
+                try resources.holdAssertions(display: config.keepDisplayOn)
                 let start = operations.now()
                 monitor = try SessionMonitor(configuration: config, now: start)
                 deadline = monitor?.deadline
@@ -733,6 +1007,13 @@ final class SessionModel: ObservableObject {
                 becameActive()
             }
             tick()
+        } catch let termination as SessionTermination where termination.code == .thermal {
+            if continuing {
+                prepareForThermalStop()
+                fail(Self.thermalStopNotice)
+            } else {
+                fail("Wakecup cannot start because the Mac is too hot.")
+            }
         } catch let issue as EndTimeSelection.Issue {
             fail(SessionMessage(issue.messageKey))
         } catch { fail(SessionMessage(reason: error.localizedDescription)) }
@@ -776,7 +1057,7 @@ final class SessionModel: ObservableObject {
                 if self.recovering {
                     self.recovering = false
                     if result.status == 0, let files = self.files,
-                       let status = try? files.read("status.json", as: SessionStatus.self), status.sleepRestored {
+                       let status = try? self.operations.readGuardianStatus(files), status.phase.isTerminal, status.sleepRestored {
                         self.finish(status)
                     } else { self.fail(Self.recoveryFailure) }
                 } else if result.status != 0 {
@@ -814,6 +1095,9 @@ final class SessionModel: ObservableObject {
             }
             statusDidChange?()
         }
+        if let id = configuration?.id, resources.hasThermalStop(for: id) {
+            thermalStopDetected(in: id)
+        }
         if isRestarting, let restart = restartRequest, let limit = restart.deadline, now >= limit {
             closedLid = restart.previousClosedLid
             restartRequest = nil
@@ -823,8 +1107,8 @@ final class SessionModel: ObservableObject {
         }
         if needsRecovery, !busy { _ = refreshRecoveryStatus() }
         if recoveryInProgress, let files, usingInstalledHelper || phase == .stopping {
-            if let status = try? files.read("status.json", as: SessionStatus.self),
-               ["stopped", "failed"].contains(status.phase), status.sleepRestored || phase == .stopping {
+            if let status = try? operations.readGuardianStatus(files),
+               status.phase.isTerminal, status.sleepRestored || phase == .stopping {
                 recovering = false
                 finish(status)
             } else if now - recoveryStartedAt >= 30 {
@@ -833,10 +1117,10 @@ final class SessionModel: ObservableObject {
             }
             return
         }
-        guard busy, !recovering, let config = configuration else { return }
+        guard hasRunningSession, !recovering, let config = configuration else { return }
         if config.closedLid {
             guard let files else { return }
-            guard let status = try? files.read("status.json", as: SessionStatus.self) else {
+            guard let status = try? operations.readGuardianStatus(files) else {
                 let failedAt = statusReadFailedAt ?? now
                 statusReadFailedAt = failedAt
                 if now - failedAt >= 10 {
@@ -846,7 +1130,15 @@ final class SessionModel: ObservableObject {
             }
             statusReadFailedAt = nil
             lastStatus = status
-            if ["arming", "active", "restoring"].contains(status.phase),
+            if status.phase == .unknown {
+                fail("Could not read guardian state.", requiresSleepConfirmation: true)
+                return
+            }
+            if status.reasonCode == .thermal {
+                resources.acceptThermalStop(for: config.id)
+                thermalStopDetected(in: config.id)
+            }
+            if status.phase.expectsHeartbeat,
                !operations.guardianResponding(status, operations.now()) {
                 fail("The guardian is not responding. Restore normal sleep to continue.")
                 return
@@ -855,7 +1147,7 @@ final class SessionModel: ObservableObject {
                 // Check the deadline before an acknowledgement can clear the pending request.
                 pendingSettings = nil
                 settingsMessage = "Could not confirm the new settings."
-                if status.phase == "active" {
+                if status.phase == .active {
                     stop()
                     return
                 }
@@ -863,31 +1155,36 @@ final class SessionModel: ObservableObject {
                 reconcileSettings(status)
             }
             switch status.phase {
-            case "active":
+            case .active:
                 if phase == .authorizing {
                     do {
-                        try operations.startAssertions(config.keepDisplayOn)
+                        try resources.holdAssertions(display: config.keepDisplayOn)
                         deadline = status.deadline
                         phase = .active
                         becameActive()
                     }
-                    catch { pendingError = SessionMessage(reason: error.localizedDescription); requestStop(); return }
+                    catch {
+                        if resources.hasThermalStop(for: config.id) { thermalStopDetected(in: config.id) }
+                        else { pendingError = SessionMessage(reason: error.localizedDescription); requestStop() }
+                        return
+                    }
                 }
                 deadline = status.deadline
-            case "stopped", "failed": finish(status)
-            case "restoring": phase = .stopping
-            case "arming": break
-            case "preparing":
+            case .stopped, .failed: finish(status)
+            case .restoring: phase = .stopping
+            case .arming: break
+            case .preparing:
                 if authorization == nil, let finished = authorizationFinishedAt, now - finished > 5 {
                     resolveGuardianStartupTimeout(files)
                 }
-            default: break
+            case .unknown: break // Handled before applying settings or checking liveness.
             }
         } else if phase == .active, var monitor {
             let reason = monitor.step(now: now, control: control, power: power, ownerAlive: true)
             self.monitor = monitor
             deadline = monitor.deadline
-            var status = SessionStatus(phase: reason == nil ? "active" : "stopped", reason: reason ?? "")
+            var status = SessionStatus(phase: reason == nil ? .active : .stopped)
+            if let reason { status.setTermination(reason) }
             _ = status.update(from: monitor)
             reconcileSettings(status)
             if reason != nil { finish(status) }
@@ -912,11 +1209,8 @@ final class SessionModel: ObservableObject {
     }
 
     private func sendGuardianStop(_ files: SessionFiles) throws {
-        guard !control.stop else { return }
-        var stop = control
-        stop.stop = true
-        try files.write(stop, to: "control.json")
-        control = stop
+        try resources.sendGuardianStop(files)
+        control.stop = true
     }
 
     private func confirmGuardianDidNotStart(_ files: SessionFiles, checkSystemSleep: Bool = false) throws -> Bool {
@@ -924,9 +1218,16 @@ final class SessionModel: ObservableObject {
         guard try files.tryLockGuardianAccess() else { return false }
         defer { files.unlockGuardianAccess() }
         // The guardian must read Stop under this same lock before changing sleep.
-        if let status = try? files.read("status.json", as: SessionStatus.self) {
-            guard status.phase == "preparing" else { return false }
-            _ = discardUnstartedFiles()
+        if let status = try? operations.readGuardianStatus(files) {
+            if status.phase == .preparing {
+                _ = discardUnstartedFiles()
+            } else {
+                guard status.phase == .unknown, status.sleepRestored, checkSystemSleep,
+                      (try? operations.readSleepDisabled()) == false else { return false }
+                // A future record format can be left intact once the system
+                // confirms there is no sleep change and no guardian can start.
+                forgetSessionFiles(files)
+            }
         } else {
             // On explicit retry, a missing status can be resolved by checking macOS.
             guard checkSystemSleep, (try? operations.readSleepDisabled()) == false else { return false }
@@ -936,18 +1237,19 @@ final class SessionModel: ObservableObject {
     }
 
     private func finishCancelledStartup() {
-        finish(SessionStatus(phase: "stopped", reason: "запуск отменён"))
+        var status = SessionStatus(phase: .stopped)
+        status.setTermination(.startupCancelled)
+        finish(status)
     }
 
     @discardableResult
     func stop() -> SessionOperationResult {
         if recoveryInProgress { return .pending(Self.recoveryProgress) }
+        if !hasRunningSession && display.isReturningControl { return .pending(Self.returningControlMessage) }
         if needsRecovery { return .rejected(Self.recoveryRequired) }
         if partialSettingsIssue == nil && !display.transitioning { settingsResult = nil }
         pendingStart = nil
-        if let restart = restartRequest { closedLid = restart.previousClosedLid }
-        restartRequest = nil
-        isRestarting = false
+        cancelRestart()
         let displayResult = display.finish()
         let stopResult = requestStop()
         switch stopResult {
@@ -956,11 +1258,34 @@ final class SessionModel: ObservableObject {
         }
     }
 
+    private func thermalStopDetected(in id: String) {
+        guard !recovering, hasRunningSession, configuration?.id == id,
+              pendingError?.key != Self.thermalStopNotice.key else { return }
+        prepareForThermalStop()
+        if phase != .stopping { stop() }
+    }
+
+    private func prepareForThermalStop() {
+        displaySettingsApplying = false
+        pendingError = Self.thermalStopNotice
+        pendingSettings = nil
+        liveSettingsApplying = false
+        settingsResult = nil
+        settingsMessage = nil
+        cancelRestart()
+    }
+
+    private func cancelRestart() {
+        if let restart = restartRequest { closedLid = restart.previousClosedLid }
+        restartRequest = nil
+        isRestarting = false
+    }
+
     @discardableResult
     private func requestStop() -> SessionOperationResult {
         if !isRestarting { displayModeDraft = nil }
         display.cancelCountdown()
-        guard busy else { return .completed }
+        guard hasRunningSession else { return .completed }
         defer { statusDidChange?() }
         if let files, configuration?.closedLid == true {
             defer { authorization?.cancel() }
@@ -974,17 +1299,25 @@ final class SessionModel: ObservableObject {
                 return .rejected(issue)
             }
         }
-        finish(SessionStatus(phase: "stopped", reason: "остановлено"))
+        var status = SessionStatus(phase: .stopped)
+        status.setTermination(.requested)
+        finish(status)
         return .completed
     }
 
     private func finish(_ status: SessionStatus) {
         pendingStart = nil
+        if let id = configuration?.id {
+            if status.reasonCode == .thermal { resources.acceptThermalStop(for: id) }
+            if status.reasonCode == .thermal || resources.hasThermalStop(for: id) {
+                prepareForThermalStop()
+            }
+        }
         let wasRestarting = isRestarting
-        let wasApplying = settingsApplying || wasRestarting
+        let wasApplying = liveSettingsApplying || wasRestarting
         if !wasApplying && pendingError == nil && hasSettingsDraft { settingsMessage = nil }
         if let restart = restartRequest {
-            if pendingError == nil, status.phase == "stopped", status.sleepRestored, status.reason == "остановлено" {
+            if pendingError == nil, status.phase == .stopped, status.sleepRestored, status.reasonCode == .requested {
                 lastStatus = status
                 if configuration?.closedLid == true, operations.guardianIsRunning(status) {
                     if guardianExitWaitSince == nil { guardianExitWaitSince = operations.now() }
@@ -1010,16 +1343,16 @@ final class SessionModel: ObservableObject {
         powerDraft = nil
         closedLidDraft = nil
         pendingSettings = nil
-        settingsApplying = false
+        liveSettingsApplying = false
         display.clearError()
-        display.finish(completion: operations.stopAssertions)
+        finishDisplayAndReleaseAssertions()
         helperRequestID = nil
         lastStatus = status
         deadline = nil
         monitor = nil
-        let recovered = needsRecovery && status.sleepRestored && status.phase == "stopped"
+        let recovered = needsRecovery && status.sleepRestored && status.phase == .stopped
         needsRecovery = status.ownsSleepChange && !status.sleepRestored
-        phase = status.phase == "failed" || needsRecovery ? .failed : .idle
+        phase = status.phase == .failed || needsRecovery ? .failed : .idle
         let notice: SessionMessage?
         if needsRecovery {
             notice = SessionMessage("%@ Restore normal sleep to continue.", arguments: [status.reason])
@@ -1028,9 +1361,9 @@ final class SessionModel: ObservableObject {
             notice = nil
         } else if let pendingError {
             notice = pendingError
-        } else if wasRestarting && status.reason == "время истекло" {
+        } else if wasRestarting && status.reasonCode == .expired {
             notice = Self.restartExpired
-        } else if phase == .idle && ["", "остановлено", "запуск отменён", "время истекло"].contains(status.reason) {
+        } else if phase == .idle && (status.reason.isEmpty || [.requested, .startupCancelled, .expired].contains(status.reasonCode)) {
             notice = wasRestarting ? "The mode could not restart. Wakecup has stopped." : nil
         } else {
             notice = status.reason.isEmpty ? "Session ended." : SessionMessage("Session ended: %@.", arguments: [status.reason])
@@ -1048,10 +1381,16 @@ final class SessionModel: ObservableObject {
         statusDidChange?()
     }
 
+    private func finishDisplayAndReleaseAssertions() {
+        let id = configuration?.id
+        display.finish { [resources] in resources.end(id: id) }
+    }
+
     private func fail(_ text: SessionMessage, requiresSleepConfirmation: Bool = false) {
+        displaySettingsApplying = false
         settingsResult = nil
         pendingStart = nil
-        let wasApplying = settingsApplying || isRestarting
+        let wasApplying = liveSettingsApplying || isRestarting
         powerDraft = nil
         closedLidDraft = nil
         if isRestarting { restoreSavedEndTime() }
@@ -1060,11 +1399,11 @@ final class SessionModel: ObservableObject {
         restartRequest = nil
         isRestarting = false
         pendingSettings = nil
-        settingsApplying = false
+        liveSettingsApplying = false
         display.clearError()
-        display.finish(completion: operations.stopAssertions)
-        helperRequestID = nil
         if busy, let files { try? sendGuardianStop(files) }
+        finishDisplayAndReleaseAssertions()
+        helperRequestID = nil
         needsRecovery = needsRecovery || requiresSleepConfirmation || (lastStatus?.ownsSleepChange == true && lastStatus?.sleepRestored != true)
         phase = .failed
         if wasApplying { rejectSettings(text) }
@@ -1076,13 +1415,21 @@ final class SessionModel: ObservableObject {
         guard let path = defaults.string(forKey: "lastSession"),
               let previous = try? SessionFiles(url: URL(fileURLWithPath: path)),
               let config = try? previous.read("configuration.json", as: SessionConfiguration.self), config.closedLid else { return }
-        guard let status = try? previous.read("status.json", as: SessionStatus.self) else {
+        guard let status = try? operations.readGuardianStatus(previous) else {
             files = previous
             configuration = config
             fail("Could not read guardian state.", requiresSleepConfirmation: true)
             return
         }
-        if status.phase == "preparing" {
+        if status.phase == .unknown {
+            files = previous
+            configuration = config
+            lastStatus = status
+            try? sendGuardianStop(previous)
+            fail("Could not read guardian state.", requiresSleepConfirmation: true)
+            return
+        }
+        if status.phase == .preparing {
             files = previous
             configuration = config
             lastStatus = status
@@ -1111,13 +1458,13 @@ final class SessionModel: ObservableObject {
     }
 
     private func discardUnstartedFiles() -> Bool {
-        guard let files, files.removeIfUnstarted() else { return false }
+        guard let files, resources.discardUnstarted(files) else { return false }
         forgetSessionFiles(files)
         return true
     }
 
     private func discardFinishedFiles(_ finished: SessionFiles) {
-        if finished.removeIfFinished() { forgetSessionFiles(finished) }
+        if resources.discardFinished(finished) { forgetSessionFiles(finished) }
     }
 
     private func forgetSessionFiles(_ removed: SessionFiles) {
@@ -1128,8 +1475,8 @@ final class SessionModel: ObservableObject {
     }
 
     private func refreshRecoveryStatus() -> Bool {
-        guard let files, let status = try? files.read("status.json", as: SessionStatus.self),
-              ["stopped", "failed"].contains(status.phase) else { return false }
+        guard let files, let status = try? operations.readGuardianStatus(files),
+              status.phase.isTerminal else { return false }
         if status.sleepRestored {
             finish(status)
             return true
@@ -1155,9 +1502,9 @@ final class SessionModel: ObservableObject {
         }
         settingsMessage = nil
         if refreshRecoveryStatus() { return .completed }
-        let status = try? files.read("status.json", as: SessionStatus.self)
+        let status = try? operations.readGuardianStatus(files)
         let stopFailure: SessionMessage = "Could not send the stop request to the guardian."
-        if status == nil || status?.phase == "preparing" {
+        if status == nil || status?.phase == .preparing || (status?.phase == .unknown && status?.sleepRestored == true) {
             do {
                 if try confirmGuardianDidNotStart(files, checkSystemSleep: true) {
                     finishCancelledStartup()
@@ -1170,7 +1517,7 @@ final class SessionModel: ObservableObject {
                 return .rejected(stopFailure)
             }
         }
-        if let status, ["arming", "active", "restoring"].contains(status.phase),
+        if let status, status.phase.expectsHeartbeat,
            operations.guardianResponding(status, operations.now()) {
             do {
                 try sendGuardianStop(files)

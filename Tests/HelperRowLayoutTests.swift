@@ -11,7 +11,7 @@ import SwiftUI
         let language = CommandLine.arguments[1]
         UserDefaults.standard.setVolatileDomain([AppLocalization.languageKey: language], forName: UserDefaults.argumentDomain)
         NSApplication.shared.setActivationPolicy(.prohibited)
-        let cases: [(String, PrivilegedHelperController.State, Bool, Bool, Bool, HelperStatusPresentation.Action, Bool)] = [
+        let cases: [(String, HelperStatus.State, Bool, Bool, Bool, HelperStatusPresentation.Action, Bool)] = [
             ("ready", .ready, true, false, false, .settings, false),
             ("password", .ready, false, false, false, .settings, false),
             ("update", .updateRequired, true, false, false, .update, true),
@@ -42,7 +42,8 @@ import SwiftUI
                        "Helper status must fit one line without clipping: " + name)
             let view = MenuCard {
                 MenuSectionHeading(title: localized("Mode"), symbol: "slider.horizontal.3")
-                MenuToggleRow(title: localized("Keep awake with lid closed"), isOn: .constant(true), hint: localized("closed.lid.help"))
+                MenuToggleRow(title: localized("Keep awake with lid closed"), isOn: .constant(true),
+                    help: (localized("closed.lid.help"), localized("Help about closed-lid mode"), "WakecupClosedLidInfo"))
                 HelperStatusRow(presentation: presentation, actionEnabled: !working && !checking, action: {})
                 Divider()
                 MenuToggleRow(title: localized("Keep awake on battery"), isOn: .constant(true))

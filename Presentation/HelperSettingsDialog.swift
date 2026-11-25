@@ -8,7 +8,7 @@ final class HelperSettingsDialog: NSObject, NSWindowDelegate {
     let modeLabel: NSTextField
     private let completion: (NSApplication.ModalResponse) -> Void
 
-    init(alert: NSAlert, completion: @escaping (NSApplication.ModalResponse) -> Void) {
+    init(alert: NSAlert, informational: Bool = false, completion: @escaping (NSApplication.ModalResponse) -> Void) {
         self.completion = completion
         let width = AppStyle.HelperDialogLayout.width
         let inset = AppStyle.Layout.windowInset
@@ -19,6 +19,7 @@ final class HelperSettingsDialog: NSObject, NSWindowDelegate {
         window.titleVisibility = .hidden
         window.isReleasedWhenClosed = false
         window.collectionBehavior = [.moveToActiveSpace]
+        if informational { window.hidesOnDeactivate = false }
 
         let icon = NSImageView(image: alert.icon)
         icon.imageScaling = .scaleProportionallyUpOrDown
@@ -42,10 +43,9 @@ final class HelperSettingsDialog: NSObject, NSWindowDelegate {
 
         buttons = alert.buttons.enumerated().map { index, original in
             let button = NSButton(title: original.title, target: nil, action: nil)
-            button.bezelStyle = .rounded
-            button.font = AppStyle.Font.controlLabel
+            AppStyle.configureCompactButton(button)
             button.isEnabled = original.isEnabled
-            button.keyEquivalent = index == 0 ? "\r" : original.keyEquivalent
+            button.keyEquivalent = index == 0 && !informational ? "\r" : original.keyEquivalent
             button.tag = index
             button.setContentCompressionResistancePriority(.required, for: .horizontal)
             return button
@@ -81,7 +81,7 @@ final class HelperSettingsDialog: NSObject, NSWindowDelegate {
             scroll.contentView.scroll(to: NSPoint(x: 0, y: top))
             body = scroll
         }
-        let stack = NSStackView(views: [header, body, modeLabel, actions])
+        let stack = NSStackView(views: informational ? [header, body, actions] : [header, body, modeLabel, actions])
         stack.orientation = .vertical
         stack.alignment = .leading
         stack.spacing = AppStyle.HelperDialogLayout.spacing
@@ -126,6 +126,7 @@ final class HelperSettingsDialog: NSObject, NSWindowDelegate {
         if let owner = window.sheetParent {
             owner.endSheet(window, returnCode: response)
         } else {
+            window.orderOut(nil)
             completion(response)
         }
     }

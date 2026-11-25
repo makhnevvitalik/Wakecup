@@ -26,7 +26,7 @@ struct HelperStatusPresentation {
     let action: Action
     let needsAttention: Bool
 
-    init(state: PrivilegedHelperController.State, selected: Bool, working: Bool, checking: Bool) {
+    init(state: HelperStatus.State, selected: Bool, working: Bool, checking: Bool) {
         if working {
             statusKey = "Applying changes…"
             descriptionKey = "Wait for the operation to finish."
@@ -71,22 +71,13 @@ struct HelperStatusRow: View {
     let actionEnabled: Bool
     let action: () -> Void
     @ObservedObject private var localization = AppLocalization.shared
-    @State private var showingHint = false
 
     var body: some View {
         MenuDetailRow {
             HStack(spacing: AppStyle.Layout.rowItemSpacing) {
                 Text(localized("Helper"))
-                Button { showingHint.toggle() } label: {
-                    Image(systemName: "info.circle").font(Font(AppStyle.Font.supportingText)).foregroundStyle(.secondary)
-                }.buttonStyle(.plain).help(localized("helper.help"))
-                    .accessibilityLabel(localized("About this setting"))
-                    .accessibilityIdentifier("WakecupHelperInfo")
-                    .popover(isPresented: $showingHint) {
-                        Text(localized("helper.help")).font(Font(AppStyle.Font.supportingText))
-                            .fixedSize(horizontal: false, vertical: true)
-                            .padding(MenuLayout.tooltipPadding).frame(width: MenuLayout.tooltipWidth, alignment: .leading)
-                    }
+                MenuInfoButton(text: localized("helper.help"), accessibilityTitle: localized("Help about the helper"),
+                               identifier: "WakecupHelperInfo")
             }
         } detail: {
             Text(localized(presentation.statusKey))
@@ -103,9 +94,8 @@ struct HelperStatusRow: View {
     }
 
     private var actionButton: some View {
-        Button(localized(presentation.action.titleKey), action: action)
-            .disabled(!actionEnabled)
-            .accessibilityIdentifier("WakecupHelperAction")
-            .accessibilityLabel(localized(presentation.action.accessibilityKey))
+        CompactCommandButton(title: localized(presentation.action.titleKey),
+            accessibilityTitle: localized(presentation.action.accessibilityKey),
+            identifier: "WakecupHelperAction", isEnabled: actionEnabled, action: action)
     }
 }

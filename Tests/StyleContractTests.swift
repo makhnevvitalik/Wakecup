@@ -13,7 +13,7 @@ import SwiftUI
             (AppStyle.Font.controlLabel, 13), (AppStyle.Font.statusText, 13),
             (AppStyle.Font.supportingText, 12), (AppStyle.Font.secondaryAction, 12), (AppStyle.Font.metadata, 12),
             (AppStyle.Font.sectionTitle, 13), (AppStyle.Font.appName, 16),
-            (AppStyle.Font.windowTitle, 20)
+            (AppStyle.Font.windowTitle, 20), (AppStyle.Font.primaryAction, 15)
         ]
         for (font, size) in referenceScale {
             try expect(font.pointSize == size, "Text role differs from the Lang Switcher scale")
@@ -36,7 +36,7 @@ import SwiftUI
         let model = SessionModel(defaults: defaults)
         let window = NSWindow(contentRect: NSRect(x: 20, y: 20, width: MenuLayout.width, height: 600),
                               styleMask: [.titled], backing: .buffered, defer: false)
-        window.contentViewController = NSHostingController(rootView: WakecupView(model: model, showAbout: {}))
+        window.contentViewController = NSHostingController(rootView: WakecupLayoutFixture(model: model, updates: UpdateChecker(), showAbout: {}))
         defer { window.orderOut(nil) }
         window.makeKeyAndOrderFront(nil)
         RunLoop.main.run(until: Date().addingTimeInterval(0.2))
@@ -56,14 +56,14 @@ import SwiftUI
         guard let helperMenu = menu.items.first(where: { $0.title == localized("Closed-lid permission") })?.submenu,
               let password = helperMenu.item(withTitle: localized("Ask for a password each session")),
               let installed = helperMenu.item(withTitle: localized("Use installed helper")),
-              let install = helperMenu.item(withTitle: localized(model.helper.installed ? "Update helper…" : "Install helper…")),
+              let install = helperMenu.item(withTitle: localized(model.helperStatus.installed ? "Update helper…" : "Install helper…")),
               let explanation = helperMenu.item(withTitle: localized("Why install a helper?")) else {
             throw WakecupError(message: "Both permission modes, installation and explanation must appear in settings")
         }
         try expect(helperMenu.font.isEqual(AppStyle.Font.body), "Helper submenu must use the shared menu text role")
-        try expect(password.state == (model.helper.selected ? .off : .on)
-                   && installed.state == (model.helper.selected ? .on : .off)
-                   && installed.isEnabled == (model.canSelectHelperMode && model.helper.state == .ready)
+        try expect(password.state == (model.helperStatus.selected ? .off : .on)
+                   && installed.state == (model.helperStatus.selected ? .on : .off)
+                   && installed.isEnabled == (model.canSelectHelperMode && model.helperStatus.state == .ready)
                    && install.isEnabled == model.canChangeHelper && explanation.isEnabled,
                    "Permission-mode controls must reflect the actual helper state")
 
@@ -101,7 +101,7 @@ import SwiftUI
             textOffsets.append(textFrame.minX)
         }
         try expect(abs(textOffsets[0] - textOffsets[1]) < 0.1, "Card heading titles must share the same leading edge")
-        let surfaces = MenuPanelController(model: model, statusButton: { nil })
+        let surfaces = MenuPanelController(model: model, updates: UpdateChecker(), statusButton: { nil })
         surfaces.showWindow()
         guard let settingsWindow = app.windows.first(where: { $0.title == localized("Wakecup Settings") }),
               let settingsContent = settingsWindow.contentView else {

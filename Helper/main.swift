@@ -7,7 +7,9 @@ do {
     if arguments.count == 2, arguments[1] == "--daemon" {
         try HelperService.run()
     } else if arguments.count == 4, ["--authorized-guard", "--managed-guard"].contains(arguments[1]) {
-        if arguments[1] == "--authorized-guard" { try PrivilegedExecution.validateStagedExecutable() }
+        if arguments[1] == "--authorized-guard", try StagedHelper.readExecutable() == nil {
+            throw WakecupError(message: "The operation must run from a verified system staging file.")
+        }
         let context = try ManagedGuardContext.decode(arguments[3])
         exit(runGuard(at: URL(fileURLWithPath: arguments[2]), context: context))
     } else if arguments.count == 4, ["--install", "--uninstall"].contains(arguments[1]), let uid = UInt32(arguments[2]) {
